@@ -20,6 +20,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javafx.version>17.0.2</javafx.version>
         <javafx.maven.plugin.version>0.0.8</javafx.maven.plugin.version>
+        <poi.version>5.2.4</poi.version>
         <main.class>com.example.Main</main.class>
     </properties>
     
@@ -36,6 +37,34 @@
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
+        </dependency>
+        
+        <!-- Apache POI - Excel (XLSX) y Word (.docx) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+        
+        <!-- Apache POI - Excel (XLS) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+        
+        <!-- Apache POI - Word (.doc) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-scratchpad</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+        
+        <!-- Apache POI - PowerPoint (.pptx) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml-lite</artifactId>
+            <version>${poi.version}</version>
         </dependency>
         
         <!-- JUnit para tests -->
@@ -83,6 +112,16 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.0.0-M9</version>
+            </plugin>
+            
+            <!-- Maven Exec Plugin para ejecutar clases -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>com.example.demo.ProbadorCotizacionesReales</mainClass>
+                </configuration>
             </plugin>
         </plugins>
     </build>
