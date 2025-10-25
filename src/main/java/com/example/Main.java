@@ -90,9 +90,73 @@ public class Main extends Application {
         // Agregar todas las pestañas
         tabPane.getTabs().addAll(dashboardTab, cotizacionesTab, clientesTab, productosTab, reportesTab, importarTab);
 
-        // Crear escena
-        Scene scene = new Scene(tabPane, 1200, 700);
+        // Aplicar estilos profesionales al TabPane
+        tabPane.setStyle("-fx-background-color: #f8f9fa;");
+
+        // Crear escena con tamaño más grande y colores profesionales
+        Scene scene = new Scene(tabPane, 1400, 900);
+        
+        // Aplicar CSS profesional
+        scene.getStylesheets().add("data:text/css," + 
+            ".root { " +
+            "    -fx-background-color: #f8f9fa; " +
+            "    -fx-font-family: 'Segoe UI', 'Arial', sans-serif; " +
+            "} " +
+            ".tab-pane { " +
+            "    -fx-background-color: #ffffff; " +
+            "    -fx-border-color: #dee2e6; " +
+            "} " +
+            ".tab { " +
+            "    -fx-background-color: #e9ecef; " +
+            "    -fx-text-fill: #495057; " +
+            "    -fx-border-color: #dee2e6; " +
+            "    -fx-padding: 8 16 8 16; " +
+            "} " +
+            ".tab:selected { " +
+            "    -fx-background-color: #ffffff; " +
+            "    -fx-text-fill: #212529; " +
+            "    -fx-border-color: #007bff; " +
+            "    -fx-border-width: 0 0 2 0; " +
+            "} " +
+            ".button { " +
+            "    -fx-background-color: #007bff; " +
+            "    -fx-text-fill: white; " +
+            "    -fx-background-radius: 4; " +
+            "    -fx-padding: 8 16 8 16; " +
+            "    -fx-font-weight: 500; " +
+            "} " +
+            ".button:hover { " +
+            "    -fx-background-color: #0056b3; " +
+            "} " +
+            ".button:pressed { " +
+            "    -fx-background-color: #004085; " +
+            "} " +
+            ".table-view { " +
+            "    -fx-background-color: white; " +
+            "    -fx-border-color: #dee2e6; " +
+            "    -fx-border-radius: 4; " +
+            "} " +
+            ".table-view .column-header { " +
+            "    -fx-background-color: #f8f9fa; " +
+            "    -fx-text-fill: #495057; " +
+            "    -fx-font-weight: 600; " +
+            "    -fx-border-color: #dee2e6; " +
+            "} " +
+            ".table-row-cell { " +
+            "    -fx-border-color: transparent; " +
+            "} " +
+            ".table-row-cell:odd { " +
+            "    -fx-background-color: #f8f9fa; " +
+            "} " +
+            ".table-row-cell:selected { " +
+            "    -fx-background-color: #007bff; " +
+            "    -fx-text-fill: white; " +
+            "}"
+        );
+        
         primaryStage.setScene(scene);
+        primaryStage.setMinWidth(1200);
+        primaryStage.setMinHeight(800);
         primaryStage.show();
     }
 
@@ -111,7 +175,7 @@ public class Main extends Application {
         dashboard.setPadding(new Insets(20));
 
         Label titulo = new Label("Dashboard - Sistema de Cotizaciones");
-        titulo.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        titulo.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #212529; -fx-padding: 0 0 10 0;");
 
         // Estadísticas
         HBox statsBox = new HBox(20);
@@ -141,17 +205,23 @@ public class Main extends Application {
     }
 
     private VBox crearStatCard(String titulo, String valor) {
-        VBox card = new VBox(5);
-        card.setPadding(new Insets(15));
-        card.setStyle("-fx-background-color: #f0f0f0; -fx-background-radius: 5;");
+        VBox card = new VBox(8);
+        card.setPadding(new Insets(20));
+        card.setStyle("-fx-background-color: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%); " +
+                      "-fx-background-radius: 8; " +
+                      "-fx-border-color: #dee2e6; " +
+                      "-fx-border-radius: 8; " +
+                      "-fx-border-width: 1; " +
+                      "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 4, 0, 0, 2);");
         
         Label tituloLabel = new Label(titulo);
-        tituloLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #666;");
+        tituloLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #6c757d; -fx-font-weight: 500;");
         
         Label valorLabel = new Label(valor);
-        valorLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #333;");
+        valorLabel.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #212529;");
         
         card.getChildren().addAll(tituloLabel, valorLabel);
+        card.setMinWidth(180);
         return card;
     }
 
@@ -160,7 +230,7 @@ public class Main extends Application {
         panel.setPadding(new Insets(20));
 
         Label titulo = new Label("Gestión de Cotizaciones");
-        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        titulo.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529; -fx-padding: 0 0 10 0;");
 
         // Botones de acción
         HBox botones = new HBox(10);
@@ -229,7 +299,7 @@ public class Main extends Application {
         panel.setPadding(new Insets(20));
 
         Label titulo = new Label("Gestión de Clientes");
-        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        titulo.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529; -fx-padding: 0 0 10 0;");
 
         // Botones
         HBox botones = new HBox(10);
@@ -273,7 +343,7 @@ public class Main extends Application {
         panel.setPadding(new Insets(20));
 
         Label titulo = new Label("Gestión de Productos");
-        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        titulo.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529; -fx-padding: 0 0 10 0;");
 
         // Formulario para agregar productos
         GridPane formulario = new GridPane();
@@ -314,7 +384,7 @@ public class Main extends Application {
         panel.setPadding(new Insets(20));
 
         Label titulo = new Label("Reportes y Estadísticas");
-        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        titulo.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529; -fx-padding: 0 0 10 0;");
 
         // Botones de reportes
         HBox botonesReportes = new HBox(10);
@@ -501,14 +571,19 @@ public class Main extends Application {
         panel.setPadding(new Insets(20));
 
         Label titulo = new Label("Importar Cotizaciones desde Excel");
-        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        titulo.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529; -fx-padding: 0 0 10 0;");
 
         // Área de instrucciones
-        VBox instrucciones = new VBox(10);
-        instrucciones.setStyle("-fx-background-color: #f0f8ff; -fx-padding: 15; -fx-background-radius: 5;");
+        VBox instrucciones = new VBox(12);
+        instrucciones.setStyle("-fx-background-color: linear-gradient(to bottom, #e3f2fd 0%, #f3e5f5 100%); " +
+                               "-fx-padding: 20; " +
+                               "-fx-background-radius: 8; " +
+                               "-fx-border-color: #90caf9; " +
+                               "-fx-border-radius: 8; " +
+                               "-fx-border-width: 1;");
         
         Label instruccionesTitulo = new Label("📋 Instrucciones:");
-        instruccionesTitulo.setStyle("-fx-font-weight: bold;");
+        instruccionesTitulo.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #1976d2;");
         
         Label instruccionesTexto = new Label(
             "1. Selecciona un archivo Excel (.xlsx o .xls)\n" +
@@ -521,7 +596,7 @@ public class Main extends Application {
             "3. Haz clic en 'Cargar Archivo' para procesar\n" +
             "4. Revisa los datos cargados antes de importar"
         );
-        instruccionesTexto.setStyle("-fx-font-size: 12px;");
+        instruccionesTexto.setStyle("-fx-font-size: 13px; -fx-text-fill: #37474f; -fx-line-spacing: 2px;");
         
         instrucciones.getChildren().addAll(instruccionesTitulo, instruccionesTexto);
 
