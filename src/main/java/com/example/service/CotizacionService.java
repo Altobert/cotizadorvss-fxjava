@@ -1,178 +1,217 @@
 package com.example.service;
 
-import com.example.model.Cotizacion;
-import com.example.model.Cliente;
-import com.example.model.ItemCotizacion;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import com.example.model.ItemCotizacionExcel;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-/**
- * Servicio para gestionar cotizaciones en memoria
- * Proporciona operaciones CRUD básicas
- */
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.util.*;
+
 public class CotizacionService {
-    
-    private static CotizacionService instance;
-    private Map<String, Cotizacion> cotizaciones;
-    private Map<String, Cliente> clientes;
-    private int contadorCotizaciones;
-    
-    // Constructor privado para Singleton
-    private CotizacionService() {
-        this.cotizaciones = new ConcurrentHashMap<>();
-        this.clientes = new ConcurrentHashMap<>();
-        this.contadorCotizaciones = 1;
-        inicializarDatosEjemplo();
-    }
-    
-    // Obtener instancia singleton
-    public static synchronized CotizacionService getInstance() {
-        if (instance == null) {
-            instance = new CotizacionService();
+
+    public List<ItemCotizacionExcel> leerItemsDesdeExcel(File archivo) {
+        List<ItemCotizacionExcel> items = new ArrayList<>();
+
+        try (FileInputStream fis = new FileInputStream(archivo);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+
+            Sheet hoja = workbook.getSheetAt(0);
+            Iterator<Row> filas = hoja.iterator();
+
+            System.out.println("🔎 Explorando filas para detectar encabezado...");
+
+            Row encabezado = null;
+            while (filas.hasNext()) {
+                Row fila = filas.next();
+                for (Cell celda : fila) {
+                    String valor = celda.toString().trim().toLowerCase();
+                    System.out.print("[" + valor + "] ");
+                    if (valor.contains("item") || valor.contains("item description") || valor.contains("unit of measure")) {
+                        encabezado = fila;
+                        break;
+                    }
+                }
+                System.out.println();
+                if (encabezado != null) break;
+            }
+
+            if (encabezado == null) {
+                System.err.println("❌ No se encontró fila de encabezado válida.");
+                return items;
+            }
+
+            Map<String, Integer> columnas = detectarColumnas(encabezado);
+
+            System.out.println("✅ Encabezados detectados:");
+            columnas.forEach((k, v) -> System.out.println("→ " + k + " en columna " + v));
+
+            if (!columnas.containsKey("codigo") || !columnas.containsKey("descripcion")) {
+                System.err.println("⚠️ Encabezados clave faltantes: 'codigo' y/o 'descripcion'");
+                return items;
+            }
+
+            while (filas.hasNext()) {
+                Row fila = filas.next();
+
+                String codigo = obtenerTexto(fila, columnas.get("codigo"));
+                String descripcion = obtenerTexto(fila, columnas.get("descripcion"));
+                int cantidad = obtenerEntero(fila, columnas.get("cantidad"));
+                double precio = obtenerDecimal(fila, columnas.get("precio"));
+                String unidad = columnas.containsKey("unidad") ? obtenerTexto(fila, columnas.get("unidad")) : "";
+                String categoria = columnas.containsKey("categoria") ? obtenerTexto(fila, columnas.get("categoria")) : "";
+
+                double descuento = columnas.containsKey("descuento") ? obtenerDecimal(fila, columnas.get("descuento")) : 0.0;
+                double totalNeto = columnas.containsKey("totalneto") ? obtenerDecimal(fila, columnas.get("totalneto")) : 0.0;
+                String comentarios = columnas.containsKey("comentarios") ? obtenerTexto(fila, columnas.get("comentarios")) : "";
+                int disponibilidad = columnas.containsKey("disponibilidad") ? obtenerEntero(fila, columnas.get("disponibilidad")) : 0;
+                double totalBruto = columnas.containsKey("totalbruto") ? obtenerDecimal(fila, columnas.get("totalbruto")) : 0.0;
+
+                if (codigo.isEmpty() && descripcion.isEmpty()) continue;
+
+                ItemCotizacionExcel item = new ItemCotizacionExcel(
+                    codigo, descripcion, cantidad, precio, unidad, categoria,
+                    descuento, totalNeto, comentarios, disponibilidad, totalBruto
+                );
+                items.add(item);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        return instance;
+
+        return items;
     }
-    
-    // Inicializar con datos de ejemplo
-    private void inicializarDatosEjemplo() {
-        // Crear clientes de ejemplo
-        Cliente cliente1 = new Cliente("Empresa ABC S.A.", "contacto@empresaabc.com", 
-                                      "+56 9 1234 5678", "Av. Principal 123");
-        cliente1.setCiudad("Santiago");
-        cliente1.setPais("Chile");
-        cliente1.setTipoDocumento("RUT");
-        cliente1.setNumeroDocumento("12.345.678-9");
-        
-        Cliente cliente2 = new Cliente("Juan Pérez", "juan.perez@email.com", 
-                                      "+56 9 8765 4321", "Calle Secundaria 456");
-        cliente2.setCiudad("Valparaíso");
-        cliente2.setPais("Chile");
-        cliente2.setTipoDocumento("RUT");
-        cliente2.setNumeroDocumento("98.765.432-1");
-        
-        clientes.put(cliente1.getId(), cliente1);
-        clientes.put(cliente2.getId(), cliente2);
-        
-        // Crear cotización de ejemplo
-        Cotizacion cotizacion1 = new Cotizacion(cliente1);
-        cotizacion1.setNumeroCotizacion("COT-2024-001");
-        cotizacion1.setFechaVencimiento(java.time.LocalDateTime.now().plusDays(30));
-        cotizacion1.setEstado("PENDIENTE");
-        cotizacion1.setNotas("Cotización para equipos de oficina");
-        cotizacion1.setCondiciones("Pago a 30 días");
-        
-        // Agregar items
-        ItemCotizacion item1 = new ItemCotizacion("LAP001", "Laptop HP ProBook 450", 850000, 2, "unidad", "Electrónicos");
-        ItemCotizacion item2 = new ItemCotizacion("MON001", "Monitor Samsung 24\"", 180000, 3, "unidad", "Electrónicos");
-        ItemCotizacion item3 = new ItemCotizacion("MOU001", "Mouse Inalámbrico Logitech", 25000, 5, "unidad", "Accesorios");
-        
-        cotizacion1.agregarItem(item1);
-        cotizacion1.agregarItem(item2);
-        cotizacion1.agregarItem(item3);
-        
-        cotizacion1.setDescuento(50000); // Descuento de $50,000
-        cotizacion1.setImpuestos(0.19); // IVA 19%
-        
-        cotizaciones.put(cotizacion1.getId(), cotizacion1);
-    }
-    
-    // Operaciones CRUD para Cotizaciones
-    public Cotizacion crearCotizacion(Cotizacion cotizacion) {
-        if (cotizacion.getNumeroCotizacion() == null || cotizacion.getNumeroCotizacion().isEmpty()) {
-            cotizacion.setNumeroCotizacion("COT-" + java.time.LocalDate.now().getYear() + "-" + 
-                                         String.format("%03d", contadorCotizaciones++));
+
+    public boolean exportarItemsAExcel(List<ItemCotizacionExcel> items, File archivo) {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet hoja = workbook.createSheet("Cotización");
+
+            Row encabezado = hoja.createRow(0);
+            encabezado.createCell(0).setCellValue("Código");
+            encabezado.createCell(1).setCellValue("Descripción");
+            encabezado.createCell(2).setCellValue("Cantidad");
+            encabezado.createCell(3).setCellValue("Precio");
+            encabezado.createCell(4).setCellValue("Total");
+            encabezado.createCell(5).setCellValue("Descuento");
+            encabezado.createCell(6).setCellValue("Total Neto");
+            encabezado.createCell(7).setCellValue("Comentarios");
+            encabezado.createCell(8).setCellValue("Disponibilidad");
+            encabezado.createCell(9).setCellValue("Total Bruto");
+
+            for (int i = 0; i < items.size(); i++) {
+                ItemCotizacionExcel item = items.get(i);
+                Row fila = hoja.createRow(i + 1);
+                fila.createCell(0).setCellValue(item.getCodigo());
+                fila.createCell(1).setCellValue(item.getDescripcion());
+                fila.createCell(2).setCellValue(item.getCantidad());
+                fila.createCell(3).setCellValue(item.getPrecio());
+                fila.createCell(4).setCellValue(item.getTotal());
+                fila.createCell(5).setCellValue(item.getDescuento());
+                fila.createCell(6).setCellValue(item.getTotalNeto());
+                fila.createCell(7).setCellValue(item.getComentarios());
+                fila.createCell(8).setCellValue(item.getDisponibilidad());
+                fila.createCell(9).setCellValue(item.getTotalBruto());
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(archivo)) {
+                workbook.write(fos);
+            }
+
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
         }
-        cotizaciones.put(cotizacion.getId(), cotizacion);
-        return cotizacion;
     }
-    
-    public Cotizacion obtenerCotizacion(String id) {
-        return cotizaciones.get(id);
-    }
-    
-    public List<Cotizacion> obtenerTodasLasCotizaciones() {
-        return new ArrayList<>(cotizaciones.values());
-    }
-    
-    public List<Cotizacion> buscarCotizacionesPorCliente(String clienteId) {
-        return cotizaciones.values().stream()
-            .filter(cotizacion -> cotizacion.getCliente() != null && 
-                                 cotizacion.getCliente().getId().equals(clienteId))
-            .collect(java.util.stream.Collectors.toList());
-    }
-    
-    public List<Cotizacion> buscarCotizacionesPorEstado(String estado) {
-        return cotizaciones.values().stream()
-            .filter(cotizacion -> cotizacion.getEstado().equalsIgnoreCase(estado))
-            .collect(java.util.stream.Collectors.toList());
-    }
-    
-    public Cotizacion actualizarCotizacion(Cotizacion cotizacion) {
-        if (cotizaciones.containsKey(cotizacion.getId())) {
-            cotizaciones.put(cotizacion.getId(), cotizacion);
-            return cotizacion;
+
+    public boolean actualizarArchivoConPrecios(File archivo) {
+        List<ItemCotizacionExcel> items = leerItemsDesdeExcel(archivo);
+
+        for (ItemCotizacionExcel item : items) {
+            double nuevoPrecio = item.getPrecio() * 1.10;
+            item.setPrecio(nuevoPrecio);
         }
-        return null;
+
+        return exportarItemsAExcel(items, archivo);
     }
-    
-    public boolean eliminarCotizacion(String id) {
-        return cotizaciones.remove(id) != null;
-    }
-    
-    // Operaciones CRUD para Clientes
-    public Cliente crearCliente(Cliente cliente) {
-        clientes.put(cliente.getId(), cliente);
-        return cliente;
-    }
-    
-    public Cliente obtenerCliente(String id) {
-        return clientes.get(id);
-    }
-    
-    public List<Cliente> obtenerTodosLosClientes() {
-        return new ArrayList<>(clientes.values());
-    }
-    
-    public List<Cliente> buscarClientesPorNombre(String nombre) {
-        return clientes.values().stream()
-            .filter(cliente -> cliente.getNombre().toLowerCase().contains(nombre.toLowerCase()))
-            .collect(java.util.stream.Collectors.toList());
-    }
-    
-    public Cliente actualizarCliente(Cliente cliente) {
-        if (clientes.containsKey(cliente.getId())) {
-            clientes.put(cliente.getId(), cliente);
-            return cliente;
+
+    private Map<String, Integer> detectarColumnas(Row encabezado) {
+        Map<String, Integer> mapa = new HashMap<>();
+        Map<String, List<String>> sinonimos = new HashMap<>();
+        sinonimos.put("codigo", List.of("item code", "code", "item", "codigo", "código"));
+        sinonimos.put("descripcion", List.of("description", "desc", "item description", "descripción"));
+        sinonimos.put("cantidad", List.of("quantity", "qty", "cantidad", "quantity order"));
+        sinonimos.put("precio", List.of("price", "unit price", "precio", "unit cost", "precio unitario"));
+        sinonimos.put("unidad", List.of("unit", "unit of measure", "unidad"));
+        sinonimos.put("categoria", List.of("category", "food categories", "categoría"));
+        sinonimos.put("descuento", List.of("discount", "descuento"));
+        sinonimos.put("totalneto", List.of("total net", "net total", "totalneto"));
+        sinonimos.put("comentarios", List.of("comments", "supplier comments", "comentarios"));
+        sinonimos.put("disponibilidad", List.of("availability", "disponibilidad"));
+        sinonimos.put("totalbruto", List.of("total", "gross total", "total bruto"));
+
+        for (Cell celda : encabezado) {
+            String valor = celda.toString().trim().toLowerCase().replaceAll("[^a-z0-9 ]", "");
+
+            for (Map.Entry<String, List<String>> entry : sinonimos.entrySet()) {
+                for (String alias : entry.getValue()) {
+                    String normalizado = alias.toLowerCase().replaceAll("[^a-z0-9 ]", "");
+                    if (valor.contains(normalizado)) {
+                        mapa.put(entry.getKey(), celda.getColumnIndex());
+                    }
+                }
+            }
         }
-        return null;
+
+        return mapa;
     }
-    
-    public boolean eliminarCliente(String id) {
-        return clientes.remove(id) != null;
+
+    private String obtenerTexto(Row fila, Integer index) {
+        if (index == null) return "";
+        Cell celda = fila.getCell(index);
+        return (celda != null) ? celda.toString().trim() : "";
     }
-    
-    // Métodos de utilidad
-    public List<String> obtenerEstadosDisponibles() {
-        return Arrays.asList("BORRADOR", "PENDIENTE", "APROBADA", "RECHAZADA", "VENCIDA", "FACTURADA");
+
+    private int obtenerEntero(Row fila, Integer index) {
+        if (index == null) return 0;
+        Cell celda = fila.getCell(index);
+        if (celda == null) return 0;
+
+        try {
+            if (celda.getCellType() == CellType.NUMERIC) {
+                return (int) celda.getNumericCellValue();
+            } else if (celda.getCellType() == CellType.STRING) {
+                return Integer.parseInt(celda.getStringCellValue().trim());
+            } else if (celda.getCellType() == CellType.FORMULA) {
+                return (int) celda.getNumericCellValue();
+            }
+        } catch (Exception e) {
+            System.err.println("Error leyendo cantidad: " + e.getMessage());
+        }
+        return 0;
     }
-    
-    public List<String> obtenerCategoriasDisponibles() {
-        return Arrays.asList("Electrónicos", "Accesorios", "Oficina", "Hogar", "Software", "Servicios");
+
+    private double obtenerDecimal(Row fila, Integer index) {
+    if (index == null) return 0.0;
+    Cell celda = fila.getCell(index);
+    if (celda == null) return 0.0;
+
+    try {
+        if (celda.getCellType() == CellType.NUMERIC) {
+            return celda.getNumericCellValue();
+        } else if (celda.getCellType() == CellType.STRING) {
+            return Double.parseDouble(celda.getStringCellValue().trim().replace(",", "."));
+        } else if (celda.getCellType() == CellType.FORMULA) {
+            return celda.getNumericCellValue();
+        }
+    } catch (Exception e) {
+        System.err.println("Error leyendo decimal: " + e.getMessage());
     }
-    
-    public Map<String, Object> obtenerEstadisticas() {
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("totalCotizaciones", cotizaciones.size());
-        stats.put("totalClientes", clientes.size());
-        stats.put("cotizacionesPendientes", buscarCotizacionesPorEstado("PENDIENTE").size());
-        stats.put("cotizacionesAprobadas", buscarCotizacionesPorEstado("APROBADA").size());
-        
-        double totalVentas = cotizaciones.values().stream()
-            .filter(cotizacion -> "APROBADA".equals(cotizacion.getEstado()))
-            .mapToDouble(Cotizacion::getTotal)
-            .sum();
-        stats.put("totalVentas", totalVentas);
-        
-        return stats;
-    }
+
+    return 0.0;
+
+  }  
+
 }
