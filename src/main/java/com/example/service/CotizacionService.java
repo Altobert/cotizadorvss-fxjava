@@ -211,7 +211,66 @@ public class CotizacionService {
     }
 
     return 0.0;
+  }
 
-  }  
+  /**
+   * Exporta una lista de ItemCotizacionExcel a un archivo Excel
+   */
+  public void exportarCotizacion(List<ItemCotizacionExcel> items, File archivo) throws Exception {
+      try (Workbook workbook = new XSSFWorkbook()) {
+          Sheet sheet = workbook.createSheet("Cotización");
+          
+          // Crear estilos
+          CellStyle headerStyle = workbook.createCellStyle();
+          Font headerFont = workbook.createFont();
+          headerFont.setBold(true);
+          headerFont.setColor(IndexedColors.WHITE.getIndex());
+          headerStyle.setFont(headerFont);
+          headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+          headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+          headerStyle.setBorderBottom(BorderStyle.THIN);
+          headerStyle.setBorderTop(BorderStyle.THIN);
+          headerStyle.setBorderRight(BorderStyle.THIN);
+          headerStyle.setBorderLeft(BorderStyle.THIN);
+          
+          // Crear encabezados
+          Row headerRow = sheet.createRow(0);
+          String[] headers = {"Código", "Descripción", "Cantidad", "Precio", "Total", 
+                            "Descuento", "Total Neto", "Comentarios", "Disponibilidad", "Total Bruto"};
+          
+          for (int i = 0; i < headers.length; i++) {
+              Cell cell = headerRow.createCell(i);
+              cell.setCellValue(headers[i]);
+              cell.setCellStyle(headerStyle);
+          }
+          
+          // Agregar datos
+          int rowNum = 1;
+          for (ItemCotizacionExcel item : items) {
+              Row row = sheet.createRow(rowNum++);
+              
+              row.createCell(0).setCellValue(item.getCodigo());
+              row.createCell(1).setCellValue(item.getDescripcion());
+              row.createCell(2).setCellValue(item.getCantidad());
+              row.createCell(3).setCellValue(item.getPrecio());
+              row.createCell(4).setCellValue(item.getTotal());
+              row.createCell(5).setCellValue(item.getDescuento());
+              row.createCell(6).setCellValue(item.getTotalNeto());
+              row.createCell(7).setCellValue(item.getComentarios());
+              row.createCell(8).setCellValue(item.getDisponibilidad());
+              row.createCell(9).setCellValue(item.getTotalBruto());
+          }
+          
+          // Ajustar ancho de columnas
+          for (int i = 0; i < headers.length; i++) {
+              sheet.autoSizeColumn(i);
+          }
+          
+          // Escribir archivo
+          try (FileOutputStream fos = new FileOutputStream(archivo)) {
+              workbook.write(fos);
+          }
+      }
+  }
 
 }
