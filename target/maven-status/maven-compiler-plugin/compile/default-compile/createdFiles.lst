@@ -7,8 +7,11 @@ com/example/service/ExportacionService.class
 com/example/demo/GeneradorArchivoSimple.class
 com/example/model/ItemCotizacionExcel.class
 com/example/service/LecturaCotizacionService$1.class
+com/example/service/CotizacionService.class
+com/example/demo/CotizacionDemo.class
 com/example/demo/AnalizadorEstructuraExcel$1.class
 com/example/model/Cliente.class
+com/example/Main.class
 com/example/demo/GeneradorArchivoEjemplo.class
 com/example/model/Cotizacion.class
 com/example/demo/AnalizadorCotizaciones.class

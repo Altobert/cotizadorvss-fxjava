@@ -38,6 +38,7 @@ public class Main extends Application {
         stage.show();
     }
 
+    @SuppressWarnings("unchecked")
     private void configurarTabla() {
         TableColumn<ItemCotizacionExcel, String> colCodigo = new TableColumn<>("Código");
         colCodigo.setCellValueFactory(cellData -> cellData.getValue().codigoProperty());
