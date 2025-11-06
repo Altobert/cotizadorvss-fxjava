@@ -9,7 +9,7 @@ echo "=============================="
 
 # Configuración del proyecto
 PROJECT_NAME="Cotizador JavaFX"
-MAIN_CLASS="com.example.Main"
+MAIN_CLASS="cl.vss.cotizador.Main"
 JAVA_VERSION="17"
 
 # Función para mostrar ayuda

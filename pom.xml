@@ -6,7 +6,7 @@
     
     <modelVersion>4.0.0</modelVersion>
     
-    <groupId>com.example</groupId>
+    <groupId>cl.vss.cotizador</groupId>
     <artifactId>cotizador-javafx</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
@@ -21,7 +21,7 @@
         <javafx.version>17.0.2</javafx.version>
         <javafx.maven.plugin.version>0.0.8</javafx.maven.plugin.version>
         <poi.version>5.2.4</poi.version>
-        <main.class>com.example.Main</main.class>
+        <main.class>cl.vss.cotizador.Main</main.class>
     </properties>
     
     <dependencies>
