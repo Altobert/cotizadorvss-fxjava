@@ -7,7 +7,10 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
+import javafx.util.converter.DoubleStringConverter;
+import javafx.util.converter.IntegerStringConverter;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -46,17 +49,40 @@ public class Main extends Application {
 
     @SuppressWarnings("unchecked")
     private void configurarTabla() {
+        // Habilitar edición en la tabla
+        tabla.setEditable(true);
+        
         TableColumn<ItemCotizacionExcel, String> colCodigo = new TableColumn<>("Código");
         colCodigo.setCellValueFactory(cellData -> cellData.getValue().codigoProperty());
+        colCodigo.setCellFactory(TextFieldTableCell.forTableColumn());
+        colCodigo.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setCodigo(event.getNewValue());
+        });
 
         TableColumn<ItemCotizacionExcel, String> colDescripcion = new TableColumn<>("Descripción");
         colDescripcion.setCellValueFactory(cellData -> cellData.getValue().descripcionProperty());
+        colDescripcion.setCellFactory(TextFieldTableCell.forTableColumn());
+        colDescripcion.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setDescripcion(event.getNewValue());
+        });
 
         TableColumn<ItemCotizacionExcel, Integer> colCantidad = new TableColumn<>("Cantidad");
         colCantidad.setCellValueFactory(cellData -> cellData.getValue().cantidadProperty().asObject());
+        colCantidad.setCellFactory(TextFieldTableCell.forTableColumn(new IntegerStringConverter()));
+        colCantidad.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setCantidad(event.getNewValue());
+        });
 
         TableColumn<ItemCotizacionExcel, Double> colPrecio = new TableColumn<>("Precio");
         colPrecio.setCellValueFactory(cellData -> cellData.getValue().precioProperty().asObject());
+        colPrecio.setCellFactory(TextFieldTableCell.forTableColumn(new DoubleStringConverter()));
+        colPrecio.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setPrecio(event.getNewValue());
+        });
 
         TableColumn<ItemCotizacionExcel, Double> colTotal = new TableColumn<>("Total");
         colTotal.setCellValueFactory(cellData ->
@@ -66,18 +92,43 @@ public class Main extends Application {
         // Nuevas columnas extendidas
         TableColumn<ItemCotizacionExcel, Double> colDescuento = new TableColumn<>("Descuento");
         colDescuento.setCellValueFactory(cellData -> cellData.getValue().descuentoProperty().asObject());
+        colDescuento.setCellFactory(TextFieldTableCell.forTableColumn(new DoubleStringConverter()));
+        colDescuento.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setDescuento(event.getNewValue());
+        });
 
         TableColumn<ItemCotizacionExcel, Double> colTotalNeto = new TableColumn<>("Total Neto");
         colTotalNeto.setCellValueFactory(cellData -> cellData.getValue().totalNetoProperty().asObject());
+        colTotalNeto.setCellFactory(TextFieldTableCell.forTableColumn(new DoubleStringConverter()));
+        colTotalNeto.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setTotalNeto(event.getNewValue());
+        });
 
         TableColumn<ItemCotizacionExcel, String> colComentarios = new TableColumn<>("Comentarios");
         colComentarios.setCellValueFactory(cellData -> cellData.getValue().comentariosProperty());
+        colComentarios.setCellFactory(TextFieldTableCell.forTableColumn());
+        colComentarios.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setComentarios(event.getNewValue());
+        });
 
         TableColumn<ItemCotizacionExcel, Integer> colDisponibilidad = new TableColumn<>("Disponibilidad");
         colDisponibilidad.setCellValueFactory(cellData -> cellData.getValue().disponibilidadProperty().asObject());
+        colDisponibilidad.setCellFactory(TextFieldTableCell.forTableColumn(new IntegerStringConverter()));
+        colDisponibilidad.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setDisponibilidad(event.getNewValue());
+        });
 
         TableColumn<ItemCotizacionExcel, Double> colTotalBruto = new TableColumn<>("Total Bruto");
         colTotalBruto.setCellValueFactory(cellData -> cellData.getValue().totalBrutoProperty().asObject());
+        colTotalBruto.setCellFactory(TextFieldTableCell.forTableColumn(new DoubleStringConverter()));
+        colTotalBruto.setOnEditCommit(event -> {
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setTotalBruto(event.getNewValue());
+        });
 
         tabla.getColumns().addAll(
             colCodigo, colDescripcion, colCantidad, colPrecio, colTotal,
