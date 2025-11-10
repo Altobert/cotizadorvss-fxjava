@@ -1,0 +1,94 @@
+Table usuario {
+  id BIGINT [pk, increment]
+  nombre VARCHAR(100)
+  correo VARCHAR(100)
+  rol VARCHAR(50)
+  activo BOOLEAN
+  fecha_creacion DATETIME
+}
+
+Table tipo_cambio {
+  id BIGINT [pk, increment]
+  fecha DATE [unique]
+  valor DECIMAL(10,4)
+  fuente VARCHAR(100)
+  usuario_registro_id BIGINT [ref: > usuario.id]
+  fecha_registro DATETIME
+}
+
+Table cliente {
+  id BIGINT [pk, increment]
+  nombre_barco VARCHAR(100) [unique]
+  imo_numero VARCHAR(20)
+  empresa_operadora VARCHAR(100)
+  correo_contacto VARCHAR(100)
+  puerto_base VARCHAR(100)
+  pais_origen VARCHAR(50)
+  tipo_cliente VARCHAR(50)
+  capitán VARCHAR(100)
+  cocinero_jefe VARCHAR(100)
+  observaciones TEXT
+  activo BOOLEAN
+  fecha_creacion DATETIME
+}
+
+Table cotizacion {
+  id BIGINT [pk, increment]
+  cliente_id BIGINT [ref: > cliente.id]
+  fecha_solicitud DATE
+  puerto_destino VARCHAR(100)
+  archivo_origen VARCHAR(100)
+  observaciones TEXT
+  usuario_importador_id BIGINT [ref: > usuario.id]
+  fecha_importacion DATETIME
+}
+
+Table familia_producto {
+  id BIGINT [pk, increment]
+  nombre VARCHAR(100) [unique]
+  descripcion TEXT
+}
+
+Table producto {
+  id BIGINT [pk, increment]
+  familia VARCHAR(100)
+  descripcion_en TEXT // nombre en inglés
+  descripcion_es TEXT // nombre en español
+  unidad_medida VARCHAR(20)
+  valor_pesos DECIMAL(12,2)
+  precio_costo_neto DECIMAL(12,2)
+  porcentaje_utilidad DECIMAL(5,2)
+  precio_venta_neto DECIMAL(12,2)
+  tipo_cambio_usado DECIMAL(10,4)
+  fecha_actualizacion DATETIME
+  usuario_editor_id BIGINT [ref: > usuario.id]
+}
+
+Ref: producto.familia > familia_producto.nombre
+
+Table item_cotizacion {
+  id BIGINT [pk, increment]
+  cotizacion_id BIGINT [ref: > cotizacion.id]
+  producto_id BIGINT [ref: - producto.id] // opcional
+  descripcion TEXT
+  unidad_medida VARCHAR(20)
+  valor_pesos DECIMAL(12,2)
+  tipo_cambio_usado DECIMAL(10,4)
+  precio_costo_neto DECIMAL(12,2)
+  porcentaje_utilidad DECIMAL(5,2)
+  precio_venta_neto DECIMAL(12,2)
+  cantidad INT
+  total_neto DECIMAL(12,2)
+  comentarios TEXT
+}
+
+Table log_importacion {
+  id BIGINT [pk, increment]
+  cotizacion_id BIGINT [ref: > cotizacion.id]
+  usuario_id BIGINT [ref: > usuario.id]
+  fecha DATETIME
+  total_items INT
+  items_vinculados INT
+  items_no_encontrados INT
+  errores_detectados TEXT
+  resumen TEXT
