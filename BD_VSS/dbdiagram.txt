@@ -16,6 +16,15 @@ Table tipo_cambio {
   fecha_registro DATETIME
 }
 
+Table parametros_comerciales {
+  id BIGINT [pk, increment]
+  tipo_cambio_usado DECIMAL(10,4)
+  porcentaje_utilidad DECIMAL(5,2)
+  fecha_vigencia DATE
+  usuario_editor_id BIGINT [ref: > usuario.id]
+  fecha_actualizacion DATETIME
+}
+
 Table cliente {
   id BIGINT [pk, increment]
   nombre_barco VARCHAR(100) [unique]
@@ -51,25 +60,19 @@ Table familia_producto {
 
 Table producto {
   id BIGINT [pk, increment]
-  familia VARCHAR(100)
-  descripcion_en TEXT // nombre en inglés
-  descripcion_es TEXT // nombre en español
+  familia_id BIGINT [ref: > familia_producto.id]
+  descripcion_en TEXT
+  descripcion_es TEXT
   unidad_medida VARCHAR(20)
   valor_pesos DECIMAL(12,2)
-  precio_costo_neto DECIMAL(12,2)
-  porcentaje_utilidad DECIMAL(5,2)
-  precio_venta_neto DECIMAL(12,2)
-  tipo_cambio_usado DECIMAL(10,4)
   fecha_actualizacion DATETIME
   usuario_editor_id BIGINT [ref: > usuario.id]
 }
 
-Ref: producto.familia > familia_producto.nombre
-
 Table item_cotizacion {
   id BIGINT [pk, increment]
   cotizacion_id BIGINT [ref: > cotizacion.id]
-  producto_id BIGINT [ref: - producto.id] // opcional
+  producto_id BIGINT [ref: - producto.id]
   descripcion TEXT
   unidad_medida VARCHAR(20)
   valor_pesos DECIMAL(12,2)
@@ -92,3 +95,4 @@ Table log_importacion {
   items_no_encontrados INT
   errores_detectados TEXT
   resumen TEXT
+}
