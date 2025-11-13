@@ -14,7 +14,6 @@ BEGIN
     CREATE TEMP TABLE temp_abarrotes (
         familia_path TEXT,
         descripcion_en TEXT,
-        unidad_medida TEXT,
         valor_pesos TEXT,
         precio_costo_neto TEXT,
         tipo_cambio TEXT,

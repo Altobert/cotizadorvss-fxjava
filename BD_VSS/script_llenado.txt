@@ -9,8 +9,8 @@ INSERT INTO familia_producto (nombre, descripcion) VALUES
 ('Congelados', 'Productos congelados listos para consumo'),
 ('Pescados y mariscos', 'Productos del mar, frescos o en conserva'),
 ('Frutas y verduras', 'Productos vegetales frescos o procesados'),
-('Indu', 'Productos industriales o de uso general');
-
+('Indu', 'Productos industriales o de uso general'),
+('Abarrotes', 'Productos de almacén, abarrotes y consumo diario');
 *******************************************************************************************
 // Script para poblar con 10 productos de prueba.
 
