@@ -62,7 +62,9 @@ public class CotizacionService {
                 Row fila = filas.next();
 
                 String codigo = obtenerTexto(fila, columnas.get("codigo"));
+                logger.info("Leyendo item con código: " + codigo);
                 String descripcion = obtenerTexto(fila, columnas.get("descripcion"));
+                logger.info("Leyendo item con descripción: " + descripcion);
                 int cantidad = obtenerEntero(fila, columnas.get("cantidad"));
                 double precio = obtenerDecimal(fila, columnas.get("precio"));
                 String unidad = columnas.containsKey("unidad") ? obtenerTexto(fila, columnas.get("unidad")) : "";

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <!-- Configuración básica de Log4j2 para Apache POI -->
+    <!-- Configurada para no interferir con Java Util Logging -->
+    
+    <Appenders>
+        <!-- Console Appender con nivel mínimo para reducir ruido -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="[LOG4J2] %d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+    
+    <Loggers>
+        <!-- Logger específico para Apache POI con nivel WARNING para reducir ruido -->
+        <Logger name="org.apache.poi" level="WARN" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- Root logger con nivel ERROR para minimizar interferencia -->
+        <Root level="ERROR">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>

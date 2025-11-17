@@ -67,6 +67,16 @@ public class LoggingConfig {
     }
     
     /**
+     * Obtiene un logger configurado por nombre
+     * @param name nombre del logger
+     * @return Logger configurado
+     */
+    public static Logger getLogger(String name) {
+        initialize();
+        return Logger.getLogger(name);
+    }
+    
+    /**
      * Cambia el nivel de logging dinámicamente
      * @param loggerName nombre del logger
      * @param level nuevo nivel
