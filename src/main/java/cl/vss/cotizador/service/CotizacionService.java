@@ -8,10 +8,16 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.util.*;
+import java.util.logging.Logger;
+import java.util.logging.Level;
+import cl.vss.cotizador.util.LoggingConfig;
 
 public class CotizacionService {
+    
+    private static final Logger logger = LoggingConfig.getLogger(CotizacionService.class);
 
     public List<ItemCotizacionExcel> leerItemsDesdeExcel(File archivo) {
+        logger.info("📂 Iniciando lectura de archivo Excel: " + archivo.getAbsolutePath());
         List<ItemCotizacionExcel> items = new ArrayList<>();
 
         try (FileInputStream fis = new FileInputStream(archivo);
@@ -20,35 +26,35 @@ public class CotizacionService {
             Sheet hoja = workbook.getSheetAt(0);
             Iterator<Row> filas = hoja.iterator();
 
-            System.out.println("🔎 Explorando filas para detectar encabezado...");
+            logger.info("🔎 Explorando filas para detectar encabezado en archivo: " + archivo.getName());
 
             Row encabezado = null;
             while (filas.hasNext()) {
                 Row fila = filas.next();
                 for (Cell celda : fila) {
                     String valor = celda.toString().trim().toLowerCase();
-                    System.out.print("[" + valor + "] ");
+                    logger.fine("Analizando celda: [" + valor + "]");
                     if (valor.contains("item") || valor.contains("item description") || valor.contains("unit of measure")) {
                         encabezado = fila;
+                        logger.fine("Encabezado encontrado en fila: " + fila.getRowNum());
                         break;
                     }
                 }
-                System.out.println();
                 if (encabezado != null) break;
             }
 
             if (encabezado == null) {
-                System.err.println("❌ No se encontró fila de encabezado válida.");
+                logger.severe("❌ No se encontró fila de encabezado válida en archivo: " + archivo.getName());
                 return items;
             }
 
             Map<String, Integer> columnas = detectarColumnas(encabezado);
 
-            System.out.println("✅ Encabezados detectados:");
-            columnas.forEach((k, v) -> System.out.println("→ " + k + " en columna " + v));
+            logger.info("✅ Encabezados detectados: " + columnas.size() + " columnas");
+            columnas.forEach((k, v) -> logger.fine("→ " + k + " en columna " + v));
 
             if (!columnas.containsKey("codigo") || !columnas.containsKey("descripcion")) {
-                System.err.println("⚠️ Encabezados clave faltantes: 'codigo' y/o 'descripcion'");
+                logger.warning("⚠️ Encabezados clave faltantes: 'codigo' y/o 'descripcion' en archivo: " + archivo.getName());
                 return items;
             }
 
@@ -78,13 +84,15 @@ public class CotizacionService {
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "❌ Error al leer archivo Excel: " + archivo.getName(), e);
         }
 
+        logger.info("✅ Procesamiento completado. Items leídos: " + items.size());
         return items;
     }
 
     public boolean exportarItemsAExcel(List<ItemCotizacionExcel> items, File archivo) {
+        logger.info("📤 Iniciando exportación de " + items.size() + " items a: " + archivo.getName());
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet hoja = workbook.createSheet("Cotización");
 
@@ -119,9 +127,10 @@ public class CotizacionService {
                 workbook.write(fos);
             }
 
+            logger.info("✅ Exportación completada exitosamente: " + archivo.getName());
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "❌ Error al exportar items a Excel: " + archivo.getName(), e);
             return false;
         }
     }
@@ -188,7 +197,7 @@ public class CotizacionService {
                 return (int) celda.getNumericCellValue();
             }
         } catch (Exception e) {
-            System.err.println("Error leyendo cantidad: " + e.getMessage());
+            logger.log(Level.WARNING, "⚠️ Error leyendo cantidad en índice " + index, e);
         }
         return 0;
     }
@@ -207,7 +216,7 @@ public class CotizacionService {
             return celda.getNumericCellValue();
         }
     } catch (Exception e) {
-        System.err.println("Error leyendo decimal: " + e.getMessage());
+        logger.log(Level.WARNING, "⚠️ Error leyendo decimal en índice " + index, e);
     }
 
     return 0.0;

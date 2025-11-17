@@ -22,9 +22,6 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 
 
-
-
-
 public class Main extends Application {
     // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
