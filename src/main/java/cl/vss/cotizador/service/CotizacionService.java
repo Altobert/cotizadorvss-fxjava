@@ -1,12 +1,17 @@
 package cl.vss.cotizador.service;
 
 import cl.vss.cotizador.model.ItemCotizacionExcel;
+import cl.vss.cotizador.util.DBConnection;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.logging.Logger;
 import java.util.logging.Level;
@@ -281,6 +286,96 @@ public class CotizacionService {
           try (FileOutputStream fos = new FileOutputStream(archivo)) {
               workbook.write(fos);
           }
+      }
+  }
+
+  /**
+   * Consulta el precio de venta neto de un producto desde la vista vista_producto_precio
+   * @param descripcion descripción del producto a buscar
+   * @return precio de venta neto, o 0.0 si no se encuentra
+   */
+  public double consultarPrecioPorDescripcion(String descripcion) {
+      logger.info("💰 Consultando precio para descripción: " + descripcion);
+      
+      if (descripcion == null || descripcion.trim().isEmpty()) {
+          logger.warning("⚠️ Descripción vacía o nula para consulta de precio");
+          return 0.0;
+      }
+      
+      // Buscar en ambas columnas de descripción (español e inglés)
+      String sql = "SELECT precio_venta_neto FROM vista_producto_precio " +
+                  "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
+                  "LIMIT 1";
+      
+      try (Connection connection = DBConnection.getConnection();
+           PreparedStatement statement = connection.prepareStatement(sql)) {
+          
+          // Preparar el parámetro con wildcards para búsqueda parcial
+          String descripcionBusqueda = "%" + descripcion.trim() + "%";
+          statement.setString(1, descripcionBusqueda);
+          statement.setString(2, descripcionBusqueda);
+          
+          logger.fine("🔍 Ejecutando consulta SQL: " + sql);
+          logger.fine("🔍 Parámetro búsqueda: " + descripcionBusqueda);
+          
+          try (ResultSet resultSet = statement.executeQuery()) {
+              if (resultSet.next()) {
+                  double precio = resultSet.getDouble("precio_venta_neto");
+                  logger.info("✅ Precio encontrado: $" + precio + " para descripción: " + descripcion);
+                  return precio;
+              } else {
+                  logger.warning("⚠️ No se encontró precio para descripción: " + descripcion);
+                  return 0.0;
+              }
+          }
+          
+      } catch (SQLException e) {
+          logger.log(Level.SEVERE, "❌ Error al consultar precio para descripción: " + descripcion, e);
+          return 0.0;
+      }
+  }
+  
+  /**
+   * Consulta el precio de venta neto de un producto con búsqueda exacta
+   * @param descripcion descripción exacta del producto
+   * @return precio de venta neto, o 0.0 si no se encuentra
+   */
+  public double consultarPrecioExactoPorDescripcion(String descripcion) {
+      logger.info("💰 Consultando precio exacto para descripción: " + descripcion);
+      
+      if (descripcion == null || descripcion.trim().isEmpty()) {
+          logger.warning("⚠️ Descripción vacía o nula para consulta de precio exacto");
+          return 0.0;
+      }
+      
+      // Buscar coincidencia exacta en ambas columnas de descripción
+      String sql = "SELECT precio_venta_neto FROM vista_producto_precio " +
+                  "WHERE UPPER(descripcion_es) = UPPER(?) OR UPPER(descripcion_en) = UPPER(?) " +
+                  "LIMIT 1";
+      
+      try (Connection connection = DBConnection.getConnection();
+           PreparedStatement statement = connection.prepareStatement(sql)) {
+          
+          statement.setString(1, descripcion.trim());
+          statement.setString(2, descripcion.trim());
+          
+          logger.fine("🔍 Ejecutando consulta SQL exacta: " + sql);
+          logger.fine("🔍 Parámetro: " + descripcion.trim());
+          
+          try (ResultSet resultSet = statement.executeQuery()) {
+              if (resultSet.next()) {
+                  double precio = resultSet.getDouble("precio_venta_neto");
+                  logger.info("✅ Precio exacto encontrado: $" + precio + " para descripción: " + descripcion);
+                  return precio;
+              } else {
+                  logger.warning("⚠️ No se encontró precio exacto para descripción: " + descripcion);
+                  return 0.0;
+              }
+          }
+          
+      } catch (SQLException e) {
+          logger.log(Level.SEVERE, "❌ Error al consultar precio exacto para descripción: " + descripcion, e);
+          return 0.0;
       }
   }
 
