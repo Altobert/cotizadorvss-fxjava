@@ -1,0 +1,201 @@
+# ================================
+# .gitignore para Proyecto JavaFX
+# Proyecto: Cotizador VSS
+# ================================
+
+# ====== JAVA ======
+# Archivos compilados
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar.gz
+*.rar
+
+# Logs
+*.log
+logs/
+
+# ====== MAVEN ======
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# ====== IDE ======
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse
+.project
+.classpath
+.c9/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+.metadata
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+.apt_generated
+.apt_generated_test
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# ====== JAVAFX ======
+# JavaFX archivos temporales
+*.fxml~
+
+# ====== SISTEMA OPERATIVO ======
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ====== ARCHIVOS TEMPORALES ======
+# Archivos de backup
+*.bak
+*.backup
+*.orig
+*.tmp
+*.temp
+
+# Archivos de trabajo temporales
+*.wip
+*.draft
+
+# ====== BASE DE DATOS ======
+# Archivos de base de datos locales
+*.db
+*.sqlite
+*.sqlite3
+*.h2.db
+
+# ====== CONFIGURACIÓN LOCAL ======
+# Archivos de configuración local
+config/local/
+*.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ====== ARCHIVOS DE CONSTRUCCIÓN ======
+# Archivos de distribución
+dist/
+build/
+*.exe
+*.dmg
+*.pkg
+
+# ====== DOCUMENTACIÓN GENERADA ======
+# JavaDoc generado
+/doc/
+/docs/api/
+
+# ====== DEPENDENCIAS ======
+# Librerías descargadas manualmente (si las hay)
+lib/downloaded/
+vendors/
+
+# ====== ARCHIVOS DE PRUEBA ======
+# Archivos de prueba temporales
+test-output/
+*.test
+coverage/
+*.coverage
+
+# ====== COTIZACIONES (ESPECÍFICO DEL PROYECTO) ======
+# Archivos Excel de prueba
+cotizaciones/test/
+cotizaciones/ejemplos/
+*.xlsx
+*.xls
+# Excepción: mantener archivos de ejemplo
+!cotizaciones/ejemplos/ejemplo_basico.xlsx
+
+# ====== OTROS ======
+# Archivos de caché
+.cache/
+*.cache
+
+# Node modules (si usas alguna herramienta Node.js)
+node_modules/
+
+# Archivos de seguridad
+*.key
+*.pem
+*.p12
+*.jks
+secrets/
+
+# ====== ARCHIVOS ESPECÍFICOS DEL PROYECTO ======
+# Scripts de construcción personalizados temporales
+build-temp/
+deploy-temp/
+
+# Reportes de análisis de código
+reports/
+sonar/
+
+# Archivos de configuración de desarrollo personal
+.vscode/settings.json
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries/
+
+# ====== FINAL ======
+# Cualquier archivo que termine en .local
+*.local
