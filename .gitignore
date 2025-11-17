@@ -132,6 +132,12 @@ config/local/
 .env.test.local
 .env.production.local
 
+# Archivos de configuración con passwords (mantener solo templates)
+*-prod.properties
+*-local.properties
+# Excepción: mantener archivos de ejemplo y desarrollo
+!db-dev.properties
+
 # ====== ARCHIVOS DE CONSTRUCCIÓN ======
 # Archivos de distribución
 dist/
