@@ -69,17 +69,29 @@ public class CotizacionService {
                 String codigo = obtenerTexto(fila, columnas.get("codigo"));
                 logger.info("Leyendo item con código: " + codigo);
                 String descripcion = obtenerTexto(fila, columnas.get("descripcion"));
-                logger.info("Leyendo item con descripción: " + descripcion);
+
                 int cantidad = obtenerEntero(fila, columnas.get("cantidad"));
+                
+                // utilizar metodo consultarPrecioPorDescripcion()
+                double precioCalculado = consultarPrecioPorDescripcion(descripcion);
+                logger.info("Leyendo item con descripción: " + descripcion);
+
+                double precioTotalNeto = precioCalculado * cantidad;
+
+
+                
                 double precio = obtenerDecimal(fila, columnas.get("precio"));
                 String unidad = columnas.containsKey("unidad") ? obtenerTexto(fila, columnas.get("unidad")) : "";
                 String categoria = columnas.containsKey("categoria") ? obtenerTexto(fila, columnas.get("categoria")) : "";
 
                 double descuento = columnas.containsKey("descuento") ? obtenerDecimal(fila, columnas.get("descuento")) : 0.0;
-                double totalNeto = columnas.containsKey("totalneto") ? obtenerDecimal(fila, columnas.get("totalneto")) : 0.0;
+                //double totalNeto = columnas.containsKey("totalneto") ? obtenerDecimal(fila, columnas.get("totalneto")) : 0.0;
+                double totalNeto = precioTotalNeto;
+
                 String comentarios = columnas.containsKey("comentarios") ? obtenerTexto(fila, columnas.get("comentarios")) : "";
                 int disponibilidad = columnas.containsKey("disponibilidad") ? obtenerEntero(fila, columnas.get("disponibilidad")) : 0;
-                double totalBruto = columnas.containsKey("totalbruto") ? obtenerDecimal(fila, columnas.get("totalbruto")) : 0.0;
+                //double totalBruto = columnas.containsKey("totalbruto") ? obtenerDecimal(fila, columnas.get("totalbruto")) : 0.0;
+                double totalBruto = precioCalculado * cantidad;
 
                 if (codigo.isEmpty() && descripcion.isEmpty()) continue;
 
