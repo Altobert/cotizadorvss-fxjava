@@ -13,42 +13,98 @@ import javafx.util.converter.DoubleStringConverter;
 import javafx.util.converter.IntegerStringConverter;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-
 import java.io.File;
 import java.sql.Connection;
 import java.util.List;
+import cl.vss.cotizador.model.Producto;
+import cl.vss.cotizador.service.ProductoService;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.SimpleDoubleProperty;
+
+
+
+
 
 public class Main extends Application {
-
+    // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
+    // Productos
+    private final ProductoService productoService = new ProductoService();
+    private final TableView<Producto> tablaProductos = new TableView<>();
 
     @Override
-    public void start(Stage stage) {
+public void start(Stage stage) {
+    probarConexion();
 
+<<<<<<< HEAD
         //probarConexion();
         BorderPane root = new BorderPane();
+=======
+    // Tab Cotizador
+    BorderPane rootCotizador = new BorderPane();
+    Button btnCargar = new Button("📂 Cargar Excel");
+    btnCargar.setOnAction(e -> cargarArchivo(stage));
+>>>>>>> 3aeea440f0031e39a80f7d8ff4e0a33d51207de5
 
-        Button btnCargar = new Button("📂 Cargar Excel");
-        btnCargar.setOnAction(e -> cargarArchivo(stage));
+    Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
+    btnLimpiar.setOnAction(e -> limpiarTabla());
 
-        Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
-        btnLimpiar.setOnAction(e -> limpiarTabla());
+    Button btnExportar = new Button("💾 Exportar Cotización");
+    btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
-        Button btnExportar = new Button("💾 Exportar Cotización");
-        btnExportar.setOnAction(e -> exportarCotizacion(stage));
+    ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar, btnExportar);
+    rootCotizador.setTop(barraCotizador);
+    rootCotizador.setCenter(tabla);
+    configurarTabla();
 
-        ToolBar barra = new ToolBar(btnCargar, new Separator(), btnLimpiar, btnExportar);
-        root.setTop(barra);
-        root.setCenter(tabla);
+    // Tab Productos
+    BorderPane rootProductos = new BorderPane();
+    ToolBar barraProductos = new ToolBar(
+        new Button("➕ Agregar"),
+        new Button("✏️ Editar"),
+        new Button("🗑️ Eliminar")
+    );
+    rootProductos.setTop(barraProductos);
+    rootProductos.setCenter(tablaProductos);
 
-        configurarTabla();
+    configurarTablaProductos();
+    cargarProductos();
 
-        Scene scene = new Scene(root, 1200, 600);
-        stage.setTitle("Cotizador VSS");
-        stage.setScene(scene);
-        stage.show();
-    }
+    // TabPane principal
+    TabPane tabs = new TabPane();
+    tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
+    tabs.getTabs().add(new Tab("Productos", rootProductos));
+
+    Scene scene = new Scene(tabs, 1200, 600);
+    stage.setTitle("Cotizador VSS");
+    stage.setScene(scene);
+    stage.show();
+}
+
+
+    
+    private void configurarTablaProductos() {
+    TableColumn<Producto, String> colDescEs = new TableColumn<>("Descripción ES");
+    colDescEs.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getDescripcionEs()));
+
+    TableColumn<Producto, String> colDescEn = new TableColumn<>("Descripción EN");
+    colDescEn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getDescripcionEn()));
+
+    TableColumn<Producto, String> colUnidad = new TableColumn<>("Unidad");
+    colUnidad.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getUnidadMedida()));
+
+    TableColumn<Producto, Double> colValor = new TableColumn<>("Valor Pesos");
+    colValor.setCellValueFactory(cell -> new SimpleDoubleProperty(cell.getValue().getValorPesos()).asObject());
+
+    tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colValor);
+}
+
+private void cargarProductos() {
+    tablaProductos.setItems(FXCollections.observableArrayList(productoService.listarProductos()));
+}
+
+
 
     @SuppressWarnings("unchecked")
     private void configurarTabla() {
@@ -148,8 +204,11 @@ public class Main extends Application {
 
 
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 3aeea440f0031e39a80f7d8ff4e0a33d51207de5
     private void cargarArchivo(Stage stage) {
 
         FileChooser fileChooser = new FileChooser();
