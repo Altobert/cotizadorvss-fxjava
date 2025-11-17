@@ -26,9 +26,8 @@ CREATE TEMP TABLE temp_abarrotes (
 );
 
 -- Cargar CSV desde terminal psql
-\COPY temp_abarrotes 
-FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+--FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv' 
+\COPY temp_abarrotes FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/abarrotes.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 -- Insertar productos con limpieza de formato y derivación de descripcion_es
 INSERT INTO producto (
@@ -67,9 +66,7 @@ WHERE TRIM(descripcion_en) != ''
 -- Eliminar tabla temporal
 DROP TABLE temp_abarrotes;
 
-
-
-**********************************************************************************
+-- **********************************************************************************
 -- SCRIPT PARA CARGA CSV bebestibles : USUARIO DITTO
 DROP TABLE IF EXISTS temp_bebestibles;
 
@@ -87,9 +84,7 @@ CREATE TEMP TABLE temp_bebestibles (
     col11 TEXT
 );
 
-\COPY temp_bebestibles 
-FROM '/Users/claudioandressanmartinconcha/Desktop/bebestibles.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_bebestibles FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/bebestibles.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 INSERT INTO producto (
     familia_id,
@@ -127,12 +122,10 @@ WHERE TRIM(descripcion_en) != ''
 DROP TABLE temp_bebestibles;
 
 
-************************************************************************************
+--- ************************************************************************************
 -- SCRIPT PARA CARGA CSV carnes : USUARIO DITTO
 
-
 -- 2. Crear tabla temporal con 11 columnas (estructura del CSV)
-
 
 DROP TABLE IF EXISTS temp_carnes;
 
@@ -149,9 +142,7 @@ CREATE TEMP TABLE temp_carnes (
 
 
 -- 3. Cargar CSV desde terminal psql
-\COPY temp_carnes 
-FROM '/Users/claudioandressanmartinconcha/Desktop/carnes.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_carnes FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/carnes.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 
 INSERT INTO producto (
@@ -188,7 +179,7 @@ WHERE TRIM(descripcion_en) != ''
   AND familia_path ILIKE '%CARNES%';
 
 
-************************************************************************************
+-- ************************************************************************************
 
 -- SCRIPT PARA CARGA CSV congelados : USUARIO DITTO
 
@@ -207,9 +198,7 @@ CREATE TEMP TABLE temp_congelados (
     precio_venta_neto TEXT
 );
 
-\COPY temp_congelados 
-FROM '/Users/claudioandressanmartinconcha/Desktop/congelados.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_congelados FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/congelados.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 INSERT INTO producto (
     familia_id,
@@ -245,8 +234,7 @@ WHERE TRIM(descripcion_en) != ''
   AND familia_path ILIKE '%CONGELADOS%';
 
 
-
-************************************************************************************
+--************************************************************************************
 
 -- SCRIPT PARA CARGA CSV indu : USUARIO DITTO
 DROP TABLE IF EXISTS temp_indu;
@@ -262,9 +250,7 @@ CREATE TEMP TABLE temp_indu (
     precio_venta_neto TEXT
 );
 
-\COPY temp_indu 
-FROM '/Users/claudioandressanmartinconcha/Desktop/indu.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_indu FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/indu.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 INSERT INTO producto (
     familia_id,
@@ -301,9 +287,7 @@ WHERE TRIM(descripcion_en) != ''
 
 DROP TABLE temp_indu;
 
-
-
-************************************************************************************
+--************************************************************************************
 
 -- SCRIPT PARA CARGA CSV lacteos : USUARIO DITTO
 DROP TABLE IF EXISTS temp_lacteos;
@@ -319,9 +303,7 @@ CREATE TEMP TABLE temp_lacteos (
     precio_venta_neto TEXT
 );
 
-\COPY temp_lacteos 
-FROM '/Users/claudioandressanmartinconcha/Desktop/lacteos.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_lacteos FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/lacteos.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 INSERT INTO producto (
     familia_id,
@@ -358,7 +340,7 @@ WHERE TRIM(descripcion_en) != ''
 
 DROP TABLE temp_lacteos;
 
-************************************************************************************
+--************************************************************************************
 
 -- SCRIPT PARA CARGA CSV tostaduria : USUARIO DITTO
 
@@ -375,9 +357,7 @@ CREATE TEMP TABLE temp_tostaduria (
     precio_venta_neto TEXT
 );
 
-\COPY temp_tostaduria 
-FROM '/Users/claudioandressanmartinconcha/Desktop/tostaduria.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_tostaduria FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/tostaduria.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 INSERT INTO producto (
     familia_id,
@@ -414,7 +394,7 @@ WHERE TRIM(descripcion_en) != ''
 
 DROP TABLE temp_tostaduria;
 
-************************************************************************************
+--************************************************************************************
 
 -- SCRIPT PARA CARGA CSV frutas_y_verduras : USUARIO DITTO
 
@@ -433,9 +413,7 @@ CREATE TEMP TABLE temp_frutas_verduras (
 );
 
 -- 2. Cargar CSV
-\COPY temp_frutas_verduras 
-FROM '/Users/claudioandressanmartinconcha/Desktop/frutas_y_verduras.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_frutas_verduras FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/frutas_y_verduras.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 -- 3. Insertar en la tabla principal usando el ID 7
 INSERT INTO producto (
@@ -490,9 +468,7 @@ CREATE TEMP TABLE temp_pescados_mariscos (
 );
 
 -- 2. Cargar CSV
-\COPY temp_pescados_mariscos 
-FROM '/Users/claudioandressanmartinconcha/Desktop/pescados_y_mariscos.csv' 
-WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_pescados_mariscos FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/pescados_y_mariscos.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 -- 3. Insertar en la tabla principal
 INSERT INTO producto (
