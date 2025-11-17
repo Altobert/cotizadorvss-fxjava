@@ -37,15 +37,10 @@ public class Main extends Application {
 public void start(Stage stage) {
     probarConexion();
 
-<<<<<<< HEAD
-        //probarConexion();
-        BorderPane root = new BorderPane();
-=======
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
     Button btnCargar = new Button("📂 Cargar Excel");
     btnCargar.setOnAction(e -> cargarArchivo(stage));
->>>>>>> 3aeea440f0031e39a80f7d8ff4e0a33d51207de5
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
     btnLimpiar.setOnAction(e -> limpiarTabla());
@@ -204,11 +199,6 @@ private void cargarProductos() {
 
 
 
-<<<<<<< HEAD
-
-
-=======
->>>>>>> 3aeea440f0031e39a80f7d8ff4e0a33d51207de5
     private void cargarArchivo(Stage stage) {
 
         FileChooser fileChooser = new FileChooser();
