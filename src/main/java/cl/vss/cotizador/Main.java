@@ -26,7 +26,7 @@ public class Main extends Application {
     @Override
     public void start(Stage stage) {
 
-        probarConexion();
+        //probarConexion();
         BorderPane root = new BorderPane();
 
         Button btnCargar = new Button("📂 Cargar Excel");
@@ -150,11 +150,8 @@ public class Main extends Application {
 
 
 
-
-
-
-
     private void cargarArchivo(Stage stage) {
+
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Seleccionar archivo Excel");
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));

@@ -6,7 +6,7 @@ import java.sql.SQLException;
 
 public class DBConnection {
     // Ajusta estos valores a tu entorno real
-    private static final String URL = "jdbc:postgresql://localhost:5432/sistema_cotizacion_2025";
+    private static final String URL = "jdbc:postgresql://localhost:5432/sistema_cotizacion";
     private static final String USER = "postgres";
     private static final String PASSWORD = "031244";
 
