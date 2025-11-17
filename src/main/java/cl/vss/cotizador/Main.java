@@ -15,6 +15,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
+import java.sql.Connection;
 import java.util.List;
 
 public class Main extends Application {
@@ -24,6 +25,8 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
+
+        probarConexion();
         BorderPane root = new BorderPane();
 
         Button btnCargar = new Button("📂 Cargar Excel");
@@ -135,6 +138,21 @@ public class Main extends Application {
             colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto
         );
     }
+        private void probarConexion() {
+             try (Connection conn = cl.vss.cotizador.util.DBConnection.getConnection()) {
+                  System.out.println("✅ Conexión exitosa a PostgreSQL");
+        }   catch (Exception e) {
+            System.err.println("❌ Error de conexión: " + e.getMessage());
+    }
+}
+
+
+
+
+
+
+
+
 
     private void cargarArchivo(Stage stage) {
         FileChooser fileChooser = new FileChooser();
