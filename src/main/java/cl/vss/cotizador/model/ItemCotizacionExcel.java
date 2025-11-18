@@ -17,6 +17,9 @@ public class ItemCotizacionExcel {
     private final StringProperty comentarios = new SimpleStringProperty();
     private final IntegerProperty disponibilidad = new SimpleIntegerProperty();
     private final DoubleProperty totalBruto = new SimpleDoubleProperty();
+    
+    // Propiedad para indicar si no se encontró precio en la base de datos (para colorear la fila)
+    private final BooleanProperty precioNoEncontrado = new SimpleBooleanProperty();
 
     public ItemCotizacionExcel(String codigo, String descripcion, int cantidad, double precio,
                                String unidad, String categoria,
@@ -33,6 +36,9 @@ public class ItemCotizacionExcel {
         this.comentarios.set(comentarios);
         this.disponibilidad.set(disponibilidad);
         this.totalBruto.set(totalBruto);
+        
+        // Inicializar precioNoEncontrado como false (se actualizará desde el servicio)
+        this.precioNoEncontrado.set(false);
     }
 
     public ItemCotizacionExcel(String codigo, String descripcion, int cantidad, double precio,
@@ -52,6 +58,7 @@ public class ItemCotizacionExcel {
     public String getComentarios() { return comentarios.get(); }
     public int getDisponibilidad() { return disponibilidad.get(); }
     public double getTotalBruto() { return totalBruto.get(); }
+    public boolean isPrecioNoEncontrado() { return precioNoEncontrado.get(); }
 
     // Total calculado directamente
     public double getTotal() {
@@ -70,6 +77,7 @@ public class ItemCotizacionExcel {
     public void setComentarios(String value) { comentarios.set(value); }
     public void setDisponibilidad(int value) { disponibilidad.set(value); }
     public void setTotalBruto(double value) { totalBruto.set(value); }
+    public void setPrecioNoEncontrado(boolean value) { precioNoEncontrado.set(value); }
 
     // Properties
     public StringProperty codigoProperty() { return codigo; }
@@ -83,4 +91,5 @@ public class ItemCotizacionExcel {
     public StringProperty comentariosProperty() { return comentarios; }
     public IntegerProperty disponibilidadProperty() { return disponibilidad; }
     public DoubleProperty totalBrutoProperty() { return totalBruto; }
+    public BooleanProperty precioNoEncontradoProperty() { return precioNoEncontrado; }
 }

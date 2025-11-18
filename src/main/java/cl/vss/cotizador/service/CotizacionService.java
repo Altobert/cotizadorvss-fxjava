@@ -1,6 +1,7 @@
 package cl.vss.cotizador.service;
 
 import cl.vss.cotizador.model.ItemCotizacionExcel;
+import cl.vss.cotizador.model.ProductoSimilar;
 import cl.vss.cotizador.util.DBConnection;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -73,19 +74,19 @@ public class CotizacionService {
                 int cantidad = obtenerEntero(fila, columnas.get("cantidad"));
                 
                 // utilizar metodo consultarPrecioPorDescripcion()
-                double precioCalculado = consultarPrecioPorDescripcion(descripcion);
+                double precioPorDescripcion = consultarPrecioPorDescripcion(descripcion);
                 logger.info("Leyendo item con descripción: " + descripcion);
+                                
+                //double precio = obtenerDecimal(fila, columnas.get("precio"));
+                double precio = precioPorDescripcion;
+                double precioCalculado = precioPorDescripcion;
 
-                
-                
-                double precio = obtenerDecimal(fila, columnas.get("precio"));
                 String unidad = columnas.containsKey("unidad") ? obtenerTexto(fila, columnas.get("unidad")) : "";
                 String categoria = columnas.containsKey("categoria") ? obtenerTexto(fila, columnas.get("categoria")) : "";
 
                 double descuento = columnas.containsKey("descuento") ? obtenerDecimal(fila, columnas.get("descuento")) : 0.0;
                 double totalNeto = columnas.containsKey("totalneto") ? obtenerDecimal(fila, columnas.get("totalneto")) : 0.0;
                 
-
                 String comentarios = columnas.containsKey("comentarios") ? obtenerTexto(fila, columnas.get("comentarios")) : "";
                 int disponibilidad = columnas.containsKey("disponibilidad") ? obtenerEntero(fila, columnas.get("disponibilidad")) : 0;
                 
@@ -99,6 +100,11 @@ public class CotizacionService {
                     codigo, descripcion, cantidad, precio, unidad, categoria,
                     descuento, totalNeto, comentarios, disponibilidad, totalBruto
                 );
+                
+                // Marcar si no se encontró precio en la base de datos (precio = 0.0)
+                // para colorear la fila en amarillo
+                item.setPrecioNoEncontrado(precio == 0.0);
+                
                 items.add(item);
             }
 
@@ -311,7 +317,6 @@ public class CotizacionService {
       
       if (descripcion == null || descripcion.trim().isEmpty()) {
           logger.warning("⚠️ Descripción vacía o nula para consulta de precio");
-          sugerirProductosSimilares(descripcion);
           return 0.0;
       }
       
@@ -392,92 +397,107 @@ public class CotizacionService {
       }
   }
 
+
+
   /**
-   * Sugiere productos similares basados en la descripción proporcionada
-   * Si la descripción es nula o vacía, muestra productos populares
-   * @param descripcionOriginal descripción original (puede ser nula o vacía)
+   * Busca productos similares por descripción y retorna una lista con todos los datos
+   * @param descripcion descripción del producto a buscar
+   * @return lista de productos similares encontrados
    */
-  private void sugerirProductosSimilares(String descripcionOriginal) {
-      logger.info("💡 Generando sugerencias de productos similares...");
+  public List<ProductoSimilar> buscarProductosSimilares(String descripcion) {
+      logger.info("🔍 Buscando productos similares para descripción: " + descripcion);
+      List<ProductoSimilar> productos = new ArrayList<>();
       
-      String sql;
-      boolean tieneDescripcion = descripcionOriginal != null && !descripcionOriginal.trim().isEmpty();
-      
-      if (tieneDescripcion) {
-          // Si hay descripción, buscar productos con palabras similares
-          String[] palabras = descripcionOriginal.trim().toUpperCase().split("\\s+");
-          StringBuilder condicionWhere = new StringBuilder();
-          
-          for (int i = 0; i < palabras.length; i++) {
-              if (i > 0) condicionWhere.append(" OR ");
-              condicionWhere.append("(UPPER(descripcion_es) LIKE ? OR UPPER(descripcion_en) LIKE ?)");
-          }
-          
-          sql = "SELECT descripcion_es, descripcion_en, precio_venta_neto " +
-                "FROM vista_producto_precio " +
-                "WHERE " + condicionWhere.toString() + " " +
-                "ORDER BY precio_venta_neto DESC " +
-                "LIMIT 8";
-                
-          logger.info("🔍 Buscando productos similares a: \"" + descripcionOriginal + "\"");
-      } else {
-          // Si no hay descripción, mostrar productos populares
-          sql = "SELECT descripcion_es, descripcion_en, precio_venta_neto " +
-                "FROM vista_producto_precio " +
-                "ORDER BY precio_venta_neto DESC " +
-                "LIMIT 8";
-                
-          logger.info("🔍 Mostrando productos populares del catálogo:");
+      if (descripcion == null || descripcion.trim().isEmpty()) {
+          logger.warning("⚠️ Descripción vacía o nula para búsqueda de productos similares");
+          return productos;
       }
+      
+      // Buscar coincidencias parciales en ambas columnas de descripción
+      String sql = "SELECT descripcion_es, descripcion_en, unidad_medida, precio_venta_neto " +
+                  "FROM vista_producto_precio " +
+                  "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
+                  "ORDER BY precio_venta_neto DESC " +
+                  "LIMIT 20";
       
       try (Connection connection = DBConnection.getConnection();
            PreparedStatement statement = connection.prepareStatement(sql)) {
           
-          // Si hay descripción, configurar parámetros para búsqueda por palabras
-          if (tieneDescripcion) {
-              String[] palabras = descripcionOriginal.trim().toUpperCase().split("\\s+");
-              int paramIndex = 1;
-              for (String palabra : palabras) {
-                  String palabraBusqueda = "%" + palabra + "%";
-                  statement.setString(paramIndex++, palabraBusqueda);
-                  statement.setString(paramIndex++, palabraBusqueda);
-              }
-          }
+          // Preparar parámetros con wildcards para búsqueda parcial
+          String descripcionBusqueda = "%" + descripcion.trim() + "%";
+          statement.setString(1, descripcionBusqueda);
+          statement.setString(2, descripcionBusqueda);
+          
+          logger.fine("🔍 Ejecutando consulta SQL productos similares: " + sql);
+          logger.fine("🔍 Parámetro búsqueda: " + descripcionBusqueda);
           
           try (ResultSet resultSet = statement.executeQuery()) {
-              logger.info("=====================");
-              
-              int contador = 1;
-              boolean encontroSugerencias = false;
-              
               while (resultSet.next()) {
-                  String descripcionEs = resultSet.getString("descripcion_es");
-                  String descripcionEn = resultSet.getString("descripcion_en");
-                  double precio = resultSet.getDouble("precio_venta_neto");
-                  
-                  // Mostrar la descripción más completa
-                  String descripcionMostrar = (descripcionEs != null && !descripcionEs.trim().isEmpty()) 
-                      ? descripcionEs : descripcionEn;
-                  
-                  if (descripcionMostrar != null && !descripcionMostrar.trim().isEmpty()) {
-                      logger.info(String.format("%d. %s - $%.2f", 
-                          contador++, descripcionMostrar, precio));
-                      encontroSugerencias = true;
-                  }
+                  ProductoSimilar producto = new ProductoSimilar(
+                      resultSet.getString("descripcion_es"),
+                      resultSet.getString("descripcion_en"),
+                      resultSet.getString("unidad_medida"),
+                      resultSet.getDouble("precio_venta_neto")
+                  );
+                  productos.add(producto);
               }
               
-              if (encontroSugerencias) {
-                  logger.info("=====================");
-                  logger.info("💡 Sugerencia: Intente usar alguna de estas descripciones para obtener el precio");
+              logger.info("✅ Encontrados " + productos.size() + " productos similares para: " + descripcion);
+              
+          }
+          
+      } catch (SQLException e) {
+          logger.log(Level.SEVERE, "❌ Error al buscar productos similares para descripción: " + descripcion, e);
+      }
+      
+      return productos;
+  }
+
+  /**
+   * Consulta el precio de venta neto de un producto desde la vista vista_producto_precio
+   * Método público que busca coincidencias parciales en las descripciones
+   * @param descripcion descripción del producto a buscar
+   * @return precio de venta neto, o 0.0 si no se encuentra
+   */
+  public double consultarPrecioNetoPorDescripcion(String descripcion) {
+      logger.info("💰 Consultando precio neto para descripción: " + descripcion);
+      
+      if (descripcion == null || descripcion.trim().isEmpty()) {
+          logger.warning("⚠️ Descripción vacía o nula para consulta de precio neto");
+          return 0.0;
+      }
+      
+      // Buscar coincidencias parciales en ambas columnas de descripción
+      String sql = "SELECT precio_venta_neto FROM vista_producto_precio " +
+                  "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
+                  "ORDER BY precio_venta_neto DESC " +
+                  "LIMIT 1";
+      
+      try (Connection connection = DBConnection.getConnection();
+           PreparedStatement statement = connection.prepareStatement(sql)) {
+          
+          // Preparar parámetros con wildcards para búsqueda parcial
+          String descripcionBusqueda = "%" + descripcion.trim() + "%";
+          statement.setString(1, descripcionBusqueda);
+          statement.setString(2, descripcionBusqueda);
+          
+          logger.fine("🔍 Ejecutando consulta SQL precio neto: " + sql);
+          logger.fine("🔍 Parámetro búsqueda: " + descripcionBusqueda);
+          
+          try (ResultSet resultSet = statement.executeQuery()) {
+              if (resultSet.next()) {
+                  double precioNeto = resultSet.getDouble("precio_venta_neto");
+                  logger.info("✅ Precio neto encontrado: $" + precioNeto + " para descripción: " + descripcion);
+                  return precioNeto;
               } else {
-                  logger.info("⚠️ No se encontraron productos similares");
-                  logger.info("💡 Verifique la descripción del producto o contacte al administrador");
+                  logger.warning("⚠️ No se encontró precio neto para descripción: " + descripcion);
+                  return 0.0;
               }
           }
           
       } catch (SQLException e) {
-          logger.log(Level.WARNING, "⚠️ Error al obtener sugerencias de productos", e);
-          logger.info("💡 No se pudieron cargar las sugerencias. Verifique la descripción del producto.");
+          logger.log(Level.SEVERE, "❌ Error al consultar precio neto para descripción: " + descripcion, e);
+          return 0.0;
       }
   }
 

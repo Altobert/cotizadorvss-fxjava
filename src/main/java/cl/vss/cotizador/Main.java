@@ -9,11 +9,17 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.VBox;
 import javafx.util.converter.DoubleStringConverter;
 import javafx.util.converter.IntegerStringConverter;
+import javafx.util.Callback;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.scene.image.Image;
 import java.io.File;
+import java.io.InputStream;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 import java.sql.Connection;
 import java.util.List;
 import cl.vss.cotizador.model.Producto;
@@ -68,11 +74,121 @@ public void start(Stage stage) {
     tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
     tabs.getTabs().add(new Tab("Productos", rootProductos));
 
-    Scene scene = new Scene(tabs, 1200, 600);
+    Scene scene = new Scene(tabs, 1400, 1000);
     stage.setTitle("Cotizador VSS");
+    
+    // Aplicar hoja de estilos CSS
+    try {
+        String cssPath = getClass().getResource("/estilos.css").toExternalForm();
+        scene.getStylesheets().add(cssPath);
+        System.out.println("Hoja de estilos cargada: " + cssPath);
+    } catch (Exception e) {
+        System.out.println("No se pudo cargar la hoja de estilos: " + e.getMessage());
+    }
+    
+    // Configurar iconos de la aplicación (múltiples tamaños para mejor compatibilidad)
+    configurarIconosAplicacion(stage);
+    
     stage.setScene(scene);
+    
+    // En macOS, a veces es necesario configurar el icono después de mostrar la ventana
     stage.show();
+    
+    // Configurar icono del dock en macOS si es posible
+    try {
+        System.setProperty("com.apple.mrj.application.apple.menu.about.name", "Cotizador VSS");
+        System.setProperty("apple.awt.application.name", "Cotizador VSS");
+        
+        // Intentar configurar el icono del dock usando AWT si está disponible
+        if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+            java.awt.Toolkit toolkit = java.awt.Toolkit.getDefaultToolkit();
+            java.net.URL imageURL = getClass().getResource("/images/cotizador-icon-64.png");
+            if (imageURL != null) {
+                java.awt.Image awtImage = toolkit.getImage(imageURL);
+                try {
+                    // Usar reflexión para establecer el icono del dock sin dependencias directas
+                    Class<?> applicationClass = Class.forName("com.apple.eawt.Application");
+                    Object application = applicationClass.getMethod("getApplication").invoke(null);
+                    applicationClass.getMethod("setDockIconImage", java.awt.Image.class).invoke(application, awtImage);
+                    System.out.println("🍎 Icono del dock configurado para macOS");
+                } catch (Exception e) {
+                    System.out.println("⚠️ No se pudo configurar el icono del dock: " + e.getMessage());
+                }
+            }
+        }
+    } catch (Exception e) {
+        System.out.println("⚠️ Error configurando propiedades de macOS: " + e.getMessage());
+    }
 }
+
+    private void configurarIconosAplicacion(Stage primaryStage) {
+        System.out.println("🎨 Configurando iconos de la aplicación...");
+        
+        // Lista de tamaños de iconos a cargar
+        String[] iconSizes = {"icon-16.png", "icon-32.png", "icon-48.png", "icon-64.png", "icon.png"};
+        int iconosConfigurados = 0;
+        
+        for (String iconFile : iconSizes) {
+            try {
+                // Cargar imagen desde recursos
+                InputStream iconStream = getClass().getResourceAsStream("/images/" + iconFile);
+                if (iconStream != null) {
+                    Image icon = new Image(iconStream);
+                    if (!icon.isError()) {
+                        primaryStage.getIcons().add(icon);
+                        iconosConfigurados++;
+                        System.out.println("✅ Icono cargado: " + iconFile + " (" + 
+                                         (int)icon.getWidth() + "x" + (int)icon.getHeight() + ")");
+                    } else {
+                        System.err.println("❌ Error en imagen: " + iconFile);
+                    }
+                    iconStream.close();
+                } else {
+                    System.err.println("❌ No se encontró: /images/" + iconFile);
+                }
+            } catch (Exception e) {
+                System.err.println("❌ Error cargando " + iconFile + ": " + e.getMessage());
+            }
+        }
+        
+        System.out.println("✅ " + iconosConfigurados + " iconos de aplicación configurados correctamente");
+        System.out.println("📋 Total de iconos en stage: " + primaryStage.getIcons().size());
+        
+        // Configurar propiedades del sistema para identificación de la aplicación
+        System.setProperty("apple.awt.application.name", "Cotizador VSS");
+        
+        // Intentar configurar icono usando AWT Toolkit (alternativa más compatible)
+        try {
+            InputStream iconStream = getClass().getResourceAsStream("/images/icon.png");
+            if (iconStream != null) {
+                BufferedImage iconImage = ImageIO.read(iconStream);
+                
+                // Método 1: Configurar usando AWT Toolkit
+                java.awt.Toolkit.getDefaultToolkit().setDynamicLayout(true);
+                
+                // Método 2: Si estamos en macOS, intentar configurar dock
+                String osName = System.getProperty("os.name").toLowerCase();
+                if (osName.contains("mac")) {
+                    try {
+                        // Configurar usando reflexión para evitar problemas de módulos
+                        Class<?> taskbarClass = Class.forName("java.awt.Taskbar");
+                        if ((Boolean) taskbarClass.getMethod("isTaskbarSupported").invoke(null)) {
+                            Object taskbar = taskbarClass.getMethod("getTaskbar").invoke(null);
+                            taskbarClass.getMethod("setIconImage", java.awt.Image.class)
+                                       .invoke(taskbar, iconImage);
+                            System.out.println("✅ Icono del taskbar configurado");
+                        }
+                    } catch (Exception taskbarEx) {
+                        System.out.println("⚠️ Taskbar API no disponible: " + taskbarEx.getMessage());
+                    }
+                }
+                
+                iconStream.close();
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ No se pudo configurar el icono del sistema: " + e.getMessage());
+        }
+    }
 
 
     
@@ -181,19 +297,185 @@ private void cargarProductos() {
             item.setTotalBruto(event.getNewValue());
         });
 
+        // Columna de Acción con botones
+        TableColumn<ItemCotizacionExcel, Void> colAccion = new TableColumn<>("Acción");
+        colAccion.setCellFactory(new Callback<TableColumn<ItemCotizacionExcel, Void>, TableCell<ItemCotizacionExcel, Void>>() {
+            @Override
+            public TableCell<ItemCotizacionExcel, Void> call(final TableColumn<ItemCotizacionExcel, Void> param) {
+                final TableCell<ItemCotizacionExcel, Void> cell = new TableCell<ItemCotizacionExcel, Void>() {
+                    private final Button btnAccion = new Button("Editar");
+                    
+                    {
+                        btnAccion.setOnAction((event) -> {
+                            ItemCotizacionExcel item = getTableView().getItems().get(getIndex());
+                            Main.this.manejarAccionItem(item);
+                        });
+                        btnAccion.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-size: 12px;");
+                        btnAccion.setPrefWidth(80);
+                    }
+                    
+                    @Override
+                    public void updateItem(Void item, boolean empty) {
+                        super.updateItem(item, empty);
+                        if (empty) {
+                            setGraphic(null);
+                        } else {
+                            setGraphic(btnAccion);
+                        }
+                    }
+                };
+                return cell;
+            }
+        });
+        colAccion.setMinWidth(100);
+        colAccion.setSortable(false);
+
         tabla.getColumns().addAll(
             colCodigo, colDescripcion, colCantidad, colPrecio, colTotal,
-            colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto
+            colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto, colAccion
         );
+        
+        // Aplicar estilos CSS personalizados para la selección de filas
+        tabla.setStyle(
+            // Estilo para fila seleccionada: texto visible, fondo transparente
+            "-fx-selection-bar: transparent; " +
+            "-fx-selection-bar-non-focused: transparent; " +
+            "-fx-focus-color: transparent; " +
+            "-fx-faint-focus-color: transparent; " +
+            // Forzar color de texto en celdas seleccionadas
+            "-fx-selection-bar-text: black; " +
+            "-fx-cell-focus-inner-border: transparent;"
+        );
+        
+        // Crear hoja de estilos CSS más específica para sobrescribir los estilos predeterminados
+        String cssOverride = 
+            ".table-view .table-row-cell:selected .table-cell { " +
+                "-fx-background-color: transparent; " +
+                "-fx-text-fill: black !important; " +
+                "-fx-font-weight: bold; " +
+            "} " +
+            ".table-view .table-row-cell:selected:focused .table-cell { " +
+                "-fx-background-color: transparent; " +
+                "-fx-text-fill: black !important; " +
+                "-fx-font-weight: bold; " +
+            "} " +
+            ".table-view .table-row-cell:selected .text { " +
+                "-fx-fill: black !important; " +
+                "-fx-font-weight: bold; " +
+            "}";
+        
+        // Crear una escena temporal para aplicar CSS si no existe
+        if (tabla.getScene() == null) {
+            // Se aplicará cuando la tabla se agregue a la escena
+            tabla.sceneProperty().addListener((obs, oldScene, newScene) -> {
+                if (newScene != null) {
+                    newScene.getRoot().setStyle(cssOverride);
+                }
+            });
+        } else {
+            tabla.getScene().getRoot().setStyle(cssOverride);
+        }
+        
+        // Configurar RowFactory para colorear filas cuando no se encuentra precio y manejar selección
+        tabla.setRowFactory(tv -> {
+            TableRow<ItemCotizacionExcel> row = new TableRow<ItemCotizacionExcel>() {
+                @Override
+                protected void updateItem(ItemCotizacionExcel item, boolean empty) {
+                    super.updateItem(item, empty);
+                    
+                    if (empty || item == null) {
+                        setStyle("");
+                    } else {
+                        Main.this.actualizarEstiloFila(this, item);
+                    }
+                }
+                
+                @Override
+                public void updateSelected(boolean selected) {
+                    super.updateSelected(selected);
+                    if (!isEmpty()) {
+                        Main.this.actualizarEstiloFila(this, getItem());
+                    }
+                }
+            };
+            
+            return row;
+        });
+        
+        // Agregar listener para cambios de selección y forzar actualización de estilos
+        tabla.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+            // Forzar actualización de todas las filas visibles
+            tabla.refresh();
+        });
     }
-        private void probarConexion() {
-             try (Connection conn = cl.vss.cotizador.util.DBConnection.getConnection()) {
+
+    private void actualizarEstiloFila(TableRow<ItemCotizacionExcel> row, ItemCotizacionExcel item) {
+        if (item == null) {
+            row.setStyle("");
+            return;
+        }
+        
+        StringBuilder estilo = new StringBuilder();
+        
+        // Si la fila está seleccionada, usar estilos más específicos
+        if (row.isSelected()) {
+            // Fondo más oscuro y texto forzado en negro con negrita
+            if (item.isPrecioNoEncontrado()) {
+                estilo.append("-fx-background-color: #e6e67a; "); // Amarillo más oscuro
+            } else {
+                estilo.append("-fx-background-color: #5cb85c; "); // Verde más oscuro
+            }
+            // Forzar texto negro y negrita - usar CSS más específico
+            estilo.append("-fx-text-fill: black; ");
+            estilo.append("-fx-font-weight: bold; ");
+            
+            // Usar Platform.runLater para asegurar que los estilos se apliquen después del renderizado
+            javafx.application.Platform.runLater(() -> {
+                // Aplicar estilos directamente a cada celda
+                row.getChildrenUnmodifiable().forEach(node -> {
+                    if (node instanceof javafx.scene.control.TableCell) {
+                        TableCell<?, ?> cell = (TableCell<?, ?>) node;
+                        cell.setStyle("-fx-text-fill: black; -fx-font-weight: bold; -fx-background-color: transparent;");
+                        
+                        // También aplicar a los nodos de texto dentro de la celda
+                        cell.getChildrenUnmodifiable().forEach(childNode -> {
+                            if (childNode instanceof javafx.scene.text.Text) {
+                                ((javafx.scene.text.Text) childNode).setStyle("-fx-fill: black; -fx-font-weight: bold;");
+                            }
+                        });
+                    }
+                });
+            });
+        } else {
+            // Estilo normal según el estado del precio
+            if (item.isPrecioNoEncontrado()) {
+                estilo.append("-fx-background-color: #eded93ff; ");
+            } else {
+                estilo.append("-fx-background-color: #6de26dff; ");
+            }
+            estilo.append("-fx-text-fill: black; ");
+            
+            // Limpiar estilos de selección en celdas cuando no está seleccionada
+            javafx.application.Platform.runLater(() -> {
+                row.getChildrenUnmodifiable().forEach(node -> {
+                    if (node instanceof javafx.scene.control.TableCell) {
+                        node.setStyle("");
+                    }
+                });
+            });
+        }
+        
+        row.setStyle(estilo.toString());
+    }
+
+    private void probarConexion() {
+
+    try (Connection conn = cl.vss.cotizador.util.DBConnection.getConnection()) {
                   System.out.println("✅ Conexión exitosa a PostgreSQL");
         }   catch (Exception e) {
             System.err.println("❌ Error de conexión: " + e.getMessage());
     }
 }
-
 
 
     private void cargarArchivo(Stage stage) {
@@ -204,10 +486,100 @@ private void cargarProductos() {
         File archivo = fileChooser.showOpenDialog(stage);
 
         if (archivo != null) {
+
             List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
             ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
             tabla.setItems(datos);
         }
+    }
+
+    private void manejarAccionItem(ItemCotizacionExcel item) {
+        // Buscar productos similares en la base de datos
+        List<cl.vss.cotizador.model.ProductoSimilar> productosSimilares = 
+            cotizacionService.buscarProductosSimilares(item.getDescripcion());
+        
+        // Crear diálogo personalizado con tabla
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Productos Similares");
+        dialog.setHeaderText("Productos encontrados para: " + item.getDescripcion());
+        
+        // Crear la tabla de productos similares
+        TableView<cl.vss.cotizador.model.ProductoSimilar> tablaProductosSimilares = new TableView<>();
+        
+        // Configurar columnas
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colDescEs = new TableColumn<>("Descripción ES");
+        colDescEs.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getDescripcionEs()));
+        colDescEs.setPrefWidth(200);
+        
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colDescEn = new TableColumn<>("Descripción EN");
+        colDescEn.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getDescripcionEn()));
+        colDescEn.setPrefWidth(200);
+        
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colUnidad = new TableColumn<>("Unidad");
+        colUnidad.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getUnidadMedida()));
+        colUnidad.setPrefWidth(80);
+        
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecio = new TableColumn<>("Precio Neto");
+        colPrecio.setCellValueFactory(cellData -> new javafx.beans.property.SimpleDoubleProperty(cellData.getValue().getPrecioVentaNeto()).asObject());
+        colPrecio.setPrefWidth(120);
+        
+        // Formatear la columna de precio para mostrar como moneda
+        colPrecio.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
+            @Override
+            protected void updateItem(Double item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(String.format("$%,.2f", item));
+                }
+            }
+        });
+        
+        // Agregar columnas a la tabla
+        tablaProductosSimilares.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecio);
+        
+        // Cargar datos en la tabla
+        ObservableList<cl.vss.cotizador.model.ProductoSimilar> datosTabla = 
+            FXCollections.observableArrayList(productosSimilares);
+        tablaProductosSimilares.setItems(datosTabla);
+        
+        // Configurar tamaño de la tabla
+        tablaProductosSimilares.setPrefSize(650, 300);
+        
+        // Crear panel de información del item original
+        VBox infoPanel = new VBox(10);
+        infoPanel.setStyle("-fx-padding: 10; -fx-background-color: #f0f0f0;");
+        
+        Label lblItemOriginal = new Label("📦 Item Original:");
+        lblItemOriginal.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        
+        Label lblDescripcion = new Label("Descripción: " + item.getDescripcion());
+        Label lblCantidad = new Label("Cantidad: " + item.getCantidad());
+        Label lblPrecioActual = new Label("Precio Actual: $" + String.format("%,.2f", item.getPrecio()));
+        
+        infoPanel.getChildren().addAll(lblItemOriginal, lblDescripcion, lblCantidad, lblPrecioActual);
+        
+        // Panel principal que combina información y tabla
+        VBox contenidoPrincipal = new VBox(15);
+        contenidoPrincipal.getChildren().addAll(infoPanel, 
+                                              new Label("🔍 Productos Similares Encontrados (" + productosSimilares.size() + "):"),
+                                              tablaProductosSimilares);
+        
+        // Configurar el diálogo
+        dialog.getDialogPane().setContent(contenidoPrincipal);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.getDialogPane().setPrefSize(700, 500);
+        
+        // Mensaje si no se encontraron productos
+        if (productosSimilares.isEmpty()) {
+            Label sinResultados = new Label("❌ No se encontraron productos similares en la base de datos.");
+            sinResultados.setStyle("-fx-font-size: 14px; -fx-text-fill: #666666;");
+            tablaProductosSimilares.setPlaceholder(sinResultados);
+        }
+        
+        // Mostrar el diálogo
+        dialog.showAndWait();
     }
 
     private void limpiarTabla() {
