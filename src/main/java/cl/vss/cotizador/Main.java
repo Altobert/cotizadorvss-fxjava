@@ -76,6 +76,15 @@ public void start(Stage stage) {
     Scene scene = new Scene(tabs, 1200, 600);
     stage.setTitle("Cotizador VSS");
     
+    // Aplicar hoja de estilos CSS
+    try {
+        String cssPath = getClass().getResource("/estilos.css").toExternalForm();
+        scene.getStylesheets().add(cssPath);
+        System.out.println("Hoja de estilos cargada: " + cssPath);
+    } catch (Exception e) {
+        System.out.println("No se pudo cargar la hoja de estilos: " + e.getMessage());
+    }
+    
     // Configurar iconos de la aplicación (múltiples tamaños para mejor compatibilidad)
     configurarIconosAplicacion(stage);
     
@@ -325,26 +334,140 @@ private void cargarProductos() {
             colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto, colAccion
         );
         
-        // Configurar RowFactory para colorear filas cuando no se encuentra precio
-        tabla.setRowFactory(tv -> {
-            TableRow<ItemCotizacionExcel> row = new TableRow<>();
-            row.itemProperty().addListener((obs, oldItem, newItem) -> {
-                if (newItem == null) {
-                    row.setStyle("");
-                } else {
-                    // Colorear en amarillo si no se encontró precio en la base de datos
-                    if (newItem.isPrecioNoEncontrado()) {
-                        row.setStyle("-fx-background-color: #eded93ff; -fx-text-fill: black;");
-                    } else {
-                        // colorear en verde claro si se encontró precio
-                        row.setStyle("-fx-background-color: #6de26dff; -fx-text-fill: black;");
-                    }
+        // Aplicar estilos CSS personalizados para la selección de filas
+        tabla.setStyle(
+            // Estilo para fila seleccionada: texto visible, fondo transparente
+            "-fx-selection-bar: transparent; " +
+            "-fx-selection-bar-non-focused: transparent; " +
+            "-fx-focus-color: transparent; " +
+            "-fx-faint-focus-color: transparent; " +
+            // Forzar color de texto en celdas seleccionadas
+            "-fx-selection-bar-text: black; " +
+            "-fx-cell-focus-inner-border: transparent;"
+        );
+        
+        // Crear hoja de estilos CSS más específica para sobrescribir los estilos predeterminados
+        String cssOverride = 
+            ".table-view .table-row-cell:selected .table-cell { " +
+                "-fx-background-color: transparent; " +
+                "-fx-text-fill: black !important; " +
+                "-fx-font-weight: bold; " +
+            "} " +
+            ".table-view .table-row-cell:selected:focused .table-cell { " +
+                "-fx-background-color: transparent; " +
+                "-fx-text-fill: black !important; " +
+                "-fx-font-weight: bold; " +
+            "} " +
+            ".table-view .table-row-cell:selected .text { " +
+                "-fx-fill: black !important; " +
+                "-fx-font-weight: bold; " +
+            "}";
+        
+        // Crear una escena temporal para aplicar CSS si no existe
+        if (tabla.getScene() == null) {
+            // Se aplicará cuando la tabla se agregue a la escena
+            tabla.sceneProperty().addListener((obs, oldScene, newScene) -> {
+                if (newScene != null) {
+                    newScene.getRoot().setStyle(cssOverride);
                 }
             });
+        } else {
+            tabla.getScene().getRoot().setStyle(cssOverride);
+        }
+        
+        // Configurar RowFactory para colorear filas cuando no se encuentra precio y manejar selección
+        tabla.setRowFactory(tv -> {
+            TableRow<ItemCotizacionExcel> row = new TableRow<ItemCotizacionExcel>() {
+                @Override
+                protected void updateItem(ItemCotizacionExcel item, boolean empty) {
+                    super.updateItem(item, empty);
+                    
+                    if (empty || item == null) {
+                        setStyle("");
+                    } else {
+                        Main.this.actualizarEstiloFila(this, item);
+                    }
+                }
+                
+                @Override
+                public void updateSelected(boolean selected) {
+                    super.updateSelected(selected);
+                    if (!isEmpty()) {
+                        Main.this.actualizarEstiloFila(this, getItem());
+                    }
+                }
+            };
+            
             return row;
         });
+        
+        // Agregar listener para cambios de selección y forzar actualización de estilos
+        tabla.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+            // Forzar actualización de todas las filas visibles
+            tabla.refresh();
+        });
     }
-private void probarConexion() {
+
+    private void actualizarEstiloFila(TableRow<ItemCotizacionExcel> row, ItemCotizacionExcel item) {
+        if (item == null) {
+            row.setStyle("");
+            return;
+        }
+        
+        StringBuilder estilo = new StringBuilder();
+        
+        // Si la fila está seleccionada, usar estilos más específicos
+        if (row.isSelected()) {
+            // Fondo más oscuro y texto forzado en negro con negrita
+            if (item.isPrecioNoEncontrado()) {
+                estilo.append("-fx-background-color: #e6e67a; "); // Amarillo más oscuro
+            } else {
+                estilo.append("-fx-background-color: #5cb85c; "); // Verde más oscuro
+            }
+            // Forzar texto negro y negrita - usar CSS más específico
+            estilo.append("-fx-text-fill: black; ");
+            estilo.append("-fx-font-weight: bold; ");
+            
+            // Usar Platform.runLater para asegurar que los estilos se apliquen después del renderizado
+            javafx.application.Platform.runLater(() -> {
+                // Aplicar estilos directamente a cada celda
+                row.getChildrenUnmodifiable().forEach(node -> {
+                    if (node instanceof javafx.scene.control.TableCell) {
+                        TableCell<?, ?> cell = (TableCell<?, ?>) node;
+                        cell.setStyle("-fx-text-fill: black; -fx-font-weight: bold; -fx-background-color: transparent;");
+                        
+                        // También aplicar a los nodos de texto dentro de la celda
+                        cell.getChildrenUnmodifiable().forEach(childNode -> {
+                            if (childNode instanceof javafx.scene.text.Text) {
+                                ((javafx.scene.text.Text) childNode).setStyle("-fx-fill: black; -fx-font-weight: bold;");
+                            }
+                        });
+                    }
+                });
+            });
+        } else {
+            // Estilo normal según el estado del precio
+            if (item.isPrecioNoEncontrado()) {
+                estilo.append("-fx-background-color: #eded93ff; ");
+            } else {
+                estilo.append("-fx-background-color: #6de26dff; ");
+            }
+            estilo.append("-fx-text-fill: black; ");
+            
+            // Limpiar estilos de selección en celdas cuando no está seleccionada
+            javafx.application.Platform.runLater(() -> {
+                row.getChildrenUnmodifiable().forEach(node -> {
+                    if (node instanceof javafx.scene.control.TableCell) {
+                        node.setStyle("");
+                    }
+                });
+            });
+        }
+        
+        row.setStyle(estilo.toString());
+    }
+
+    private void probarConexion() {
 
     try (Connection conn = cl.vss.cotizador.util.DBConnection.getConnection()) {
                   System.out.println("✅ Conexión exitosa a PostgreSQL");

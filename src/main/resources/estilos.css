@@ -1,0 +1,53 @@
+/* Sobrescribir completamente los estilos de selección de TableView */
+.table-view {
+    -fx-selection-bar: transparent;
+    -fx-selection-bar-non-focused: transparent;
+}
+
+/* Estilos para filas de tabla */
+.table-row-cell {
+    -fx-background-color: transparent;
+}
+
+/* Estilos específicos para filas seleccionadas */
+.table-row-cell:selected {
+    -fx-background-color: transparent !important;
+    -fx-text-fill: black !important;
+    -fx-font-weight: bold !important;
+}
+
+/* Estilos para celdas dentro de filas seleccionadas */
+.table-row-cell:selected .table-cell {
+    -fx-background-color: transparent !important;
+    -fx-text-fill: black !important;
+    -fx-font-weight: bold !important;
+}
+
+/* Estilos para texto dentro de celdas seleccionadas */
+.table-row-cell:selected .table-cell .text {
+    -fx-fill: black !important;
+    -fx-font-weight: bold !important;
+}
+
+/* Sobrescribir el color de fondo azul predeterminado */
+.table-row-cell:focused,
+.table-row-cell:focused:selected {
+    -fx-background-color: transparent !important;
+    -fx-border-color: transparent !important;
+}
+
+/* Asegurar que los botones mantengan su estilo */
+.table-row-cell:selected .button {
+    -fx-text-fill: black !important;
+    -fx-background-color: #f0f0f0 !important;
+    -fx-border-color: #ccc !important;
+}
+
+/* Eliminar el resaltado azul predeterminado completamente */
+.table-view:focused .table-row-cell:filled:focused:selected {
+    -fx-background-color: transparent !important;
+}
+
+.table-view .table-row-cell:filled:selected {
+    -fx-background-color: transparent !important;
+}
