@@ -501,14 +501,14 @@ private void cargarProductos() {
         StringBuilder contenido = new StringBuilder();
         contenido.append("Código: ").append(item.getCodigo()).append("\n");
         contenido.append("Descripción: ").append(item.getDescripcion()).append("\n");
-        contenido.append("Cantidad: ").append(item.getCantidad()).append("\n");
+        /*contenido.append("Cantidad: ").append(item.getCantidad()).append("\n");
         contenido.append("Precio: $").append(String.format("%.2f", item.getPrecio())).append("\n");
         contenido.append("Total: $").append(String.format("%.2f", item.getTotal())).append("\n");
         contenido.append("Descuento: ").append(item.getDescuento()).append("%\n");
         contenido.append("Total Neto: $").append(String.format("%.2f", item.getTotalNeto())).append("\n");
         contenido.append("Total Bruto: $").append(String.format("%.2f", item.getTotalBruto())).append("\n");
         contenido.append("Disponibilidad: ").append(item.getDisponibilidad()).append("\n");
-        contenido.append("Comentarios: ").append(item.getComentarios() != null ? item.getComentarios() : "Sin comentarios");
+        contenido.append("Comentarios: ").append(item.getComentarios() != null ? item.getComentarios() : "Sin comentarios");*/
         
         alert.setContentText(contenido.toString());
         
