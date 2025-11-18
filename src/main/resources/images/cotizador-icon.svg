@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+    <!-- Fondo azul -->
+    <rect width="64" height="64" rx="8" ry="8" fill="#2E86C1"/>
+    
+    <!-- Documento principal -->
+    <rect x="12" y="8" width="32" height="40" rx="2" ry="2" fill="#FFFFFF"/>
+    
+    <!-- Líneas del documento -->
+    <rect x="16" y="16" width="20" height="2" fill="#2E86C1"/>
+    <rect x="16" y="22" width="16" height="2" fill="#2E86C1"/>
+    <rect x="16" y="28" width="18" height="2" fill="#2E86C1"/>
+    <rect x="16" y="34" width="14" height="2" fill="#2E86C1"/>
+    
+    <!-- Símbolo de dinero/cotización -->
+    <circle cx="48" cy="48" r="12" fill="#F39C12"/>
+    <text x="48" y="54" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF">$</text>
+    
+    <!-- Texto VSS -->
+    <text x="32" y="58" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#FFFFFF">VSS</text>
+</svg>

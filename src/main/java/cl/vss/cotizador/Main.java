@@ -13,7 +13,11 @@ import javafx.util.converter.DoubleStringConverter;
 import javafx.util.converter.IntegerStringConverter;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.scene.image.Image;
 import java.io.File;
+import java.io.InputStream;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 import java.sql.Connection;
 import java.util.List;
 import cl.vss.cotizador.model.Producto;
@@ -70,9 +74,110 @@ public void start(Stage stage) {
 
     Scene scene = new Scene(tabs, 1200, 600);
     stage.setTitle("Cotizador VSS");
+    
+    // Configurar iconos de la aplicación (múltiples tamaños para mejor compatibilidad)
+    configurarIconosAplicacion(stage);
+    
     stage.setScene(scene);
+    
+    // En macOS, a veces es necesario configurar el icono después de mostrar la ventana
     stage.show();
+    
+    // Configurar icono del dock en macOS si es posible
+    try {
+        System.setProperty("com.apple.mrj.application.apple.menu.about.name", "Cotizador VSS");
+        System.setProperty("apple.awt.application.name", "Cotizador VSS");
+        
+        // Intentar configurar el icono del dock usando AWT si está disponible
+        if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+            java.awt.Toolkit toolkit = java.awt.Toolkit.getDefaultToolkit();
+            java.net.URL imageURL = getClass().getResource("/images/cotizador-icon-64.png");
+            if (imageURL != null) {
+                java.awt.Image awtImage = toolkit.getImage(imageURL);
+                try {
+                    // Usar reflexión para establecer el icono del dock sin dependencias directas
+                    Class<?> applicationClass = Class.forName("com.apple.eawt.Application");
+                    Object application = applicationClass.getMethod("getApplication").invoke(null);
+                    applicationClass.getMethod("setDockIconImage", java.awt.Image.class).invoke(application, awtImage);
+                    System.out.println("🍎 Icono del dock configurado para macOS");
+                } catch (Exception e) {
+                    System.out.println("⚠️ No se pudo configurar el icono del dock: " + e.getMessage());
+                }
+            }
+        }
+    } catch (Exception e) {
+        System.out.println("⚠️ Error configurando propiedades de macOS: " + e.getMessage());
+    }
 }
+
+    private void configurarIconosAplicacion(Stage primaryStage) {
+        System.out.println("🎨 Configurando iconos de la aplicación...");
+        
+        // Lista de tamaños de iconos a cargar
+        String[] iconSizes = {"icon-16.png", "icon-32.png", "icon-48.png", "icon-64.png", "icon.png"};
+        int iconosConfigurados = 0;
+        
+        for (String iconFile : iconSizes) {
+            try {
+                // Cargar imagen desde recursos
+                InputStream iconStream = getClass().getResourceAsStream("/images/" + iconFile);
+                if (iconStream != null) {
+                    Image icon = new Image(iconStream);
+                    if (!icon.isError()) {
+                        primaryStage.getIcons().add(icon);
+                        iconosConfigurados++;
+                        System.out.println("✅ Icono cargado: " + iconFile + " (" + 
+                                         (int)icon.getWidth() + "x" + (int)icon.getHeight() + ")");
+                    } else {
+                        System.err.println("❌ Error en imagen: " + iconFile);
+                    }
+                    iconStream.close();
+                } else {
+                    System.err.println("❌ No se encontró: /images/" + iconFile);
+                }
+            } catch (Exception e) {
+                System.err.println("❌ Error cargando " + iconFile + ": " + e.getMessage());
+            }
+        }
+        
+        System.out.println("✅ " + iconosConfigurados + " iconos de aplicación configurados correctamente");
+        System.out.println("📋 Total de iconos en stage: " + primaryStage.getIcons().size());
+        
+        // Configurar propiedades del sistema para identificación de la aplicación
+        System.setProperty("apple.awt.application.name", "Cotizador VSS");
+        
+        // Intentar configurar icono usando AWT Toolkit (alternativa más compatible)
+        try {
+            InputStream iconStream = getClass().getResourceAsStream("/images/icon.png");
+            if (iconStream != null) {
+                BufferedImage iconImage = ImageIO.read(iconStream);
+                
+                // Método 1: Configurar usando AWT Toolkit
+                java.awt.Toolkit.getDefaultToolkit().setDynamicLayout(true);
+                
+                // Método 2: Si estamos en macOS, intentar configurar dock
+                String osName = System.getProperty("os.name").toLowerCase();
+                if (osName.contains("mac")) {
+                    try {
+                        // Configurar usando reflexión para evitar problemas de módulos
+                        Class<?> taskbarClass = Class.forName("java.awt.Taskbar");
+                        if ((Boolean) taskbarClass.getMethod("isTaskbarSupported").invoke(null)) {
+                            Object taskbar = taskbarClass.getMethod("getTaskbar").invoke(null);
+                            taskbarClass.getMethod("setIconImage", java.awt.Image.class)
+                                       .invoke(taskbar, iconImage);
+                            System.out.println("✅ Icono del taskbar configurado");
+                        }
+                    } catch (Exception taskbarEx) {
+                        System.out.println("⚠️ Taskbar API no disponible: " + taskbarEx.getMessage());
+                    }
+                }
+                
+                iconStream.close();
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ No se pudo configurar el icono del sistema: " + e.getMessage());
+        }
+    }
 
 
     
@@ -198,7 +303,7 @@ private void cargarProductos() {
                         row.setStyle("-fx-background-color: #eded93ff; -fx-text-fill: black;");
                     } else {
                         // colorear en verde claro si se encontró precio
-                        row.setStyle("-fx-background-color: #98e198ff; -fx-text-fill: black;");
+                        row.setStyle("-fx-background-color: #6de26dff; -fx-text-fill: black;");
                     }
                 }
             });
