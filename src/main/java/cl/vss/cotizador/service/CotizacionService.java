@@ -1,6 +1,7 @@
 package cl.vss.cotizador.service;
 
 import cl.vss.cotizador.model.ItemCotizacionExcel;
+import cl.vss.cotizador.model.ProductoSimilar;
 import cl.vss.cotizador.util.DBConnection;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -397,6 +398,60 @@ public class CotizacionService {
   }
 
 
+
+  /**
+   * Busca productos similares por descripción y retorna una lista con todos los datos
+   * @param descripcion descripción del producto a buscar
+   * @return lista de productos similares encontrados
+   */
+  public List<ProductoSimilar> buscarProductosSimilares(String descripcion) {
+      logger.info("🔍 Buscando productos similares para descripción: " + descripcion);
+      List<ProductoSimilar> productos = new ArrayList<>();
+      
+      if (descripcion == null || descripcion.trim().isEmpty()) {
+          logger.warning("⚠️ Descripción vacía o nula para búsqueda de productos similares");
+          return productos;
+      }
+      
+      // Buscar coincidencias parciales en ambas columnas de descripción
+      String sql = "SELECT descripcion_es, descripcion_en, unidad_medida, precio_venta_neto " +
+                  "FROM vista_producto_precio " +
+                  "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
+                  "ORDER BY precio_venta_neto DESC " +
+                  "LIMIT 20";
+      
+      try (Connection connection = DBConnection.getConnection();
+           PreparedStatement statement = connection.prepareStatement(sql)) {
+          
+          // Preparar parámetros con wildcards para búsqueda parcial
+          String descripcionBusqueda = "%" + descripcion.trim() + "%";
+          statement.setString(1, descripcionBusqueda);
+          statement.setString(2, descripcionBusqueda);
+          
+          logger.fine("🔍 Ejecutando consulta SQL productos similares: " + sql);
+          logger.fine("🔍 Parámetro búsqueda: " + descripcionBusqueda);
+          
+          try (ResultSet resultSet = statement.executeQuery()) {
+              while (resultSet.next()) {
+                  ProductoSimilar producto = new ProductoSimilar(
+                      resultSet.getString("descripcion_es"),
+                      resultSet.getString("descripcion_en"),
+                      resultSet.getString("unidad_medida"),
+                      resultSet.getDouble("precio_venta_neto")
+                  );
+                  productos.add(producto);
+              }
+              
+              logger.info("✅ Encontrados " + productos.size() + " productos similares para: " + descripcion);
+              
+          }
+          
+      } catch (SQLException e) {
+          logger.log(Level.SEVERE, "❌ Error al buscar productos similares para descripción: " + descripcion, e);
+      }
+      
+      return productos;
+  }
 
   /**
    * Consulta el precio de venta neto de un producto desde la vista vista_producto_precio

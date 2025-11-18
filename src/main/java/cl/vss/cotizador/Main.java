@@ -9,6 +9,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.VBox;
 import javafx.util.converter.DoubleStringConverter;
 import javafx.util.converter.IntegerStringConverter;
 import javafx.util.Callback;
@@ -493,28 +494,92 @@ private void cargarProductos() {
     }
 
     private void manejarAccionItem(ItemCotizacionExcel item) {
-        // Crear un diálogo de información del item
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Información del Item");
-        alert.setHeaderText("Detalles del Item Seleccionado");
+        // Buscar productos similares en la base de datos
+        List<cl.vss.cotizador.model.ProductoSimilar> productosSimilares = 
+            cotizacionService.buscarProductosSimilares(item.getDescripcion());
         
-        StringBuilder contenido = new StringBuilder();
-        contenido.append("Código: ").append(item.getCodigo()).append("\n");
-        contenido.append("Descripción: ").append(item.getDescripcion()).append("\n");
-        /*contenido.append("Cantidad: ").append(item.getCantidad()).append("\n");
-        contenido.append("Precio: $").append(String.format("%.2f", item.getPrecio())).append("\n");
-        contenido.append("Total: $").append(String.format("%.2f", item.getTotal())).append("\n");
-        contenido.append("Descuento: ").append(item.getDescuento()).append("%\n");
-        contenido.append("Total Neto: $").append(String.format("%.2f", item.getTotalNeto())).append("\n");
-        contenido.append("Total Bruto: $").append(String.format("%.2f", item.getTotalBruto())).append("\n");
-        contenido.append("Disponibilidad: ").append(item.getDisponibilidad()).append("\n");
-        contenido.append("Comentarios: ").append(item.getComentarios() != null ? item.getComentarios() : "Sin comentarios");*/
+        // Crear diálogo personalizado con tabla
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Productos Similares");
+        dialog.setHeaderText("Productos encontrados para: " + item.getDescripcion());
         
-        alert.setContentText(contenido.toString());
+        // Crear la tabla de productos similares
+        TableView<cl.vss.cotizador.model.ProductoSimilar> tablaProductosSimilares = new TableView<>();
         
-        // Personalizar el diálogo
-        alert.getDialogPane().setPrefSize(400, 300);
-        alert.showAndWait();
+        // Configurar columnas
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colDescEs = new TableColumn<>("Descripción ES");
+        colDescEs.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getDescripcionEs()));
+        colDescEs.setPrefWidth(200);
+        
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colDescEn = new TableColumn<>("Descripción EN");
+        colDescEn.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getDescripcionEn()));
+        colDescEn.setPrefWidth(200);
+        
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colUnidad = new TableColumn<>("Unidad");
+        colUnidad.setCellValueFactory(cellData -> new javafx.beans.property.SimpleStringProperty(cellData.getValue().getUnidadMedida()));
+        colUnidad.setPrefWidth(80);
+        
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecio = new TableColumn<>("Precio Neto");
+        colPrecio.setCellValueFactory(cellData -> new javafx.beans.property.SimpleDoubleProperty(cellData.getValue().getPrecioVentaNeto()).asObject());
+        colPrecio.setPrefWidth(120);
+        
+        // Formatear la columna de precio para mostrar como moneda
+        colPrecio.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
+            @Override
+            protected void updateItem(Double item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(String.format("$%,.2f", item));
+                }
+            }
+        });
+        
+        // Agregar columnas a la tabla
+        tablaProductosSimilares.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecio);
+        
+        // Cargar datos en la tabla
+        ObservableList<cl.vss.cotizador.model.ProductoSimilar> datosTabla = 
+            FXCollections.observableArrayList(productosSimilares);
+        tablaProductosSimilares.setItems(datosTabla);
+        
+        // Configurar tamaño de la tabla
+        tablaProductosSimilares.setPrefSize(650, 300);
+        
+        // Crear panel de información del item original
+        VBox infoPanel = new VBox(10);
+        infoPanel.setStyle("-fx-padding: 10; -fx-background-color: #f0f0f0;");
+        
+        Label lblItemOriginal = new Label("📦 Item Original:");
+        lblItemOriginal.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        
+        Label lblDescripcion = new Label("Descripción: " + item.getDescripcion());
+        Label lblCantidad = new Label("Cantidad: " + item.getCantidad());
+        Label lblPrecioActual = new Label("Precio Actual: $" + String.format("%,.2f", item.getPrecio()));
+        
+        infoPanel.getChildren().addAll(lblItemOriginal, lblDescripcion, lblCantidad, lblPrecioActual);
+        
+        // Panel principal que combina información y tabla
+        VBox contenidoPrincipal = new VBox(15);
+        contenidoPrincipal.getChildren().addAll(infoPanel, 
+                                              new Label("🔍 Productos Similares Encontrados (" + productosSimilares.size() + "):"),
+                                              tablaProductosSimilares);
+        
+        // Configurar el diálogo
+        dialog.getDialogPane().setContent(contenidoPrincipal);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.getDialogPane().setPrefSize(700, 500);
+        
+        // Mensaje si no se encontraron productos
+        if (productosSimilares.isEmpty()) {
+            Label sinResultados = new Label("❌ No se encontraron productos similares en la base de datos.");
+            sinResultados.setStyle("-fx-font-size: 14px; -fx-text-fill: #666666;");
+            tablaProductosSimilares.setPlaceholder(sinResultados);
+        }
+        
+        // Mostrar el diálogo
+        dialog.showAndWait();
     }
 
     private void limpiarTabla() {
