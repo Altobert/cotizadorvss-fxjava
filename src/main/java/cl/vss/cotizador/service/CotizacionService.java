@@ -76,22 +76,22 @@ public class CotizacionService {
                 double precioCalculado = consultarPrecioPorDescripcion(descripcion);
                 logger.info("Leyendo item con descripción: " + descripcion);
 
-                double precioTotalNeto = precioCalculado * cantidad;
-
-
+                
                 
                 double precio = obtenerDecimal(fila, columnas.get("precio"));
                 String unidad = columnas.containsKey("unidad") ? obtenerTexto(fila, columnas.get("unidad")) : "";
                 String categoria = columnas.containsKey("categoria") ? obtenerTexto(fila, columnas.get("categoria")) : "";
 
                 double descuento = columnas.containsKey("descuento") ? obtenerDecimal(fila, columnas.get("descuento")) : 0.0;
-                //double totalNeto = columnas.containsKey("totalneto") ? obtenerDecimal(fila, columnas.get("totalneto")) : 0.0;
-                double totalNeto = precioTotalNeto;
+                double totalNeto = columnas.containsKey("totalneto") ? obtenerDecimal(fila, columnas.get("totalneto")) : 0.0;
+                
 
                 String comentarios = columnas.containsKey("comentarios") ? obtenerTexto(fila, columnas.get("comentarios")) : "";
                 int disponibilidad = columnas.containsKey("disponibilidad") ? obtenerEntero(fila, columnas.get("disponibilidad")) : 0;
+                
                 //double totalBruto = columnas.containsKey("totalbruto") ? obtenerDecimal(fila, columnas.get("totalbruto")) : 0.0;
-                double totalBruto = precioCalculado * cantidad;
+                double precioTotalBruto = precioCalculado * cantidad;
+                double totalBruto = precioTotalBruto;
 
                 if (codigo.isEmpty() && descripcion.isEmpty()) continue;
 
@@ -311,6 +311,7 @@ public class CotizacionService {
       
       if (descripcion == null || descripcion.trim().isEmpty()) {
           logger.warning("⚠️ Descripción vacía o nula para consulta de precio");
+          sugerirProductosSimilares(descripcion);
           return 0.0;
       }
       
@@ -388,6 +389,95 @@ public class CotizacionService {
       } catch (SQLException e) {
           logger.log(Level.SEVERE, "❌ Error al consultar precio exacto para descripción: " + descripcion, e);
           return 0.0;
+      }
+  }
+
+  /**
+   * Sugiere productos similares basados en la descripción proporcionada
+   * Si la descripción es nula o vacía, muestra productos populares
+   * @param descripcionOriginal descripción original (puede ser nula o vacía)
+   */
+  private void sugerirProductosSimilares(String descripcionOriginal) {
+      logger.info("💡 Generando sugerencias de productos similares...");
+      
+      String sql;
+      boolean tieneDescripcion = descripcionOriginal != null && !descripcionOriginal.trim().isEmpty();
+      
+      if (tieneDescripcion) {
+          // Si hay descripción, buscar productos con palabras similares
+          String[] palabras = descripcionOriginal.trim().toUpperCase().split("\\s+");
+          StringBuilder condicionWhere = new StringBuilder();
+          
+          for (int i = 0; i < palabras.length; i++) {
+              if (i > 0) condicionWhere.append(" OR ");
+              condicionWhere.append("(UPPER(descripcion_es) LIKE ? OR UPPER(descripcion_en) LIKE ?)");
+          }
+          
+          sql = "SELECT descripcion_es, descripcion_en, precio_venta_neto " +
+                "FROM vista_producto_precio " +
+                "WHERE " + condicionWhere.toString() + " " +
+                "ORDER BY precio_venta_neto DESC " +
+                "LIMIT 8";
+                
+          logger.info("🔍 Buscando productos similares a: \"" + descripcionOriginal + "\"");
+      } else {
+          // Si no hay descripción, mostrar productos populares
+          sql = "SELECT descripcion_es, descripcion_en, precio_venta_neto " +
+                "FROM vista_producto_precio " +
+                "ORDER BY precio_venta_neto DESC " +
+                "LIMIT 8";
+                
+          logger.info("🔍 Mostrando productos populares del catálogo:");
+      }
+      
+      try (Connection connection = DBConnection.getConnection();
+           PreparedStatement statement = connection.prepareStatement(sql)) {
+          
+          // Si hay descripción, configurar parámetros para búsqueda por palabras
+          if (tieneDescripcion) {
+              String[] palabras = descripcionOriginal.trim().toUpperCase().split("\\s+");
+              int paramIndex = 1;
+              for (String palabra : palabras) {
+                  String palabraBusqueda = "%" + palabra + "%";
+                  statement.setString(paramIndex++, palabraBusqueda);
+                  statement.setString(paramIndex++, palabraBusqueda);
+              }
+          }
+          
+          try (ResultSet resultSet = statement.executeQuery()) {
+              logger.info("=====================");
+              
+              int contador = 1;
+              boolean encontroSugerencias = false;
+              
+              while (resultSet.next()) {
+                  String descripcionEs = resultSet.getString("descripcion_es");
+                  String descripcionEn = resultSet.getString("descripcion_en");
+                  double precio = resultSet.getDouble("precio_venta_neto");
+                  
+                  // Mostrar la descripción más completa
+                  String descripcionMostrar = (descripcionEs != null && !descripcionEs.trim().isEmpty()) 
+                      ? descripcionEs : descripcionEn;
+                  
+                  if (descripcionMostrar != null && !descripcionMostrar.trim().isEmpty()) {
+                      logger.info(String.format("%d. %s - $%.2f", 
+                          contador++, descripcionMostrar, precio));
+                      encontroSugerencias = true;
+                  }
+              }
+              
+              if (encontroSugerencias) {
+                  logger.info("=====================");
+                  logger.info("💡 Sugerencia: Intente usar alguna de estas descripciones para obtener el precio");
+              } else {
+                  logger.info("⚠️ No se encontraron productos similares");
+                  logger.info("💡 Verifique la descripción del producto o contacte al administrador");
+              }
+          }
+          
+      } catch (SQLException e) {
+          logger.log(Level.WARNING, "⚠️ Error al obtener sugerencias de productos", e);
+          logger.info("💡 No se pudieron cargar las sugerencias. Verifique la descripción del producto.");
       }
   }
 
