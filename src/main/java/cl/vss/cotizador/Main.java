@@ -195,9 +195,10 @@ private void cargarProductos() {
                 } else {
                     // Colorear en amarillo si no se encontró precio en la base de datos
                     if (newItem.isPrecioNoEncontrado()) {
-                        row.setStyle("-fx-background-color: #FFFF99; -fx-text-fill: black;");
+                        row.setStyle("-fx-background-color: #eded93ff; -fx-text-fill: black;");
                     } else {
-                        row.setStyle("");
+                        // colorear en verde claro si se encontró precio
+                        row.setStyle("-fx-background-color: #98e198ff; -fx-text-fill: black;");
                     }
                 }
             });
