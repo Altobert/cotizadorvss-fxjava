@@ -73,7 +73,7 @@ public void start(Stage stage) {
     tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
     tabs.getTabs().add(new Tab("Productos", rootProductos));
 
-    Scene scene = new Scene(tabs, 1200, 600);
+    Scene scene = new Scene(tabs, 1400, 1000);
     stage.setTitle("Cotizador VSS");
     
     // Aplicar hoja de estilos CSS
