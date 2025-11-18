@@ -185,6 +185,24 @@ private void cargarProductos() {
             colCodigo, colDescripcion, colCantidad, colPrecio, colTotal,
             colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto
         );
+        
+        // Configurar RowFactory para colorear filas cuando no se encuentra precio
+        tabla.setRowFactory(tv -> {
+            TableRow<ItemCotizacionExcel> row = new TableRow<>();
+            row.itemProperty().addListener((obs, oldItem, newItem) -> {
+                if (newItem == null) {
+                    row.setStyle("");
+                } else {
+                    // Colorear en amarillo si no se encontró precio en la base de datos
+                    if (newItem.isPrecioNoEncontrado()) {
+                        row.setStyle("-fx-background-color: #FFFF99; -fx-text-fill: black;");
+                    } else {
+                        row.setStyle("");
+                    }
+                }
+            });
+            return row;
+        });
     }
         private void probarConexion() {
              try (Connection conn = cl.vss.cotizador.util.DBConnection.getConnection()) {
@@ -195,7 +213,6 @@ private void cargarProductos() {
 }
 
 
-
     private void cargarArchivo(Stage stage) {
 
         FileChooser fileChooser = new FileChooser();
@@ -204,6 +221,7 @@ private void cargarProductos() {
         File archivo = fileChooser.showOpenDialog(stage);
 
         if (archivo != null) {
+
             List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
             ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
             tabla.setItems(datos);

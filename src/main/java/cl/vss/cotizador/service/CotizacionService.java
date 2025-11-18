@@ -73,13 +73,12 @@ public class CotizacionService {
                 int cantidad = obtenerEntero(fila, columnas.get("cantidad"));
                 
                 // utilizar metodo consultarPrecioPorDescripcion()
-                double precioCalculado = consultarPrecioPorDescripcion(descripcion);
-                logger.info("Leyendo item con descripción: " + descripcion);
-
                 double precioPorDescripcion = consultarPrecioPorDescripcion(descripcion);
+                logger.info("Leyendo item con descripción: " + descripcion);
                                 
                 //double precio = obtenerDecimal(fila, columnas.get("precio"));
                 double precio = precioPorDescripcion;
+                double precioCalculado = precioPorDescripcion;
 
                 String unidad = columnas.containsKey("unidad") ? obtenerTexto(fila, columnas.get("unidad")) : "";
                 String categoria = columnas.containsKey("categoria") ? obtenerTexto(fila, columnas.get("categoria")) : "";
@@ -87,7 +86,6 @@ public class CotizacionService {
                 double descuento = columnas.containsKey("descuento") ? obtenerDecimal(fila, columnas.get("descuento")) : 0.0;
                 double totalNeto = columnas.containsKey("totalneto") ? obtenerDecimal(fila, columnas.get("totalneto")) : 0.0;
                 
-
                 String comentarios = columnas.containsKey("comentarios") ? obtenerTexto(fila, columnas.get("comentarios")) : "";
                 int disponibilidad = columnas.containsKey("disponibilidad") ? obtenerEntero(fila, columnas.get("disponibilidad")) : 0;
                 
@@ -101,6 +99,11 @@ public class CotizacionService {
                     codigo, descripcion, cantidad, precio, unidad, categoria,
                     descuento, totalNeto, comentarios, disponibilidad, totalBruto
                 );
+                
+                // Marcar si no se encontró precio en la base de datos (precio = 0.0)
+                // para colorear la fila en amarillo
+                item.setPrecioNoEncontrado(precio == 0.0);
+                
                 items.add(item);
             }
 
