@@ -11,6 +11,7 @@ import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.util.converter.DoubleStringConverter;
 import javafx.util.converter.IntegerStringConverter;
+import javafx.util.Callback;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.image.Image;
@@ -286,9 +287,42 @@ private void cargarProductos() {
             item.setTotalBruto(event.getNewValue());
         });
 
+        // Columna de Acción con botones
+        TableColumn<ItemCotizacionExcel, Void> colAccion = new TableColumn<>("Acción");
+        colAccion.setCellFactory(new Callback<TableColumn<ItemCotizacionExcel, Void>, TableCell<ItemCotizacionExcel, Void>>() {
+            @Override
+            public TableCell<ItemCotizacionExcel, Void> call(final TableColumn<ItemCotizacionExcel, Void> param) {
+                final TableCell<ItemCotizacionExcel, Void> cell = new TableCell<ItemCotizacionExcel, Void>() {
+                    private final Button btnAccion = new Button("Editar");
+                    
+                    {
+                        btnAccion.setOnAction((event) -> {
+                            ItemCotizacionExcel item = getTableView().getItems().get(getIndex());
+                            Main.this.manejarAccionItem(item);
+                        });
+                        btnAccion.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-size: 12px;");
+                        btnAccion.setPrefWidth(80);
+                    }
+                    
+                    @Override
+                    public void updateItem(Void item, boolean empty) {
+                        super.updateItem(item, empty);
+                        if (empty) {
+                            setGraphic(null);
+                        } else {
+                            setGraphic(btnAccion);
+                        }
+                    }
+                };
+                return cell;
+            }
+        });
+        colAccion.setMinWidth(100);
+        colAccion.setSortable(false);
+
         tabla.getColumns().addAll(
             colCodigo, colDescripcion, colCantidad, colPrecio, colTotal,
-            colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto
+            colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto, colAccion
         );
         
         // Configurar RowFactory para colorear filas cuando no se encuentra precio
@@ -310,8 +344,9 @@ private void cargarProductos() {
             return row;
         });
     }
-        private void probarConexion() {
-             try (Connection conn = cl.vss.cotizador.util.DBConnection.getConnection()) {
+private void probarConexion() {
+
+    try (Connection conn = cl.vss.cotizador.util.DBConnection.getConnection()) {
                   System.out.println("✅ Conexión exitosa a PostgreSQL");
         }   catch (Exception e) {
             System.err.println("❌ Error de conexión: " + e.getMessage());
@@ -332,6 +367,31 @@ private void cargarProductos() {
             ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
             tabla.setItems(datos);
         }
+    }
+
+    private void manejarAccionItem(ItemCotizacionExcel item) {
+        // Crear un diálogo de información del item
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Información del Item");
+        alert.setHeaderText("Detalles del Item Seleccionado");
+        
+        StringBuilder contenido = new StringBuilder();
+        contenido.append("Código: ").append(item.getCodigo()).append("\n");
+        contenido.append("Descripción: ").append(item.getDescripcion()).append("\n");
+        contenido.append("Cantidad: ").append(item.getCantidad()).append("\n");
+        contenido.append("Precio: $").append(String.format("%.2f", item.getPrecio())).append("\n");
+        contenido.append("Total: $").append(String.format("%.2f", item.getTotal())).append("\n");
+        contenido.append("Descuento: ").append(item.getDescuento()).append("%\n");
+        contenido.append("Total Neto: $").append(String.format("%.2f", item.getTotalNeto())).append("\n");
+        contenido.append("Total Bruto: $").append(String.format("%.2f", item.getTotalBruto())).append("\n");
+        contenido.append("Disponibilidad: ").append(item.getDisponibilidad()).append("\n");
+        contenido.append("Comentarios: ").append(item.getComentarios() != null ? item.getComentarios() : "Sin comentarios");
+        
+        alert.setContentText(contenido.toString());
+        
+        // Personalizar el diálogo
+        alert.getDialogPane().setPrefSize(400, 300);
+        alert.showAndWait();
     }
 
     private void limpiarTabla() {
