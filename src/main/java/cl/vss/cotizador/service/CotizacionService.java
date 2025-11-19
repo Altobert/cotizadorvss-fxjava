@@ -320,8 +320,8 @@ public class CotizacionService {
           return 0.0;
       }
       
-      // Buscar en ambas columnas de descripción (español e inglés)
-      String sql = "SELECT precio_venta_neto FROM vista_producto_precio " +
+      // Buscar en ambas columnas de descripción (español e inglés) en tabla producto
+      String sql = "SELECT valor_pesos FROM producto " +
                   "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
                   "LIMIT 1";
       
@@ -338,7 +338,7 @@ public class CotizacionService {
           
           try (ResultSet resultSet = statement.executeQuery()) {
               if (resultSet.next()) {
-                  double precio = resultSet.getDouble("precio_venta_neto");
+                  double precio = resultSet.getDouble("valor_pesos");
                   logger.info("✅ Precio encontrado: $" + precio + " para descripción: " + descripcion);
                   return precio;
               } else {
@@ -366,8 +366,8 @@ public class CotizacionService {
           return 0.0;
       }
       
-      // Buscar coincidencia exacta en ambas columnas de descripción
-      String sql = "SELECT precio_venta_neto FROM vista_producto_precio " +
+      // Buscar coincidencia exacta en ambas columnas de descripción en tabla producto
+      String sql = "SELECT valor_pesos FROM producto " +
                   "WHERE UPPER(descripcion_es) = UPPER(?) OR UPPER(descripcion_en) = UPPER(?) " +
                   "LIMIT 1";
       
@@ -382,7 +382,7 @@ public class CotizacionService {
           
           try (ResultSet resultSet = statement.executeQuery()) {
               if (resultSet.next()) {
-                  double precio = resultSet.getDouble("precio_venta_neto");
+                  double precio = resultSet.getDouble("valor_pesos");
                   logger.info("✅ Precio exacto encontrado: $" + precio + " para descripción: " + descripcion);
                   return precio;
               } else {
@@ -413,41 +413,76 @@ public class CotizacionService {
           return productos;
       }
       
-      // Buscar coincidencias parciales en ambas columnas de descripción
-      String sql = "SELECT descripcion_es, descripcion_en, unidad_medida, precio_venta_neto " +
-                  "FROM vista_producto_precio " +
+      // Buscar coincidencias parciales en ambas columnas de descripción en tabla producto
+      String sql = "SELECT descripcion_es, descripcion_en, unidad_medida, valor_pesos " +
+                  "FROM producto " +
                   "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
-                  "ORDER BY precio_venta_neto DESC " +
+                  "ORDER BY valor_pesos DESC " +
                   "LIMIT 20";
       
-      try (Connection connection = DBConnection.getConnection();
-           PreparedStatement statement = connection.prepareStatement(sql)) {
+      try (Connection connection = DBConnection.getConnection()) {
+          logger.info("✅ Conexión establecida para búsqueda de productos similares");
           
-          // Preparar parámetros con wildcards para búsqueda parcial
-          String descripcionBusqueda = "%" + descripcion.trim() + "%";
-          statement.setString(1, descripcionBusqueda);
-          statement.setString(2, descripcionBusqueda);
-          
-          logger.fine("🔍 Ejecutando consulta SQL productos similares: " + sql);
-          logger.fine("🔍 Parámetro búsqueda: " + descripcionBusqueda);
-          
-          try (ResultSet resultSet = statement.executeQuery()) {
-              while (resultSet.next()) {
-                  ProductoSimilar producto = new ProductoSimilar(
-                      resultSet.getString("descripcion_es"),
-                      resultSet.getString("descripcion_en"),
-                      resultSet.getString("unidad_medida"),
-                      resultSet.getDouble("precio_venta_neto")
-                  );
-                  productos.add(producto);
+          // Primero verificar si hay datos en la tabla producto
+          String countSql = "SELECT COUNT(*) as total FROM producto";
+          try (PreparedStatement countStatement = connection.prepareStatement(countSql);
+               ResultSet countResult = countStatement.executeQuery()) {
+              if (countResult.next()) {
+                  int totalProductos = countResult.getInt("total");
+                  logger.info("📊 Total productos en tabla: " + totalProductos);
+                  if (totalProductos == 0) {
+                      logger.warning("⚠️ La tabla producto está vacía");
+                      return productos;
+                  }
               }
+          }
+          
+          try (PreparedStatement statement = connection.prepareStatement(sql)) {
+              // Preparar parámetros con wildcards para búsqueda parcial
+              String descripcionBusqueda = "%" + descripcion.trim() + "%";
+              statement.setString(1, descripcionBusqueda);
+              statement.setString(2, descripcionBusqueda);
               
-              logger.info("✅ Encontrados " + productos.size() + " productos similares para: " + descripcion);
+              logger.info("🔍 Ejecutando consulta SQL productos similares: " + sql);
+              logger.info("🔍 Parámetro búsqueda: " + descripcionBusqueda);
+          
+              try (ResultSet resultSet = statement.executeQuery()) {
+                  logger.info("🔄 Ejecutando consulta...");
+                  int contador = 0;
+                  while (resultSet.next()) {
+                      contador++;
+                      String descEs = resultSet.getString("descripcion_es");
+                      String descEn = resultSet.getString("descripcion_en");
+                      String unidad = resultSet.getString("unidad_medida");
+                      double precio = resultSet.getDouble("valor_pesos");
+                      
+                      logger.info("📦 Producto " + contador + ": ES=" + descEs + ", EN=" + descEn + ", Precio=" + precio);
+                      
+                      ProductoSimilar producto = new ProductoSimilar(descEs, descEn, unidad, precio);
+                      productos.add(producto);
+                  }
+                  
+                  if (contador == 0) {
+                      logger.warning("⚠️ La consulta no devolvió ningún resultado");
+                      // Hacer una consulta de prueba más simple
+                      String testSql = "SELECT descripcion_es FROM producto LIMIT 5";
+                      try (PreparedStatement testStatement = connection.prepareStatement(testSql);
+                           ResultSet testResult = testStatement.executeQuery()) {
+                          logger.info("🧪 Probando consulta simple...");
+                          while (testResult.next()) {
+                              logger.info("📋 Producto encontrado: " + testResult.getString("descripcion_es"));
+                          }
+                      }
+                  }
+                  
+                  logger.info("✅ Encontrados " + productos.size() + " productos similares para: " + descripcion);
               
+              }
           }
           
       } catch (SQLException e) {
           logger.log(Level.SEVERE, "❌ Error al buscar productos similares para descripción: " + descripcion, e);
+          logger.log(Level.SEVERE, "❌ Detalles del error SQL: " + e.getSQLState() + " - " + e.getErrorCode());
       }
       
       return productos;
@@ -467,10 +502,10 @@ public class CotizacionService {
           return 0.0;
       }
       
-      // Buscar coincidencias parciales en ambas columnas de descripción
-      String sql = "SELECT precio_venta_neto FROM vista_producto_precio " +
+      // Buscar coincidencias parciales en ambas columnas de descripción en tabla producto
+      String sql = "SELECT valor_pesos FROM producto " +
                   "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
-                  "ORDER BY precio_venta_neto DESC " +
+                  "ORDER BY valor_pesos DESC " +
                   "LIMIT 1";
       
       try (Connection connection = DBConnection.getConnection();
@@ -486,7 +521,7 @@ public class CotizacionService {
           
           try (ResultSet resultSet = statement.executeQuery()) {
               if (resultSet.next()) {
-                  double precioNeto = resultSet.getDouble("precio_venta_neto");
+                  double precioNeto = resultSet.getDouble("valor_pesos");
                   logger.info("✅ Precio neto encontrado: $" + precioNeto + " para descripción: " + descripcion);
                   return precioNeto;
               } else {
@@ -498,6 +533,58 @@ public class CotizacionService {
       } catch (SQLException e) {
           logger.log(Level.SEVERE, "❌ Error al consultar precio neto para descripción: " + descripcion, e);
           return 0.0;
+      }
+  }
+
+  /**
+   * Método de diagnóstico para verificar la estructura y contenido de la tabla producto
+   */
+  public void diagnosticarTablaProducto() {
+      logger.info("🔧 Iniciando diagnóstico de tabla producto");
+      
+      try (Connection connection = DBConnection.getConnection()) {
+          // Verificar si la tabla existe
+          String checkTableSql = "SELECT table_name FROM information_schema.tables WHERE table_name = 'producto'";
+          try (PreparedStatement statement = connection.prepareStatement(checkTableSql);
+               ResultSet resultSet = statement.executeQuery()) {
+              if (resultSet.next()) {
+                  logger.info("✅ Tabla 'producto' existe");
+              } else {
+                  logger.severe("❌ Tabla 'producto' NO existe");
+                  return;
+              }
+          }
+          
+          // Verificar columnas
+          String columnsSql = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'producto'";
+          try (PreparedStatement statement = connection.prepareStatement(columnsSql);
+               ResultSet resultSet = statement.executeQuery()) {
+              logger.info("📋 Columnas de la tabla producto:");
+              while (resultSet.next()) {
+                  logger.info("  - " + resultSet.getString("column_name") + " (" + resultSet.getString("data_type") + ")");
+              }
+          }
+          
+          // Verificar datos de muestra
+          String sampleSql = "SELECT descripcion_es, descripcion_en, unidad_medida, valor_pesos FROM producto LIMIT 3";
+          try (PreparedStatement statement = connection.prepareStatement(sampleSql);
+               ResultSet resultSet = statement.executeQuery()) {
+              logger.info("📊 Datos de muestra:");
+              int count = 0;
+              while (resultSet.next()) {
+                  count++;
+                  logger.info("  " + count + ". ES: " + resultSet.getString("descripcion_es") + 
+                            ", EN: " + resultSet.getString("descripcion_en") + 
+                            ", Unidad: " + resultSet.getString("unidad_medida") + 
+                            ", Precio: " + resultSet.getDouble("valor_pesos"));
+              }
+              if (count == 0) {
+                  logger.warning("⚠️ No hay datos en la tabla producto");
+              }
+          }
+          
+      } catch (SQLException e) {
+          logger.log(Level.SEVERE, "❌ Error en diagnóstico de tabla producto", e);
       }
   }
 

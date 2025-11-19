@@ -10,6 +10,7 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.HBox;
 import javafx.util.converter.DoubleStringConverter;
 import javafx.util.converter.IntegerStringConverter;
 import javafx.util.Callback;
@@ -498,10 +499,16 @@ private void cargarProductos() {
         List<cl.vss.cotizador.model.ProductoSimilar> productosSimilares = 
             cotizacionService.buscarProductosSimilares(item.getDescripcion());
         
+        // Si no se encuentran productos, ejecutar diagnóstico
+        if (productosSimilares.isEmpty()) {
+            System.out.println("🔍 No se encontraron productos similares, ejecutando diagnóstico...");
+            cotizacionService.diagnosticarTablaProducto();
+        }
+        
         // Crear diálogo personalizado con tabla
-        Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle("Productos Similares");
-        dialog.setHeaderText("Productos encontrados para: " + item.getDescripcion());
+        Dialog<Void> dialogProductosSimilares = new Dialog<>();
+        dialogProductosSimilares.setTitle("Productos Similares");
+        dialogProductosSimilares.setHeaderText("Productos encontrados para: " + item.getDescripcion());
         
         // Crear la tabla de productos similares
         TableView<cl.vss.cotizador.model.ProductoSimilar> tablaProductosSimilares = new TableView<>();
@@ -560,16 +567,64 @@ private void cargarProductos() {
         
         infoPanel.getChildren().addAll(lblItemOriginal, lblDescripcion, lblCantidad, lblPrecioActual);
         
-        // Panel principal que combina información y tabla
+        // Crear panel de búsqueda personalizada
+        javafx.scene.layout.HBox panelBusqueda = new javafx.scene.layout.HBox(10);
+        panelBusqueda.setStyle("-fx-padding: 10; -fx-alignment: center-left;");
+        
+        Label lblBuscar = new Label("🔍 Buscar otros productos:");
+        lblBuscar.setStyle("-fx-font-weight: bold;");
+        
+        TextField txtBusqueda = new TextField();
+        txtBusqueda.setPromptText("Ingrese términos de búsqueda...");
+        txtBusqueda.setPrefWidth(300);
+        txtBusqueda.setText(item.getDescripcion()); // Prellenar con la descripción actual
+        
+        Button btnBuscar = new Button("Buscar");
+        btnBuscar.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnBuscar.setPrefWidth(80);
+        
+        // Acción del botón buscar
+        btnBuscar.setOnAction(e -> {
+            String terminoBusqueda = txtBusqueda.getText().trim();
+            if (!terminoBusqueda.isEmpty()) {
+                // Realizar nueva búsqueda
+                List<cl.vss.cotizador.model.ProductoSimilar> nuevosResultados = 
+                    cotizacionService.buscarProductosSimilares(terminoBusqueda);
+                
+                // Actualizar la tabla con los nuevos resultados  
+                ObservableList<cl.vss.cotizador.model.ProductoSimilar> nuevosdatos = 
+                    FXCollections.observableArrayList(nuevosResultados);
+                tablaProductosSimilares.setItems(nuevosdatos);
+                
+                // Actualizar el header del diálogo
+                dialogProductosSimilares.setHeaderText("Productos encontrados para: " + terminoBusqueda + 
+                                                      " (" + nuevosResultados.size() + " resultados)");
+                
+                // Actualizar mensaje si no hay resultados
+                if (nuevosResultados.isEmpty()) {
+                    Label sinResultados = new Label("❌ No se encontraron productos para: " + terminoBusqueda);
+                    sinResultados.setStyle("-fx-font-size: 14px; -fx-text-fill: #666666;");
+                    tablaProductosSimilares.setPlaceholder(sinResultados);
+                }
+            }
+        });
+        
+        // Permitir búsqueda con Enter
+        txtBusqueda.setOnAction(e -> btnBuscar.fire());
+        
+        panelBusqueda.getChildren().addAll(lblBuscar, txtBusqueda, btnBuscar);
+        
+        // Panel principal que combina información, búsqueda y tabla
         VBox contenidoPrincipal = new VBox(15);
-        contenidoPrincipal.getChildren().addAll(infoPanel, 
+        contenidoPrincipal.getChildren().addAll(infoPanel,
+                                              panelBusqueda,
                                               new Label("🔍 Productos Similares Encontrados (" + productosSimilares.size() + "):"),
                                               tablaProductosSimilares);
         
         // Configurar el diálogo
-        dialog.getDialogPane().setContent(contenidoPrincipal);
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        dialog.getDialogPane().setPrefSize(700, 500);
+        dialogProductosSimilares.getDialogPane().setContent(contenidoPrincipal);
+        dialogProductosSimilares.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialogProductosSimilares.getDialogPane().setPrefSize(700, 500);
         
         // Mensaje si no se encontraron productos
         if (productosSimilares.isEmpty()) {
@@ -579,7 +634,7 @@ private void cargarProductos() {
         }
         
         // Mostrar el diálogo
-        dialog.showAndWait();
+        dialogProductosSimilares.showAndWait();
     }
 
     private void limpiarTabla() {
