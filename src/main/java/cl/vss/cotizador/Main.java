@@ -503,6 +503,7 @@ private void cargarProductos() {
         if (productosSimilares.isEmpty()) {
             System.out.println("🔍 No se encontraron productos similares, ejecutando diagnóstico...");
             cotizacionService.diagnosticarTablaProducto();
+            cotizacionService.diagnosticarVistaProductoPrecio();
         }
         
         // Crear diálogo personalizado con tabla
@@ -543,16 +544,34 @@ private void cargarProductos() {
             }
         });
         
+        // Nueva columna para Precio Venta Neto en dólares
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecioVentaNeto = new TableColumn<>("Precio Venta Neto");
+        colPrecioVentaNeto.setCellValueFactory(cellData -> new javafx.beans.property.SimpleDoubleProperty(cellData.getValue().getPrecioVentaNetoDolares()).asObject());
+        colPrecioVentaNeto.setPrefWidth(140);
+        
+        // Formatear la columna de precio venta neto para mostrar como moneda en dólares
+        colPrecioVentaNeto.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
+            @Override
+            protected void updateItem(Double item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(String.format("US$%,.2f", item));
+                }
+            }
+        });
+        
         // Agregar columnas a la tabla
-        tablaProductosSimilares.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecio);
+        tablaProductosSimilares.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecio, colPrecioVentaNeto);
         
         // Cargar datos en la tabla
         ObservableList<cl.vss.cotizador.model.ProductoSimilar> datosTabla = 
             FXCollections.observableArrayList(productosSimilares);
         tablaProductosSimilares.setItems(datosTabla);
         
-        // Configurar tamaño de la tabla
-        tablaProductosSimilares.setPrefSize(650, 300);
+        // Configurar tamaño de la tabla (aumentado para nueva columna)
+        tablaProductosSimilares.setPrefSize(800, 300);
         
         // Crear panel de información del item original
         VBox infoPanel = new VBox(10);
@@ -621,10 +640,10 @@ private void cargarProductos() {
                                               new Label("🔍 Productos Similares Encontrados (" + productosSimilares.size() + "):"),
                                               tablaProductosSimilares);
         
-        // Configurar el diálogo
+        // Configurar el diálogo (aumentado para nueva columna)
         dialogProductosSimilares.getDialogPane().setContent(contenidoPrincipal);
         dialogProductosSimilares.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        dialogProductosSimilares.getDialogPane().setPrefSize(700, 500);
+        dialogProductosSimilares.getDialogPane().setPrefSize(850, 500);
         
         // Mensaje si no se encontraron productos
         if (productosSimilares.isEmpty()) {
