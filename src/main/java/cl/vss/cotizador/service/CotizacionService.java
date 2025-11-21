@@ -321,7 +321,11 @@ public class CotizacionService {
       }
       
       // Buscar en ambas columnas de descripción (español e inglés) en tabla producto
-      String sql = "SELECT valor_pesos FROM producto " +
+      /*String sql = "SELECT valor_pesos FROM producto " +
+                  "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
+                  "LIMIT 1";*/
+
+        String sql = "SELECT precio_venta_neto FROM vista_producto_precio " +
                   "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
                   "LIMIT 1";
       
@@ -338,7 +342,7 @@ public class CotizacionService {
           
           try (ResultSet resultSet = statement.executeQuery()) {
               if (resultSet.next()) {
-                  double precio = resultSet.getDouble("valor_pesos");
+                  double precio = resultSet.getDouble("precio_venta_neto");
                   logger.info("✅ Precio encontrado: $" + precio + " para descripción: " + descripcion);
                   return precio;
               } else {
