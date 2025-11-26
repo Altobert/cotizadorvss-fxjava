@@ -454,7 +454,8 @@ public class CotizacionService {
                       String descEs = resultSet.getString("descripcion_es");
                       String descEn = resultSet.getString("descripcion_en");
                       String unidad = resultSet.getString("unidad_medida");
-                      double precio = resultSet.getDouble("valor_pesos");
+                      //double precio = resultSet.getDouble("valor_pesos");                    
+                      double precio = resultSet.getDouble("precio_venta_neto");
                       double precioDolares = resultSet.getDouble("precio_venta_neto_dolares");
                       
                       logger.info("📦 Producto " + contador + ": ES=" + descEs + ", EN=" + descEn + ", Precio=" + precio + ", PrecioDolares=" + precioDolares);
@@ -593,6 +594,7 @@ public class CotizacionService {
    * Construye dinámicamente una consulta SQL basada en la estructura de vista_producto_precio
    */
   private String construirConsultaConVista() {
+      logger.info("🔧 Construyendo consulta SQL dinámica basada en vista_producto_precio");
       try (Connection connection = DBConnection.getConnection()) {
           // Verificar si la vista existe y qué columnas tiene
           String checkColumnsSql = "SELECT column_name FROM information_schema.columns " +
@@ -612,25 +614,27 @@ public class CotizacionService {
                   }
               }
               
-                  if (tienePrecioVentaNeto) {
-                      // La vista vista_producto_precio tiene las mismas columnas que producto
-                      // Hacer JOIN usando descripcion_es Y descripcion_en para mayor precisión
-                      return "SELECT p.descripcion_es, p.descripcion_en, p.unidad_medida, p.valor_pesos, " +
-                             "COALESCE(vpp.precio_venta_neto, 0.0) as precio_venta_neto_dolares " +
-                             "FROM producto p " +
-                             "LEFT JOIN vista_producto_precio vpp ON " +
-                             "  (p.descripcion_es = vpp.descripcion_es AND p.descripcion_en = vpp.descripcion_en) " +
-                             "WHERE UPPER(p.descripcion_es) LIKE UPPER(?) OR UPPER(p.descripcion_en) LIKE UPPER(?) " +
-                             "ORDER BY p.valor_pesos DESC " +
-                             "LIMIT 20";
-                  }          }
+              if (tienePrecioVentaNeto) {
+                  // La vista vista_producto_precio tiene precio_venta_neto, pero producto solo tiene valor_pesos
+                  // Usar los datos de la vista cuando esté disponible
+                  return "SELECT p.descripcion_es, p.descripcion_en, p.unidad_medida, " +
+                         "COALESCE(vpp.precio_venta_neto, 0.0) as precio_venta_neto, " +
+                         "COALESCE(vpp.precio_venta_neto, 0.0) as precio_venta_neto_dolares " +
+                         "FROM producto p " +
+                         "LEFT JOIN vista_producto_precio vpp ON " +
+                         "  (p.descripcion_es = vpp.descripcion_es AND p.descripcion_en = vpp.descripcion_en) " +
+                         "WHERE UPPER(p.descripcion_es) LIKE UPPER(?) OR UPPER(p.descripcion_en) LIKE UPPER(?) " +
+                         "ORDER BY COALESCE(vpp.precio_venta_neto, 0.0) DESC " +
+                         "LIMIT 20";
+              }
+          }
           
       } catch (SQLException e) {
           logger.log(Level.WARNING, "⚠️ Error al construir consulta con vista, usando consulta simple", e);
       }
       
       // Fallback: consulta simple sin JOIN
-      return "SELECT descripcion_es, descripcion_en, unidad_medida, valor_pesos, " +
+      return "SELECT descripcion_es, descripcion_en, unidad_medida, valor_pesos as precio_venta_neto, " +
              "0.0 as precio_venta_neto_dolares " +
              "FROM producto " +
              "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
