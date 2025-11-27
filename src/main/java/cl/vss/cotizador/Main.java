@@ -522,15 +522,26 @@ private void cargarProductos() {
         File archivo = fileChooser.showOpenDialog(stage);
 
         if (archivo != null) {
-            // Mostrar diálogo de progreso
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Analizando Estructura");
-            alert.setHeaderText("Analizando archivo: " + archivo.getName());
-            alert.setContentText("Revise la consola para ver el análisis detallado.");
+            // Mostrar información de formatos soportados
+            cotizacionService.mostrarInformacionFormatos();
             
             // Ejecutar análisis
             cotizacionService.analizarEstructuraExcel(archivo);
             
+            // Mostrar diálogo con resumen
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Análisis Completado");
+            alert.setHeaderText("Archivo analizado: " + archivo.getName());
+            
+            StringBuilder contenido = new StringBuilder();
+            contenido.append("✅ Análisis completado exitosamente\n\n");
+            contenido.append("📊 Formatos soportados:\n");
+            for (String formato : cotizacionService.getFormatosSoportados()) {
+                contenido.append("  • ").append(formato).append("\n");
+            }
+            contenido.append("\n🔍 Revise la consola para ver el análisis detallado.");
+            
+            alert.setContentText(contenido.toString());
             alert.showAndWait();
         }
     }

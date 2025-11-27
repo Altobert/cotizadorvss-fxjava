@@ -73,10 +73,11 @@ public class CotizacionService {
 
             Map<String, Integer> columnas = detectarColumnas(encabezado);
             
-            // Aplicar mapeo específico para formato QTN_GOF si es necesario
-            if (archivo.getName().contains("QTN_GOF") || archivo.getName().contains("Quotation")) {
-                logger.info("🎯 Aplicando mapeo específico para formato QTN_GOF");
-                columnas = aplicarMapeoQTN_GOF(encabezado, columnas);
+            // Aplicar mapeo dinámico basado en patrones detectados
+            String formatoDetectado = detectarFormato(archivo, encabezado);
+            if (!"GENERICO".equals(formatoDetectado)) {
+                logger.info("🎯 Aplicando mapeo específico para formato: " + formatoDetectado);
+                columnas = aplicarMapeoEspecifico(encabezado, columnas, formatoDetectado);
             }
 
             logger.info("✅ Encabezados detectados: " + columnas.size() + " columnas");
@@ -292,6 +293,64 @@ public class CotizacionService {
     }
 
     /**
+     * Detecta el formato del archivo Excel basándose en patrones
+     */
+    private String detectarFormato(File archivo, Row encabezado) {
+        String nombreArchivo = archivo.getName().toUpperCase();
+        
+        // Recopilar todas las columnas del encabezado
+        Set<String> columnasEncontradas = new HashSet<>();
+        for (Cell celda : encabezado) {
+            columnasEncontradas.add(celda.toString().trim().toUpperCase());
+        }
+        
+        logger.info("🔍 Detectando formato. Columnas encontradas: " + columnasEncontradas);
+        
+        // Patrones de detección por formato
+        if (nombreArchivo.contains("QTN_GOF") || nombreArchivo.contains("QUOTATION") || 
+            (columnasEncontradas.contains("VESSEL COMMENTS") && columnasEncontradas.contains("SUPPLIER COMMENTS"))) {
+            return "QTN_GOF";
+        }
+        
+        if (nombreArchivo.contains("FERNANDINA") || 
+            (columnasEncontradas.contains("UNIT OF MEASURE") && columnasEncontradas.size() <= 8)) {
+            return "FERNANDINA";
+        }
+        
+        if (columnasEncontradas.contains("SKU") || columnasEncontradas.contains("PART NUMBER")) {
+            return "INVENTARIO";
+        }
+        
+        if (columnasEncontradas.contains("INVOICE") || columnasEncontradas.contains("BILL TO")) {
+            return "FACTURA";
+        }
+        
+        logger.info("📋 Formato no reconocido, usando mapeo genérico");
+        return "GENERICO";
+    }
+    
+    /**
+     * Aplica mapeo específico basado en el formato detectado
+     */
+    private Map<String, Integer> aplicarMapeoEspecifico(Row encabezado, Map<String, Integer> columnasBase, String formato) {
+        logger.info("🎯 Aplicando mapeo para formato: " + formato);
+        
+        switch (formato) {
+            case "QTN_GOF":
+                return aplicarMapeoQTN_GOF(encabezado, columnasBase);
+            case "FERNANDINA":
+                return aplicarMapeoFERNANDINA(encabezado, columnasBase);
+            case "INVENTARIO":
+                return aplicarMapeoINVENTARIO(encabezado, columnasBase);
+            case "FACTURA":
+                return aplicarMapeoFACTURA(encabezado, columnasBase);
+            default:
+                logger.info("ℹ️ Usando mapeo genérico");
+                return columnasBase;
+        }
+    }
+    
+    /**
      * Mapeo específico para archivos formato QTN_GOF
      */
     private Map<String, Integer> aplicarMapeoQTN_GOF(Row encabezado, Map<String, Integer> columnas) {
@@ -355,6 +414,167 @@ public class CotizacionService {
         
         logger.info("🔄 Mapeo QTN_GOF completado. Columnas mapeadas: " + mapeoEspecifico.size());
         return mapeoEspecifico;
+    }
+    
+    /**
+     * Mapeo específico para archivos formato FERNANDINA
+     */
+    private Map<String, Integer> aplicarMapeoFERNANDINA(Row encabezado, Map<String, Integer> columnas) {
+        logger.info("🐠 Aplicando mapeo específico FERNANDINA...");
+        
+        Map<String, Integer> mapeoEspecifico = new HashMap<>(columnas);
+        
+        for (Cell celda : encabezado) {
+            String valor = celda.toString().trim().toUpperCase();
+            int col = celda.getColumnIndex();
+            
+            switch (valor) {
+                case "CÓDIGO":
+                case "CODIGO":
+                case "COD":
+                    mapeoEspecifico.put("codigo", col);
+                    logger.info("   ✅ " + valor + " -> codigo (columna " + (char)('A' + col) + ")");
+                    break;
+                case "DESCRIPCIÓN":
+                case "DESCRIPCION":
+                case "DESC":
+                    mapeoEspecifico.put("descripcion", col);
+                    logger.info("   ✅ " + valor + " -> descripcion (columna " + (char)('A' + col) + ")");
+                    break;
+                case "CANTIDAD":
+                case "QTY":
+                case "CANT":
+                    mapeoEspecifico.put("cantidad", col);
+                    logger.info("   ✅ " + valor + " -> cantidad (columna " + (char)('A' + col) + ")");
+                    break;
+            }
+        }
+        
+        logger.info("🔄 Mapeo FERNANDINA completado. Columnas mapeadas: " + mapeoEspecifico.size());
+        return mapeoEspecifico;
+    }
+    
+    /**
+     * Mapeo específico para archivos formato INVENTARIO
+     */
+    private Map<String, Integer> aplicarMapeoINVENTARIO(Row encabezado, Map<String, Integer> columnas) {
+        logger.info("📦 Aplicando mapeo específico INVENTARIO...");
+        
+        Map<String, Integer> mapeoEspecifico = new HashMap<>(columnas);
+        
+        for (Cell celda : encabezado) {
+            String valor = celda.toString().trim().toUpperCase();
+            int col = celda.getColumnIndex();
+            
+            switch (valor) {
+                case "SKU":
+                case "PART NUMBER":
+                case "PART #":
+                    mapeoEspecifico.put("codigo", col);
+                    logger.info("   ✅ " + valor + " -> codigo (columna " + (char)('A' + col) + ")");
+                    break;
+                case "PRODUCT NAME":
+                case "PRODUCT DESCRIPTION":
+                case "NAME":
+                    mapeoEspecifico.put("descripcion", col);
+                    logger.info("   ✅ " + valor + " -> descripcion (columna " + (char)('A' + col) + ")");
+                    break;
+                case "STOCK":
+                case "INVENTORY":
+                case "QTY ON HAND":
+                    mapeoEspecifico.put("cantidad", col);
+                    logger.info("   ✅ " + valor + " -> cantidad (columna " + (char)('A' + col) + ")");
+                    break;
+                case "COST":
+                case "UNIT COST":
+                case "WHOLESALE":
+                    mapeoEspecifico.put("precio", col);
+                    logger.info("   ✅ " + valor + " -> precio (columna " + (char)('A' + col) + ")");
+                    break;
+            }
+        }
+        
+        logger.info("🔄 Mapeo INVENTARIO completado. Columnas mapeadas: " + mapeoEspecifico.size());
+        return mapeoEspecifico;
+    }
+    
+    /**
+     * Mapeo específico para archivos formato FACTURA
+     */
+    private Map<String, Integer> aplicarMapeoFACTURA(Row encabezado, Map<String, Integer> columnas) {
+        logger.info("🧾 Aplicando mapeo específico FACTURA...");
+        
+        Map<String, Integer> mapeoEspecifico = new HashMap<>(columnas);
+        
+        for (Cell celda : encabezado) {
+            String valor = celda.toString().trim().toUpperCase();
+            int col = celda.getColumnIndex();
+            
+            switch (valor) {
+                case "INVOICE #":
+                case "INVOICE NUMBER":
+                case "BILL #":
+                    mapeoEspecifico.put("codigo", col);
+                    logger.info("   ✅ " + valor + " -> codigo (columna " + (char)('A' + col) + ")");
+                    break;
+                case "LINE DESCRIPTION":
+                case "SERVICE":
+                case "PRODUCT":
+                    mapeoEspecifico.put("descripcion", col);
+                    logger.info("   ✅ " + valor + " -> descripcion (columna " + (char)('A' + col) + ")");
+                    break;
+                case "QTY":
+                case "HOURS":
+                case "UNITS":
+                    mapeoEspecifico.put("cantidad", col);
+                    logger.info("   ✅ " + valor + " -> cantidad (columna " + (char)('A' + col) + ")");
+                    break;
+                case "RATE":
+                case "UNIT PRICE":
+                case "HOURLY RATE":
+                    mapeoEspecifico.put("precio", col);
+                    logger.info("   ✅ " + valor + " -> precio (columna " + (char)('A' + col) + ")");
+                    break;
+                case "AMOUNT":
+                case "LINE TOTAL":
+                case "SUBTOTAL":
+                    mapeoEspecifico.put("totalbruto", col);
+                    logger.info("   ✅ " + valor + " -> totalbruto (columna " + (char)('A' + col) + ")");
+                    break;
+            }
+        }
+        
+        logger.info("🔄 Mapeo FACTURA completado. Columnas mapeadas: " + mapeoEspecifico.size());
+        return mapeoEspecifico;
+    }
+    
+    /**
+     * Lista todos los formatos de Excel soportados
+     */
+    public List<String> getFormatosSoportados() {
+        return Arrays.asList("QTN_GOF", "FERNANDINA", "INVENTARIO", "FACTURA", "GENERICO");
+    }
+    
+    /**
+     * Proporciona información sobre qué columnas espera cada formato
+     */
+    public void mostrarInformacionFormatos() {
+        logger.info("📊 FORMATOS DE EXCEL SOPORTADOS:");
+        logger.info("🎯 QTN_GOF: ITEM, ITEM DESCRIPTION, QUANTITY ORDER, PRICE, SUPPLIER COMMENTS, VESSEL COMMENTS");
+        logger.info("🐠 FERNANDINA: CÓDIGO, DESCRIPCIÓN, CANTIDAD, PRECIO (formato en español)");
+        logger.info("📦 INVENTARIO: SKU/PART NUMBER, PRODUCT NAME, STOCK, UNIT COST");
+        logger.info("🧾 FACTURA: INVOICE #, LINE DESCRIPTION, QTY, RATE, AMOUNT");
+        logger.info("📋 GENÉRICO: Cualquier combinación de columnas comunes (item, description, quantity, price)");
+    }
+    
+    /**
+     * Método para registrar un nuevo formato personalizado
+     * Este método puede ser extendido para permitir configuración dinámica
+     */
+    public void registrarNuevoFormato(String nombreFormato, Map<String, List<String>> patronesColumnas) {
+        logger.info("🔧 Se puede extender este método para registrar formato: " + nombreFormato);
+        logger.info("📝 Patrones proporcionados: " + patronesColumnas);
+        // TODO: Implementar sistema de configuración dinámica de formatos
     }
 
     private String obtenerTexto(Row fila, Integer index) {
