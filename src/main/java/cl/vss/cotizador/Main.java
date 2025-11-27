@@ -37,14 +37,17 @@ public class Main extends Application {
     private final ProductoService productoService = new ProductoService();
     private final TableView<Producto> tablaProductos = new TableView<>();
 
-    @Override
+@Override
 public void start(Stage stage) {
-    probarConexion();
+    //probarConexion();
 
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
     Button btnCargar = new Button("📂 Cargar Excel");
     btnCargar.setOnAction(e -> cargarArchivo(stage));
+    
+    Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
+    btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
     btnLimpiar.setOnAction(e -> limpiarTabla());
@@ -52,7 +55,7 @@ public void start(Stage stage) {
     Button btnExportar = new Button("💾 Exportar Cotización");
     btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
-    ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar, btnExportar);
+    ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
     rootCotizador.setTop(barraCotizador);
     rootCotizador.setCenter(tabla);
     configurarTabla();
@@ -511,6 +514,26 @@ private void cargarProductos() {
     }
 }
 
+
+    private void analizarEstructuraExcel(Stage stage) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Seleccionar archivo Excel para analizar");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));
+        File archivo = fileChooser.showOpenDialog(stage);
+
+        if (archivo != null) {
+            // Mostrar diálogo de progreso
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Analizando Estructura");
+            alert.setHeaderText("Analizando archivo: " + archivo.getName());
+            alert.setContentText("Revise la consola para ver el análisis detallado.");
+            
+            // Ejecutar análisis
+            cotizacionService.analizarEstructuraExcel(archivo);
+            
+            alert.showAndWait();
+        }
+    }
 
     private void cargarArchivo(Stage stage) {
 
