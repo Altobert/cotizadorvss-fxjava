@@ -1,4 +1,5 @@
 package cl.vss.cotizador;
+import cl.vss.cotizador.model.Familia;
 
 import cl.vss.cotizador.model.ItemCotizacionExcel;
 import cl.vss.cotizador.service.CotizacionService;
@@ -58,16 +59,26 @@ public void start(Stage stage) {
 
     // Tab Productos
     BorderPane rootProductos = new BorderPane();
-    ToolBar barraProductos = new ToolBar(
-        new Button("➕ Agregar"),
-        new Button("✏️ Editar"),
-        new Button("🗑️ Eliminar")
-    );
+
+    // Botones con handlers
+    Button btnAgregar = new Button("➕ Agregar");
+    Button btnEditar  = new Button("✏️ Editar");
+    Button btnEliminar = new Button("🗑️ Eliminar");
+
+    // Handlers CRUD
+    btnAgregar.setOnAction(e -> abrirDialogAgregarProducto());
+    btnEditar.setOnAction(e -> abrirDialogEditarProducto());
+    btnEliminar.setOnAction(e -> eliminarProductoSeleccionado());
+
+    // Barra y layout
+    ToolBar barraProductos = new ToolBar(btnAgregar, btnEditar, btnEliminar);
     rootProductos.setTop(barraProductos);
     rootProductos.setCenter(tablaProductos);
 
+    // Tabla y datos
     configurarTablaProductos();
     cargarProductos();
+
 
     // TabPane principal
     TabPane tabs = new TabPane();
@@ -206,6 +217,9 @@ public void start(Stage stage) {
     colValor.setCellValueFactory(cell -> new SimpleDoubleProperty(cell.getValue().getValorPesos()).asObject());
 
     tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colValor);
+    tablaProductos.getStylesheets().add(
+        getClass().getResource("/productos.css").toExternalForm()
+    );
 }
 
 private void cargarProductos() {
@@ -592,7 +606,7 @@ private void cargarProductos() {
         alert.showAndWait();
     }
 
-    private void exportarCotizacion(Stage stage) {
+           private void exportarCotizacion(Stage stage) {
         if (tabla.getItems().isEmpty()) {
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Tabla Vacía");
@@ -610,9 +624,7 @@ private void cargarProductos() {
 
         if (archivo != null) {
             try {
-                // Aquí llamaremos al servicio de exportación
                 cotizacionService.exportarCotizacion(tabla.getItems(), archivo);
-                
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setTitle("Exportación Exitosa");
                 alert.setHeaderText(null);
@@ -628,6 +640,225 @@ private void cargarProductos() {
         }
     }
 
+    // 👉 Métodos CRUD de Productos
+
+    private void abrirDialogAgregarProducto() {
+    Dialog<Producto> dialog = new Dialog<>();
+    dialog.setTitle("Agregar Producto");
+
+    TextField txtDescEs = new TextField();
+    TextField txtDescEn = new TextField();
+    TextField txtUnidad = new TextField();
+    TextField txtValor = new TextField();
+
+    // 👉 ComboBox de familias
+    ComboBox<Familia> comboFamilia = crearComboFamilias();
+
+    VBox content = new VBox(10,
+        new Label("Descripción ES:"), txtDescEs,
+        new Label("Descripción EN:"), txtDescEn,
+        new Label("Unidad:"), txtUnidad,
+        new Label("Valor Pesos:"), txtValor,
+        new Label("Familia:"), comboFamilia   // 👉 agregado al diálogo
+    );
+    content.setStyle("-fx-padding: 10;");
+    dialog.getDialogPane().setContent(content);
+    dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+    dialog.setResultConverter(btn -> {
+        if (btn == ButtonType.OK) {
+            try {
+                // Validaciones
+                String descEs = txtDescEs.getText().trim();
+                String descEn = txtDescEn.getText().trim();
+                String unidad  = txtUnidad.getText().trim();
+                double valor   = Double.parseDouble(txtValor.getText().trim());
+
+                if (descEs.isEmpty() || unidad.isEmpty()) {
+                    throw new IllegalArgumentException("Descripción ES y Unidad son obligatorias.");
+                }
+                if (valor <= 0) {
+                    throw new IllegalArgumentException("El valor debe ser mayor que 0.");
+                }
+                if (comboFamilia.getValue() == null) {
+                    throw new IllegalArgumentException("Debe seleccionar una familia.");
+                }
+
+                // Construcción segura del objeto
+                Producto nuevo = new Producto();
+                nuevo.setDescripcionEs(descEs);
+                nuevo.setDescripcionEn(descEn);
+                nuevo.setUnidadMedida(unidad);
+                nuevo.setValorPesos(valor);
+                nuevo.setFamiliaId(comboFamilia.getValue().getId());
+
+                return nuevo;
+            } catch (NumberFormatException nfe) {
+                mostrarError("Valor inválido", "El campo 'Valor Pesos' debe ser numérico.\n" + nfe.getMessage());
+            } catch (Exception ex) {
+                mostrarError("Datos inválidos", "Revisa los campos.\n" + ex.getMessage());
+            }
+        }
+        return null;
+    });
+
+    dialog.showAndWait().ifPresent(p -> {
+        try {
+            productoService.agregarProducto(p);
+            cargarProductos();
+        } catch (Exception e) {
+            mostrarError("Error al guardar", e.getMessage());
+        }
+    });
+}
+
+
+    private void abrirDialogEditarProducto() {
+    Producto seleccionado = tablaProductos.getSelectionModel().getSelectedItem();
+    if (seleccionado == null) {
+        mostrarInfo("Selecciona un producto", "Debes seleccionar un producto para editar.");
+        return;
+    }
+
+    Dialog<Producto> dialog = new Dialog<>();
+    dialog.setTitle("Editar Producto");
+
+    TextField txtDescEs = new TextField(seleccionado.getDescripcionEs());
+    TextField txtDescEn = new TextField(seleccionado.getDescripcionEn());
+    TextField txtUnidad = new TextField(seleccionado.getUnidadMedida());
+    TextField txtValor = new TextField(String.valueOf(seleccionado.getValorPesos()));
+
+    // 👉 ComboBox de familias
+    ComboBox<Familia> comboFamilia = crearComboFamilias();
+    // Preseleccionar la familia actual del producto
+    comboFamilia.setValue(
+        productoService.listarFamilias().stream()
+            .filter(f -> f.getId() == seleccionado.getFamiliaId())
+            .findFirst()
+            .orElse(null)
+    );
+
+    VBox content = new VBox(10,
+        new Label("Descripción ES:"), txtDescEs,
+        new Label("Descripción EN:"), txtDescEn,
+        new Label("Unidad:"), txtUnidad,
+        new Label("Valor Pesos:"), txtValor,
+        new Label("Familia:"), comboFamilia   // 👉 agregado al diálogo
+    );
+    content.setStyle("-fx-padding: 10;");
+    dialog.getDialogPane().setContent(content);
+    dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+    dialog.setResultConverter(btn -> {
+        if (btn == ButtonType.OK) {
+            try {
+                // Validaciones
+                String descEs = txtDescEs.getText().trim();
+                String descEn = txtDescEn.getText().trim();
+                String unidad  = txtUnidad.getText().trim();
+                double valor   = Double.parseDouble(txtValor.getText().trim());
+
+                if (descEs.isEmpty() || unidad.isEmpty()) {
+                    throw new IllegalArgumentException("Descripción ES y Unidad son obligatorias.");
+                }
+                if (valor <= 0) {
+                    throw new IllegalArgumentException("El valor debe ser mayor que 0.");
+                }
+                if (comboFamilia.getValue() == null) {
+                    throw new IllegalArgumentException("Debe seleccionar una familia.");
+                }
+
+                // Asignación segura
+                seleccionado.setDescripcionEs(descEs);
+                seleccionado.setDescripcionEn(descEn);
+                seleccionado.setUnidadMedida(unidad);
+                seleccionado.setValorPesos(valor);
+                seleccionado.setFamiliaId(comboFamilia.getValue().getId());
+
+                return seleccionado;
+            } catch (NumberFormatException nfe) {
+                mostrarError("Valor inválido", "El campo 'Valor Pesos' debe ser numérico.\n" + nfe.getMessage());
+            } catch (Exception ex) {
+                mostrarError("Datos inválidos", "Revisa los campos.\n" + ex.getMessage());
+            }
+        }
+        return null;
+    });
+
+    dialog.showAndWait().ifPresent(p -> {
+        try {
+            productoService.actualizarProducto(p);
+            cargarProductos();
+        } catch (Exception e) {
+            mostrarError("Error al actualizar", e.getMessage());
+        }
+    });
+}
+
+
+    private void eliminarProductoSeleccionado() {
+        Producto seleccionado = tablaProductos.getSelectionModel().getSelectedItem();
+        if (seleccionado == null) {
+            mostrarInfo("Selecciona un producto", "Debes seleccionar un producto para eliminar.");
+            return;
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+            "¿Seguro que deseas eliminar el producto:\n" + seleccionado.getDescripcionEs() + "?",
+            ButtonType.YES, ButtonType.NO);
+        confirm.setTitle("Confirmar eliminación");
+        confirm.showAndWait().ifPresent(resp -> {
+            if (resp == ButtonType.YES) {
+                try {
+                    productoService.eliminarProducto(seleccionado.getId());
+                    cargarProductos();
+                } catch (Exception ex) {
+                    mostrarError("Error al eliminar", ex.getMessage());
+                }
+            }
+        });
+    }
+        private ComboBox<Familia> crearComboFamilias() {
+        ComboBox<Familia> combo = new ComboBox<>();
+        try {
+            List<Familia> familias = productoService.listarFamilias();
+            combo.getItems().addAll(familias);
+            combo.setConverter(new javafx.util.StringConverter<Familia>() {
+                @Override
+                public String toString(Familia f) {
+                    return f != null ? f.getNombre() : "";
+                }
+                @Override
+                public Familia fromString(String string) {
+                    return combo.getItems().stream()
+                            .filter(f -> f.getNombre().equals(string))
+                            .findFirst().orElse(null);
+                }
+            });
+        } catch (Exception e) {
+            mostrarError("Error cargando familias", e.getMessage());
+        }
+        return combo;
+    }
+
+
+    private void mostrarInfo(String titulo, String contenido) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(titulo);
+        alert.setHeaderText(null);
+        alert.setContentText(contenido);
+        alert.showAndWait();
+    }
+
+    private void mostrarError(String titulo, String contenido) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(titulo);
+        alert.setHeaderText(null);
+        alert.setContentText(contenido);
+        alert.showAndWait();
+    }
+
+    // ⚠️ El main siempre al final
     public static void main(String[] args) {
         launch(args);
     }

@@ -1,0 +1,35 @@
+/* Estilos específicos para la tabla de productos */
+
+/* Filas alternadas para mejor lectura */
+.table-row-cell:odd {
+    -fx-background-color: #fafafa;
+}
+.table-row-cell:even {
+    -fx-background-color: #ffffff;
+}
+
+/* Fila seleccionada resaltada en amarillo */
+.table-row-cell:selected {
+    -fx-background-color: #ffcc00 !important; /* amarillo */
+    -fx-text-fill: black !important;
+    -fx-font-weight: bold !important;
+}
+
+/* Celdas dentro de filas seleccionadas */
+.table-row-cell:selected .table-cell {
+    -fx-background-color: #ffcc00 !important;
+    -fx-text-fill: black !important;
+    -fx-font-weight: bold !important;
+}
+
+/* Texto dentro de celdas seleccionadas */
+.table-row-cell:selected .table-cell .text {
+    -fx-fill: black !important;
+    -fx-font-weight: bold !important;
+}
+
+/* Resaltado suave al pasar el mouse */
+.table-row-cell:hover {
+    -fx-background-color: #fff2a8;
+}
+

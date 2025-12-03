@@ -25,7 +25,7 @@ CREATE TEMP TABLE temp_abarrotes (
     col11 TEXT
 );
 
--- Cargar CSV desde terminal psql
+
 --FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv' 
 \COPY temp_abarrotes FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/abarrotes.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
