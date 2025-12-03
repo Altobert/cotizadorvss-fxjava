@@ -11,6 +11,7 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.HBox;
 import javafx.util.converter.DoubleStringConverter;
 import javafx.util.converter.IntegerStringConverter;
 import javafx.util.Callback;
@@ -293,7 +294,10 @@ private void cargarProductos() {
         colComentarios.setOnEditCommit(event -> {
             ItemCotizacionExcel item = event.getRowValue();
             item.setComentarios(event.getNewValue());
+            System.out.println("✅ Comentario actualizado: " + event.getNewValue()); // Debug
         });
+        colComentarios.setEditable(true); // Asegurar que la columna sea editable
+        colComentarios.setPrefWidth(150); // Hacer la columna más ancha para comentarios
 
         TableColumn<ItemCotizacionExcel, Integer> colDisponibilidad = new TableColumn<>("Disponibilidad");
         colDisponibilidad.setCellValueFactory(cellData -> cellData.getValue().disponibilidadProperty().asObject());
@@ -399,8 +403,26 @@ private void cargarProductos() {
                     
                     if (empty || item == null) {
                         setStyle("");
+                        // Limpiar cualquier listener anterior
+                        if (getItem() != null) {
+                            getItem().precioNoEncontradoProperty().removeListener((obs, oldVal, newVal) -> {});
+                        }
                     } else {
                         Main.this.actualizarEstiloFila(this, item);
+                        
+                        // Agregar listener para detectar cambios en precioNoEncontrado
+                        item.precioNoEncontradoProperty().addListener((obs, oldVal, newVal) -> {
+                            System.out.println("🐛 DEBUG - Listener activado para item: " + item.getDescripcion());
+                            System.out.println("   - Valor anterior: " + oldVal);
+                            System.out.println("   - Valor nuevo: " + newVal);
+                            
+                            if (!newVal.equals(oldVal)) {
+                                javafx.application.Platform.runLater(() -> {
+                                    System.out.println("🐛 DEBUG - Actualizando estilo de fila...");
+                                    Main.this.actualizarEstiloFila(this, item);
+                                });
+                            }
+                        });
                     }
                 }
                 
@@ -424,10 +446,17 @@ private void cargarProductos() {
     }
 
     private void actualizarEstiloFila(TableRow<ItemCotizacionExcel> row, ItemCotizacionExcel item) {
+        System.out.println("🐛 DEBUG - actualizarEstiloFila llamado");
+        
         if (item == null) {
+            System.out.println("🐛 DEBUG - item es null, limpiando estilo");
             row.setStyle("");
             return;
         }
+        
+        System.out.println("🐛 DEBUG - Item: " + item.getDescripcion());
+        System.out.println("🐛 DEBUG - PrecioNoEncontrado: " + item.isPrecioNoEncontrado());
+        System.out.println("🐛 DEBUG - Fila seleccionada: " + row.isSelected());
         
         StringBuilder estilo = new StringBuilder();
         
@@ -436,8 +465,10 @@ private void cargarProductos() {
             // Fondo más oscuro y texto forzado en negro con negrita
             if (item.isPrecioNoEncontrado()) {
                 estilo.append("-fx-background-color: #e6e67a; "); // Amarillo más oscuro
+                System.out.println("🐛 DEBUG - Aplicando amarillo oscuro (seleccionado)");
             } else {
                 estilo.append("-fx-background-color: #5cb85c; "); // Verde más oscuro
+                System.out.println("🐛 DEBUG - Aplicando verde oscuro (seleccionado)");
             }
             // Forzar texto negro y negrita - usar CSS más específico
             estilo.append("-fx-text-fill: black; ");
@@ -464,8 +495,10 @@ private void cargarProductos() {
             // Estilo normal según el estado del precio
             if (item.isPrecioNoEncontrado()) {
                 estilo.append("-fx-background-color: #eded93ff; ");
+                System.out.println("🐛 DEBUG - Aplicando amarillo normal (no seleccionado)");
             } else {
                 estilo.append("-fx-background-color: #6de26dff; ");
+                System.out.println("🐛 DEBUG - Aplicando verde normal (no seleccionado)");
             }
             estilo.append("-fx-text-fill: black; ");
             
@@ -479,6 +512,7 @@ private void cargarProductos() {
             });
         }
         
+        System.out.println("🐛 DEBUG - Estilo final aplicado: " + estilo.toString());
         row.setStyle(estilo.toString());
     }
 
@@ -512,10 +546,17 @@ private void cargarProductos() {
         List<cl.vss.cotizador.model.ProductoSimilar> productosSimilares = 
             cotizacionService.buscarProductosSimilares(item.getDescripcion());
         
+        // Si no se encuentran productos, ejecutar diagnóstico
+        if (productosSimilares.isEmpty()) {
+            System.out.println("🔍 No se encontraron productos similares, ejecutando diagnóstico...");
+            cotizacionService.diagnosticarTablaProducto();
+            cotizacionService.diagnosticarVistaProductoPrecio();
+        }
+        
         // Crear diálogo personalizado con tabla
-        Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle("Productos Similares");
-        dialog.setHeaderText("Productos encontrados para: " + item.getDescripcion());
+        Dialog<Void> dialogProductosSimilares = new Dialog<>();
+        dialogProductosSimilares.setTitle("Productos Similares");
+        dialogProductosSimilares.setHeaderText("Productos encontrados para: " + item.getDescripcion());
         
         // Crear la tabla de productos similares
         TableView<cl.vss.cotizador.model.ProductoSimilar> tablaProductosSimilares = new TableView<>();
@@ -537,6 +578,7 @@ private void cargarProductos() {
         colPrecio.setCellValueFactory(cellData -> new javafx.beans.property.SimpleDoubleProperty(cellData.getValue().getPrecioVentaNeto()).asObject());
         colPrecio.setPrefWidth(120);
         
+        
         // Formatear la columna de precio para mostrar como moneda
         colPrecio.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
             @Override
@@ -550,16 +592,38 @@ private void cargarProductos() {
             }
         });
         
+        // Nueva columna para Precio Venta Neto en dólares
+        TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecioVentaNeto = new TableColumn<>("Precio Venta Neto");
+        colPrecioVentaNeto.setCellValueFactory(cellData -> new javafx.beans.property.SimpleDoubleProperty(cellData.getValue().getPrecioVentaNetoDolares()).asObject());
+        colPrecioVentaNeto.setPrefWidth(140);
+        
+        // Formatear la columna de precio venta neto para mostrar como moneda en dólares
+        colPrecioVentaNeto.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
+            @Override
+            protected void updateItem(Double item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(String.format("US$%,.2f", item));
+                }
+            }
+        });
+        
         // Agregar columnas a la tabla
-        tablaProductosSimilares.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecio);
+        tablaProductosSimilares.getColumns().add(colDescEs);
+        tablaProductosSimilares.getColumns().add(colDescEn);
+        tablaProductosSimilares.getColumns().add(colUnidad);
+        tablaProductosSimilares.getColumns().add(colPrecio);
+        tablaProductosSimilares.getColumns().add(colPrecioVentaNeto);
         
         // Cargar datos en la tabla
         ObservableList<cl.vss.cotizador.model.ProductoSimilar> datosTabla = 
             FXCollections.observableArrayList(productosSimilares);
         tablaProductosSimilares.setItems(datosTabla);
         
-        // Configurar tamaño de la tabla
-        tablaProductosSimilares.setPrefSize(650, 300);
+        // Configurar tamaño de la tabla (aumentado para nueva columna)
+        tablaProductosSimilares.setPrefSize(800, 300);
         
         // Crear panel de información del item original
         VBox infoPanel = new VBox(10);
@@ -574,16 +638,174 @@ private void cargarProductos() {
         
         infoPanel.getChildren().addAll(lblItemOriginal, lblDescripcion, lblCantidad, lblPrecioActual);
         
-        // Panel principal que combina información y tabla
+        // Crear panel de comentarios
+        VBox panelComentarios = new VBox(10);
+        panelComentarios.setStyle("-fx-padding: 10; -fx-background-color: #e8f4f8;");
+        
+        Label lblComentarios = new Label("💬 Comentarios del Item:");
+        lblComentarios.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        
+        TextArea txtComentarios = new TextArea();
+        txtComentarios.setPromptText("Ingrese comentarios adicionales para este item...");
+        txtComentarios.setPrefRowCount(3);
+        txtComentarios.setWrapText(true);
+        txtComentarios.setText(item.getComentarios() != null ? item.getComentarios() : "");
+        
+        Button btnGuardarComentario = new Button("💾 Guardar Comentario");
+        btnGuardarComentario.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnGuardarComentario.setPrefWidth(150);
+        
+        // Acción para guardar el comentario
+        btnGuardarComentario.setOnAction(e -> {
+            String nuevoComentario = txtComentarios.getText().trim();
+            item.setComentarios(nuevoComentario);
+            
+            // Mostrar confirmación
+            Alert confirmacion = new Alert(Alert.AlertType.INFORMATION);
+            confirmacion.setTitle("Comentario Guardado");
+            confirmacion.setHeaderText(null);
+            confirmacion.setContentText("El comentario ha sido guardado para el item:\n" + item.getDescripcion());
+            confirmacion.showAndWait();
+            
+            System.out.println("🔄 Comentario actualizado para " + item.getDescripcion() + ": " + nuevoComentario);
+        });
+        
+        Button btnUtilizarDatosProducto = new Button("🔄 Utilizar Datos Producto");
+        btnUtilizarDatosProducto.setStyle("-fx-background-color: #FF9800; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnUtilizarDatosProducto.setPrefWidth(180);
+        
+        // Acción para utilizar datos del producto seleccionado
+        btnUtilizarDatosProducto.setOnAction(e -> {
+            // Obtener el producto seleccionado de la tabla
+            cl.vss.cotizador.model.ProductoSimilar productoSeleccionado = 
+                tablaProductosSimilares.getSelectionModel().getSelectedItem();
+            
+            if (productoSeleccionado != null) {
+                // Actualizar los datos del item con los del producto seleccionado
+                // vitem.setDescripcion(productoSeleccionado.getDescripcionEs());
+                item.setPrecio(productoSeleccionado.getPrecioVentaNeto());
+                
+                // Actualizar el precio del item primero
+                item.setPrecio(productoSeleccionado.getPrecioVentaNeto());
+                
+                // SOLUCION COMPLETA: Marcar el item como actualizado con precio encontrado
+                item.setPrecioNoEncontrado(false);
+                
+                System.out.println("✅ ITEM ACTUALIZADO - Precio: $" + item.getPrecio() + ", PrecioNoEncontrado: " + item.isPrecioNoEncontrado());
+                
+                // MÉTODO MEJORADO: Forzar actualización completa de la UI
+                javafx.application.Platform.runLater(() -> {
+                    // 1. Refrescar la tabla completa
+                    tabla.refresh();
+                    
+                    // 2. Encontrar el índice del item y seleccionarlo
+                    int itemIndex = tabla.getItems().indexOf(item);
+                    if (itemIndex >= 0) {
+                        // 3. Limpiar selección actual y seleccionar el item actualizado
+                        tabla.getSelectionModel().clearSelection();
+                        tabla.getSelectionModel().select(itemIndex);
+                        tabla.scrollTo(itemIndex);
+                        tabla.getFocusModel().focus(itemIndex);
+                        
+                        // 4. Forzar segunda actualización para asegurar el pintado
+                        javafx.application.Platform.runLater(() -> {
+                            tabla.refresh();
+                            System.out.println("🎨 PINTADO VERDE APLICADO - Fila " + itemIndex + " debería estar verde");
+                        });
+                    }
+                });
+                
+                // Mostrar confirmación
+                Alert confirmacion = new Alert(Alert.AlertType.INFORMATION);
+                confirmacion.setTitle("Datos Actualizados");
+                confirmacion.setHeaderText(null);
+                confirmacion.setContentText("Los datos del item han sido actualizados con:\n" +
+                                          //"Descripción: " + productoSeleccionado.getDescripcionEs() + "\n" +
+                                          "Precio: $" + String.format("%,.2f", productoSeleccionado.getPrecioVentaNeto()) + "\n" +
+                                          "Estado: Precio encontrado ✅");
+                confirmacion.showAndWait();
+                
+                System.out.println("🔄 Datos del producto utilizados para " + item.getDescripcion() + 
+                                 ": " + productoSeleccionado.getDescripcionEs() + 
+                                 " - $" + productoSeleccionado.getPrecioVentaNeto());
+                                 
+                // Cerrar el diálogo después de actualizar
+                dialogProductosSimilares.close();
+            } else {
+                // Mostrar advertencia si no hay producto seleccionado
+                Alert advertencia = new Alert(Alert.AlertType.WARNING);
+                advertencia.setTitle("Producto No Seleccionado");
+                advertencia.setHeaderText(null);
+                advertencia.setContentText("Por favor, seleccione un producto de la tabla antes de utilizar sus datos.");
+                advertencia.showAndWait();
+            }
+        });
+        
+        HBox panelBotonComentario = new HBox(10);
+        panelBotonComentario.setStyle("-fx-alignment: center-left;");
+        panelBotonComentario.getChildren().addAll(btnGuardarComentario, btnUtilizarDatosProducto);
+        
+        panelComentarios.getChildren().addAll(lblComentarios, txtComentarios, panelBotonComentario);
+        
+        // Crear panel de búsqueda personalizada
+        javafx.scene.layout.HBox panelBusqueda = new javafx.scene.layout.HBox(10);
+        panelBusqueda.setStyle("-fx-padding: 10; -fx-alignment: center-left;");
+        
+        Label lblBuscar = new Label("🔍 Buscar otros productos:");
+        lblBuscar.setStyle("-fx-font-weight: bold;");
+        
+        TextField txtBusqueda = new TextField();
+        txtBusqueda.setPromptText("Ingrese términos de búsqueda...");
+        txtBusqueda.setPrefWidth(300);
+        txtBusqueda.setText(item.getDescripcion()); // Prellenar con la descripción actual
+        
+        Button btnBuscar = new Button("Buscar");
+        btnBuscar.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnBuscar.setPrefWidth(80);
+        
+        // Acción del botón buscar
+        btnBuscar.setOnAction(e -> {
+            String terminoBusqueda = txtBusqueda.getText().trim();
+            if (!terminoBusqueda.isEmpty()) {
+                // Realizar nueva búsqueda
+                List<cl.vss.cotizador.model.ProductoSimilar> nuevosResultados = 
+                    cotizacionService.buscarProductosSimilares(terminoBusqueda);
+                
+                // Actualizar la tabla con los nuevos resultados  
+                ObservableList<cl.vss.cotizador.model.ProductoSimilar> nuevosdatos = 
+                    FXCollections.observableArrayList(nuevosResultados);
+                tablaProductosSimilares.setItems(nuevosdatos);
+                
+                // Actualizar el header del diálogo
+                dialogProductosSimilares.setHeaderText("Productos encontrados para: " + terminoBusqueda + 
+                                                      " (" + nuevosResultados.size() + " resultados)");
+                
+                // Actualizar mensaje si no hay resultados
+                if (nuevosResultados.isEmpty()) {
+                    Label sinResultados = new Label("❌ No se encontraron productos para: " + terminoBusqueda);
+                    sinResultados.setStyle("-fx-font-size: 14px; -fx-text-fill: #666666;");
+                    tablaProductosSimilares.setPlaceholder(sinResultados);
+                }
+            }
+        });
+        
+        // Permitir búsqueda con Enter
+        txtBusqueda.setOnAction(e -> btnBuscar.fire());
+        
+        panelBusqueda.getChildren().addAll(lblBuscar, txtBusqueda, btnBuscar);
+        
+        // Panel principal que combina información, comentarios, búsqueda y tabla
         VBox contenidoPrincipal = new VBox(15);
-        contenidoPrincipal.getChildren().addAll(infoPanel, 
+        contenidoPrincipal.getChildren().addAll(infoPanel,
+                                              panelComentarios,
+                                              panelBusqueda,
                                               new Label("🔍 Productos Similares Encontrados (" + productosSimilares.size() + "):"),
                                               tablaProductosSimilares);
         
-        // Configurar el diálogo
-        dialog.getDialogPane().setContent(contenidoPrincipal);
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        dialog.getDialogPane().setPrefSize(700, 500);
+        // Configurar el diálogo (aumentado para panel de comentarios)
+        dialogProductosSimilares.getDialogPane().setContent(contenidoPrincipal);
+        dialogProductosSimilares.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialogProductosSimilares.getDialogPane().setPrefSize(850, 600);
         
         // Mensaje si no se encontraron productos
         if (productosSimilares.isEmpty()) {
@@ -593,7 +815,7 @@ private void cargarProductos() {
         }
         
         // Mostrar el diálogo
-        dialog.showAndWait();
+        dialogProductosSimilares.showAndWait();
     }
 
     private void limpiarTabla() {

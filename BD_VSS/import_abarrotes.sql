@@ -22,12 +22,14 @@ CREATE TEMP TABLE temp_abarrotes (
     precio_venta_neto TEXT,
     col9 TEXT,
     col10 TEXT,
-    col11 TEXT
+    col11 TEXT,
+    col12 TEXT,
+    col13 TEXT
 );
 
 
 --FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv' 
-\COPY temp_abarrotes FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/abarrotes.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_abarrotes FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/abarrotes_limpio.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 -- Insertar productos con limpieza de formato y derivación de descripcion_es
 INSERT INTO producto (
@@ -61,6 +63,7 @@ SELECT
 FROM temp_abarrotes
 WHERE TRIM(descripcion_en) != '' 
   AND TRIM(descripcion_en) != 'DESCRIPCIÓN'
+  AND TRIM(familia_path) != ''
   AND familia_path ILIKE '%ABARROTES%';
 
 -- Eliminar tabla temporal
@@ -300,10 +303,11 @@ CREATE TEMP TABLE temp_lacteos (
     precio_costo_neto TEXT,
     tipo_cambio TEXT,
     porcentaje TEXT,
-    precio_venta_neto TEXT
+    precio_venta_neto TEXT,
+    col9 TEXT
 );
 
-\COPY temp_lacteos FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/lacteos.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_lacteos FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/lacteos_limpio.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 INSERT INTO producto (
     familia_id,
@@ -336,6 +340,7 @@ SELECT
 FROM temp_lacteos
 WHERE TRIM(descripcion_en) != '' 
   AND TRIM(descripcion_en) != 'DESCRIPCIÓN'
+  AND TRIM(familia_path) != ''
   AND familia_path ILIKE '%LACTEOS%';
 
 DROP TABLE temp_lacteos;
