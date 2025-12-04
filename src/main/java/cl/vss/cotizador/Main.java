@@ -6,6 +6,7 @@ import cl.vss.cotizador.service.CotizacionService;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.TextFieldTableCell;
@@ -24,22 +25,26 @@ import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.sql.Connection;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.UnaryOperator;
+
 import cl.vss.cotizador.model.Producto;
 import cl.vss.cotizador.service.ProductoService;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 
 
-public class Main extends Application {
+    public class Main extends Application {
     // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
     // Productos
     private final ProductoService productoService = new ProductoService();
     private final TableView<Producto> tablaProductos = new TableView<>();
+    private ObservableList<Producto> productos;   // 👉 lista compartida para filtro y recarga
 
     @Override
-public void start(Stage stage) {
+    public void start(Stage stage) {
     probarConexion();
 
     // Tab Cotizador
@@ -74,11 +79,56 @@ public void start(Stage stage) {
     // Barra y layout
     ToolBar barraProductos = new ToolBar(btnAgregar, btnEditar, btnEliminar);
     rootProductos.setTop(barraProductos);
-    rootProductos.setCenter(tablaProductos);
+   // rootProductos.setCenter(tablaProductos); ACA HICE INSERCIONNNNNN
 
-    // Tabla y datos
-    configurarTablaProductos();
-    cargarProductos();
+  
+
+
+
+// Configurar columnas de la tabla primero
+configurarTablaProductos();
+
+// 👉 Lista y filtrado
+    productos = FXCollections.observableArrayList(productoService.listarProductos());
+    FilteredList<Producto> filtrados = new FilteredList<>(productos, p -> true);
+
+// 👉 Asignar lista filtrada a la tabla
+    tablaProductos.setItems(filtrados);
+
+// 👉 Campo de búsqueda
+    TextField txtBuscar = new TextField();
+    txtBuscar.setPromptText("Buscar producto...");
+
+// 👉 Listener de búsqueda
+    txtBuscar.textProperty().addListener((obs, oldValue, newValue) -> {
+    filtrados.setPredicate(producto -> {
+        if (newValue == null || newValue.isEmpty()) {
+            return true;
+        }
+        String filtro = newValue.toLowerCase();
+
+        String descEs = producto.getDescripcionEs() != null ? producto.getDescripcionEs().toLowerCase() : "";
+        String descEn = producto.getDescripcionEn() != null ? producto.getDescripcionEn().toLowerCase() : "";
+        String unidad = producto.getUnidadMedida() != null ? producto.getUnidadMedida().toLowerCase() : "";
+        String id = String.valueOf(producto.getId()).toLowerCase();
+        String valor = String.valueOf(producto.getValorPesos()).toLowerCase();
+
+        return descEs.contains(filtro)
+            || descEn.contains(filtro)
+            || unidad.contains(filtro)
+            || id.contains(filtro)
+            || valor.contains(filtro);
+    });
+});
+
+// 👉 Contenedor central con búsqueda + tabla
+VBox centroProductos = new VBox(10, txtBuscar, tablaProductos);
+centroProductos.setStyle("-fx-padding: 10;");
+rootProductos.setCenter(centroProductos);
+
+// 👉 Cargar datos en la misma lista productos
+cargarProductos(); // debe usar productos.setAll(...)
+
 
 
     // TabPane principal
@@ -224,7 +274,7 @@ public void start(Stage stage) {
 }
 
 private void cargarProductos() {
-    tablaProductos.setItems(FXCollections.observableArrayList(productoService.listarProductos()));
+    productos.setAll(productoService.listarProductos());
 }
 
 
@@ -862,7 +912,7 @@ private void cargarProductos() {
         }
     }
 
-    // 👉 Métodos CRUD de Productos
+    // 👉 Métodos CRUD de Productos *****************************************************
 
     private void abrirDialogAgregarProducto() {
     Dialog<Producto> dialog = new Dialog<>();
@@ -873,6 +923,16 @@ private void cargarProductos() {
     TextField txtUnidad = new TextField();
     TextField txtValor = new TextField();
 
+    // 👉 TextFormatter para permitir solo números positivos en Valor
+    UnaryOperator<TextFormatter.Change> filtroNumerico = change -> {
+        String nuevoTexto = change.getControlNewText();
+        if (nuevoTexto.matches("\\d*(\\.\\d*)?")) { // solo números y decimales
+            return change;
+        }
+        return null;
+    };
+    txtValor.setTextFormatter(new TextFormatter<>(filtroNumerico));
+
     // 👉 ComboBox de familias
     ComboBox<Familia> comboFamilia = crearComboFamilias();
 
@@ -881,7 +941,7 @@ private void cargarProductos() {
         new Label("Descripción EN:"), txtDescEn,
         new Label("Unidad:"), txtUnidad,
         new Label("Valor Pesos:"), txtValor,
-        new Label("Familia:"), comboFamilia   // 👉 agregado al diálogo
+        new Label("Familia:"), comboFamilia
     );
     content.setStyle("-fx-padding: 10;");
     dialog.getDialogPane().setContent(content);
@@ -894,16 +954,41 @@ private void cargarProductos() {
                 String descEs = txtDescEs.getText().trim();
                 String descEn = txtDescEn.getText().trim();
                 String unidad  = txtUnidad.getText().trim();
-                double valor   = Double.parseDouble(txtValor.getText().trim());
+                String valorStr = txtValor.getText().trim();
 
-                if (descEs.isEmpty() || unidad.isEmpty()) {
-                    throw new IllegalArgumentException("Descripción ES y Unidad son obligatorias.");
+                // Reset estilos antes de validar
+                txtDescEs.setStyle("");
+                txtUnidad.setStyle("");
+                txtValor.setStyle("");
+
+                if (descEs.isEmpty()) {
+                    txtDescEs.setStyle("-fx-border-color: red; -fx-border-width: 2;");
+                    throw new IllegalArgumentException("Descripción ES es obligatoria.");
                 }
+                if (unidad.isEmpty()) {
+                    txtUnidad.setStyle("-fx-border-color: red; -fx-border-width: 2;");
+                    throw new IllegalArgumentException("Unidad es obligatoria.");
+                }
+                if (valorStr.isEmpty()) {
+                    txtValor.setStyle("-fx-border-color: red; -fx-border-width: 2;");
+                    throw new IllegalArgumentException("El valor es obligatorio.");
+                }
+
+                double valor = Double.parseDouble(valorStr);
                 if (valor <= 0) {
+                    txtValor.setStyle("-fx-border-color: red; -fx-border-width: 2;");
                     throw new IllegalArgumentException("El valor debe ser mayor que 0.");
                 }
+
                 if (comboFamilia.getValue() == null) {
                     throw new IllegalArgumentException("Debe seleccionar una familia.");
+                }
+
+                // 👉 Prevenir duplicados por descripción ES
+                boolean existe = productoService.listarProductos().stream()
+                    .anyMatch(p -> p.getDescripcionEs().equalsIgnoreCase(descEs));
+                if (existe) {
+                    throw new IllegalArgumentException("Ya existe un producto con esa descripción ES.");
                 }
 
                 // Construcción segura del objeto
@@ -928,6 +1013,14 @@ private void cargarProductos() {
         try {
             productoService.agregarProducto(p);
             cargarProductos();
+
+            // 👉 Mensaje de confirmación
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Acción exitosa");
+            alert.setHeaderText(null);
+            alert.setContentText("Producto agregado correctamente.");
+            alert.showAndWait();
+
         } catch (Exception e) {
             mostrarError("Error al guardar", e.getMessage());
         }
@@ -935,10 +1028,15 @@ private void cargarProductos() {
 }
 
 
-    private void abrirDialogEditarProducto() {
+
+   private void abrirDialogEditarProducto() {
     Producto seleccionado = tablaProductos.getSelectionModel().getSelectedItem();
     if (seleccionado == null) {
-        mostrarInfo("Selecciona un producto", "Debes seleccionar un producto para editar.");
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle("Sin selección");
+        alert.setHeaderText(null);
+        alert.setContentText("Debes seleccionar un producto para editar.");
+        alert.showAndWait();
         return;
     }
 
@@ -950,22 +1048,26 @@ private void cargarProductos() {
     TextField txtUnidad = new TextField(seleccionado.getUnidadMedida());
     TextField txtValor = new TextField(String.valueOf(seleccionado.getValorPesos()));
 
+    // 👉 TextFormatter para permitir solo números positivos en Valor
+    UnaryOperator<TextFormatter.Change> filtroNumerico = change -> {
+        String nuevoTexto = change.getControlNewText();
+        if (nuevoTexto.matches("\\d*(\\.\\d*)?")) {
+            return change;
+        }
+        return null;
+    };
+    txtValor.setTextFormatter(new TextFormatter<>(filtroNumerico));
+
     // 👉 ComboBox de familias
     ComboBox<Familia> comboFamilia = crearComboFamilias();
-    // Preseleccionar la familia actual del producto
-    comboFamilia.setValue(
-        productoService.listarFamilias().stream()
-            .filter(f -> f.getId() == seleccionado.getFamiliaId())
-            .findFirst()
-            .orElse(null)
-    );
+    comboFamilia.setValue(buscarFamiliaPorId(seleccionado.getFamiliaId()));
 
     VBox content = new VBox(10,
         new Label("Descripción ES:"), txtDescEs,
         new Label("Descripción EN:"), txtDescEn,
         new Label("Unidad:"), txtUnidad,
         new Label("Valor Pesos:"), txtValor,
-        new Label("Familia:"), comboFamilia   // 👉 agregado al diálogo
+        new Label("Familia:"), comboFamilia
     );
     content.setStyle("-fx-padding: 10;");
     dialog.getDialogPane().setContent(content);
@@ -978,19 +1080,45 @@ private void cargarProductos() {
                 String descEs = txtDescEs.getText().trim();
                 String descEn = txtDescEn.getText().trim();
                 String unidad  = txtUnidad.getText().trim();
-                double valor   = Double.parseDouble(txtValor.getText().trim());
+                String valorStr = txtValor.getText().trim();
 
-                if (descEs.isEmpty() || unidad.isEmpty()) {
-                    throw new IllegalArgumentException("Descripción ES y Unidad son obligatorias.");
+                // Reset estilos antes de validar
+                txtDescEs.setStyle("");
+                txtUnidad.setStyle("");
+                txtValor.setStyle("");
+
+                if (descEs.isEmpty()) {
+                    txtDescEs.setStyle("-fx-border-color: red; -fx-border-width: 2;");
+                    throw new IllegalArgumentException("Descripción ES es obligatoria.");
                 }
+                if (unidad.isEmpty()) {
+                    txtUnidad.setStyle("-fx-border-color: red; -fx-border-width: 2;");
+                    throw new IllegalArgumentException("Unidad es obligatoria.");
+                }
+                if (valorStr.isEmpty()) {
+                    txtValor.setStyle("-fx-border-color: red; -fx-border-width: 2;");
+                    throw new IllegalArgumentException("El valor es obligatorio.");
+                }
+
+                double valor = Double.parseDouble(valorStr);
                 if (valor <= 0) {
+                    txtValor.setStyle("-fx-border-color: red; -fx-border-width: 2;");
                     throw new IllegalArgumentException("El valor debe ser mayor que 0.");
                 }
+
                 if (comboFamilia.getValue() == null) {
                     throw new IllegalArgumentException("Debe seleccionar una familia.");
                 }
 
-                // Asignación segura
+                // 👉 Prevenir duplicados por descripción ES (excepto el mismo producto)
+                boolean existe = productoService.listarProductos().stream()
+                    .anyMatch(p -> p.getDescripcionEs().equalsIgnoreCase(descEs)
+                                && p.getId() != seleccionado.getId());
+                if (existe) {
+                    throw new IllegalArgumentException("Ya existe otro producto con esa descripción ES.");
+                }
+
+                // Actualizar objeto seleccionado
                 seleccionado.setDescripcionEs(descEs);
                 seleccionado.setDescripcionEn(descEn);
                 seleccionado.setUnidadMedida(unidad);
@@ -1011,6 +1139,14 @@ private void cargarProductos() {
         try {
             productoService.actualizarProducto(p);
             cargarProductos();
+
+            // 👉 Mensaje de confirmación
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Acción exitosa");
+            alert.setHeaderText(null);
+            alert.setContentText("Producto editado correctamente.");
+            alert.showAndWait();
+
         } catch (Exception e) {
             mostrarError("Error al actualizar", e.getMessage());
         }
@@ -1018,28 +1154,53 @@ private void cargarProductos() {
 }
 
 
-    private void eliminarProductoSeleccionado() {
-        Producto seleccionado = tablaProductos.getSelectionModel().getSelectedItem();
-        if (seleccionado == null) {
-            mostrarInfo("Selecciona un producto", "Debes seleccionar un producto para eliminar.");
-            return;
-        }
-
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-            "¿Seguro que deseas eliminar el producto:\n" + seleccionado.getDescripcionEs() + "?",
-            ButtonType.YES, ButtonType.NO);
-        confirm.setTitle("Confirmar eliminación");
-        confirm.showAndWait().ifPresent(resp -> {
-            if (resp == ButtonType.YES) {
-                try {
-                    productoService.eliminarProducto(seleccionado.getId());
-                    cargarProductos();
-                } catch (Exception ex) {
-                    mostrarError("Error al eliminar", ex.getMessage());
-                }
-            }
-        });
+   private void eliminarProductoSeleccionado() {
+    Producto seleccionado = tablaProductos.getSelectionModel().getSelectedItem();
+    if (seleccionado == null) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle("Sin selección");
+        alert.setHeaderText(null);
+        alert.setContentText("Debes seleccionar un producto para eliminar.");
+        alert.showAndWait();
+        return;
     }
+
+    // 👉 Confirmación antes de eliminar
+    Alert confirmacion = new Alert(Alert.AlertType.CONFIRMATION);
+    confirmacion.setTitle("Confirmar eliminación");
+    confirmacion.setHeaderText("¿Eliminar producto?");
+    confirmacion.setContentText("¿Estás seguro de que quieres eliminar el producto:\n\n" 
+                                + seleccionado.getDescripcionEs() + "?");
+
+    Optional<ButtonType> resultado = confirmacion.showAndWait();
+    if (resultado.isPresent() && resultado.get() == ButtonType.OK) {
+        try {
+            productoService.eliminarProducto(seleccionado.getId());
+            cargarProductos();
+
+            // 👉 Mensaje de éxito
+            Alert exito = new Alert(Alert.AlertType.INFORMATION);
+            exito.setTitle("Acción exitosa");
+            exito.setHeaderText(null);
+            exito.setContentText("Producto eliminado correctamente.");
+            exito.showAndWait();
+
+        } catch (Exception e) {
+            mostrarError("Error al eliminar", e.getMessage());
+        }
+    }
+}
+
+private Familia buscarFamiliaPorId(int idFamilia) {
+    List<Familia> familias = productoService.listarFamilias();
+    for (Familia f : familias) {
+        if (f.getId() == idFamilia) {
+            return f;
+        }
+    }
+    return null;
+}
+
         private ComboBox<Familia> crearComboFamilias() {
         ComboBox<Familia> combo = new ComboBox<>();
         try {
