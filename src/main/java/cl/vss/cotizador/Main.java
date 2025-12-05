@@ -43,14 +43,23 @@ import javafx.beans.property.SimpleDoubleProperty;
     private final TableView<Producto> tablaProductos = new TableView<>();
     private ObservableList<Producto> productos;   // 👉 lista compartida para filtro y recarga
 
+<<<<<<< HEAD
     @Override
     public void start(Stage stage) {
     probarConexion();
+=======
+@Override
+public void start(Stage stage) {
+    //probarConexion();
+>>>>>>> fd687438cc05bd1262c67e16834d441ac45eb224
 
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
     Button btnCargar = new Button("📂 Cargar Excel");
     btnCargar.setOnAction(e -> cargarArchivo(stage));
+    
+    Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
+    btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
     btnLimpiar.setOnAction(e -> limpiarTabla());
@@ -58,7 +67,7 @@ import javafx.beans.property.SimpleDoubleProperty;
     Button btnExportar = new Button("💾 Exportar Cotización");
     btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
-    ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar, btnExportar);
+    ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
     rootCotizador.setTop(barraCotizador);
     rootCotizador.setCenter(tabla);
     configurarTabla();
@@ -575,6 +584,37 @@ private void cargarProductos() {
     }
 }
 
+
+    private void analizarEstructuraExcel(Stage stage) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Seleccionar archivo Excel para analizar");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));
+        File archivo = fileChooser.showOpenDialog(stage);
+
+        if (archivo != null) {
+            // Mostrar información de formatos soportados
+            cotizacionService.mostrarInformacionFormatos();
+            
+            // Ejecutar análisis
+            cotizacionService.analizarEstructuraExcel(archivo);
+            
+            // Mostrar diálogo con resumen
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Análisis Completado");
+            alert.setHeaderText("Archivo analizado: " + archivo.getName());
+            
+            StringBuilder contenido = new StringBuilder();
+            contenido.append("✅ Análisis completado exitosamente\n\n");
+            contenido.append("📊 Formatos soportados:\n");
+            for (String formato : cotizacionService.getFormatosSoportados()) {
+                contenido.append("  • ").append(formato).append("\n");
+            }
+            contenido.append("\n🔍 Revise la consola para ver el análisis detallado.");
+            
+            alert.setContentText(contenido.toString());
+            alert.showAndWait();
+        }
+    }
 
     private void cargarArchivo(Stage stage) {
 
