@@ -17,17 +17,148 @@ import java.util.*;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 import cl.vss.cotizador.util.LoggingConfig;
+import java.util.regex.Pattern;
 
 public class CotizacionService {
     
     private static final Logger logger = LoggingConfig.getLogger(CotizacionService.class);
+    
+    // Configuración de formatos
+    private final Map<String, FormatoExcel> formatosConfigurados = new HashMap<>();
+    
+    /**
+     * Clase interna para definir configuraciones de formatos Excel
+     */
+    private static class FormatoExcel {
+        String nombre;
+        List<String> patronesArchivo = new ArrayList<>();
+        List<String> patronesColumnas = new ArrayList<>();
+        Map<String, List<String>> mapeoColumnas = new HashMap<>();
+        int filaInicioEncabezado = 0;
+        int filaFinEncabezado = 20;
+        int columnasMinimas = 3;
+        
+        public FormatoExcel(String nombre) {
+            this.nombre = nombre;
+        }
+        
+        public FormatoExcel patronArchivo(String... patrones) {
+            this.patronesArchivo.addAll(Arrays.asList(patrones));
+            return this;
+        }
+        
+        public FormatoExcel patronColumna(String... patrones) {
+            this.patronesColumnas.addAll(Arrays.asList(patrones));
+            return this;
+        }
+        
+        public FormatoExcel mapear(String campoInterno, String... columnasExternas) {
+            this.mapeoColumnas.put(campoInterno, Arrays.asList(columnasExternas));
+            return this;
+        }
+        
+        public FormatoExcel rango(int inicio, int fin) {
+            this.filaInicioEncabezado = inicio;
+            this.filaFinEncabezado = fin;
+            return this;
+        }
+        
+        public FormatoExcel minColumnas(int min) {
+            this.columnasMinimas = min;
+            return this;
+        }
+    }
+
+    /**
+     * Constructor - Inicializar configuración de formatos
+     */
+    public CotizacionService() {
+        inicializarFormatosConfigurados();
+    }
+    
+    /**
+     * Configuración de formatos soportados
+     */
+    private void inicializarFormatosConfigurados() {
+        
+        // QTN_GOF - Formato de cotización marítima
+        formatosConfigurados.put("QTN_GOF", 
+            new FormatoExcel("QTN_GOF")
+                .patronArchivo("QTN_GOF", "QUOTATION")
+                .patronColumna("VESSEL COMMENTS", "SUPPLIER COMMENTS")
+                .mapear("codigo", "ITEM")
+                .mapear("descripcion", "ITEM DESCRIPTION")
+                .mapear("cantidad", "QUANTITY ORDER")
+                .mapear("precio", "PRICE")
+                .mapear("unidad", "UNIT OF MEASURE")
+                .mapear("categoria", "FOOD CATEGORIES")
+                .mapear("comentarios", "SUPPLIER COMMENTS")
+                .mapear("totalbruto", "TOTAL")
+                .rango(5, 15)
+                .minColumnas(4)
+        );
+        
+        // HMM_BLESSING - Formato provision order
+        formatosConfigurados.put("HMM_BLESSING", 
+            new FormatoExcel("HMM_BLESSING")
+                .patronArchivo("HMM", "BLESSING", "PROVISION ORDER")
+                .patronColumna("CANTD", "USD TOTAL", "PRICES")
+                .mapear("descripcion", "COLUMN_A") // Columna A contiene descripciones
+                .mapear("codigo", "COLUMN_A") // Usar descripción como código
+                .mapear("comentarios", "REMARKS")
+                .mapear("unidad", "UNIT")
+                .mapear("precio", "PRICES")
+                .mapear("cantidad", "CANTD")
+                .mapear("totalbruto", "USD TOTAL")
+                .rango(10, 20)
+                .minColumnas(3)
+        );
+        
+        // FERNANDINA - Formato en español
+        formatosConfigurados.put("FERNANDINA", 
+            new FormatoExcel("FERNANDINA")
+                .patronArchivo("FERNANDINA")
+                .patronColumna("CÓDIGO", "DESCRIPCIÓN")
+                .mapear("codigo", "CÓDIGO", "CODIGO", "COD")
+                .mapear("descripcion", "DESCRIPCIÓN", "DESCRIPCION", "DESC")
+                .mapear("cantidad", "CANTIDAD", "QTY", "CANT")
+                .mapear("precio", "PRECIO", "PRICE")
+                .mapear("unidad", "UNIDAD", "UNIT")
+                .rango(0, 10)
+                .minColumnas(3)
+        );
+        
+        // INVENTARIO - Formato de inventario general
+        formatosConfigurados.put("INVENTARIO", 
+            new FormatoExcel("INVENTARIO")
+                .patronArchivo("INVENTORY", "STOCK", "ALMACÉN")
+                .patronColumna("SKU", "PART NUMBER")
+                .mapear("codigo", "SKU", "PART NUMBER", "PART #")
+                .mapear("descripcion", "PRODUCT NAME", "PRODUCT DESCRIPTION", "NAME")
+                .mapear("cantidad", "STOCK", "INVENTORY", "QTY ON HAND")
+                .mapear("precio", "COST", "UNIT COST", "WHOLESALE")
+                .rango(0, 15)
+                .minColumnas(3)
+        );
+        
+        logger.info("📊 Formatos configurados: " + formatosConfigurados.size());
+        formatosConfigurados.keySet().forEach(formato -> 
+            logger.info("  • " + formato));
+    }
 
     public List<ItemCotizacionExcel> leerItemsDesdeExcel(File archivo) {
         logger.info("📂 Iniciando lectura de archivo Excel: " + archivo.getAbsolutePath());
+        logger.info("📊 Tamaño del archivo: " + archivo.length() + " bytes");
+        logger.info("📝 Nombre del archivo: " + archivo.getName());
+        logger.info("✅ Archivo existe: " + archivo.exists());
+        logger.info("📖 Archivo es legible: " + archivo.canRead());
+        
         List<ItemCotizacionExcel> items = new ArrayList<>();
 
         try (FileInputStream fis = new FileInputStream(archivo);
              Workbook workbook = new XSSFWorkbook(fis)) {
+             
+            logger.info("✅ Archivo Excel abierto exitosamente");
 
             Sheet hoja = workbook.getSheetAt(0);
 
@@ -36,38 +167,68 @@ public class CotizacionService {
             Row encabezado = null;
             int filaEncabezado = -1;
             
-            // Buscar encabezados en las primeras 20 filas (algunos archivos tienen encabezados más abajo)
-            for (int i = 0; i <= Math.min(20, hoja.getLastRowNum()); i++) {
+            // Buscar encabezados en las primeras 25 filas (algunos archivos tienen encabezados muy abajo)
+            for (int i = 0; i <= Math.min(25, hoja.getLastRowNum()); i++) {
                 Row fila = hoja.getRow(i);
                 if (fila == null) continue;
                 
                 int columnasRelevantes = 0;
+                Set<String> columnasEncontradas = new HashSet<>();
                 
                 // Contar cuántas columnas relevantes encontramos
                 for (Cell celda : fila) {
                     String valor = celda.toString().trim().toLowerCase();
+                    columnasEncontradas.add(valor);
                     
-                    // Patrones más específicos para diferentes formatos
+                    // Patrones expandidos para diferentes formatos
                     if (valor.contains("item description") || valor.contains("item") || 
                         valor.contains("description") || valor.contains("quantity") || 
                         valor.contains("price") || valor.contains("unit of measure") ||
                         valor.contains("food categories") || valor.contains("total") ||
-                        valor.contains("supplier comments")) {
+                        valor.contains("supplier comments") || valor.contains("remarks") ||
+                        valor.contains("unit") || valor.contains("prices") || valor.contains("cantd") ||
+                        valor.contains("usd total") || valor.equals("unit") || valor.equals("prices")) {
                         columnasRelevantes++;
                     }
                 }
                 
+                // Verificación específica para formato HMM BLESSING
+                boolean esFormatoHMM = columnasEncontradas.contains("unit") && 
+                                       columnasEncontradas.contains("prices") && 
+                                       columnasEncontradas.contains("cantd");
+                
                 // Si encontramos al menos 3 columnas relevantes, es probablemente el encabezado
-                if (columnasRelevantes >= 3) {
+                if (columnasRelevantes >= 3 || esFormatoHMM) {
                     encabezado = fila;
                     filaEncabezado = i;
                     logger.info("✅ Encabezado detectado en fila " + (i + 1) + " con " + columnasRelevantes + " columnas relevantes");
+                    if (esFormatoHMM) {
+                        logger.info("💡 Formato HMM BLESSING detectado por patrones específicos");
+                    }
                     break;
                 }
             }
 
             if (encabezado == null) {
                 logger.severe("❌ No se encontró fila de encabezado válida en archivo: " + archivo.getName());
+                logger.severe("🔍 DIAGNÓSTICO DETALLADO:");
+                
+                // Mostrar todas las filas para diagnóstico
+                for (int i = 0; i <= Math.min(15, hoja.getLastRowNum()); i++) {
+                    Row filaDebug = hoja.getRow(i);
+                    if (filaDebug != null) {
+                        logger.severe("   Fila " + (i + 1) + ":");
+                        for (int j = 0; j < Math.min(10, filaDebug.getLastCellNum()); j++) {
+                            Cell celdaDebug = filaDebug.getCell(j);
+                            if (celdaDebug != null) {
+                                String valorDebug = celdaDebug.toString().trim();
+                                if (!valorDebug.isEmpty()) {
+                                    logger.severe("     Col " + (char)('A' + j) + ": [" + valorDebug + "]");
+                                }
+                            }
+                        }
+                    }
+                }
                 return items;
             }
 
@@ -86,8 +247,36 @@ public class CotizacionService {
             // Verificar que al menos tengamos descripción o código
             if (!columnas.containsKey("codigo") && !columnas.containsKey("descripcion")) {
                 logger.warning("⚠️ Encabezados clave faltantes: 'codigo' y/o 'descripcion' en archivo: " + archivo.getName());
-                logger.warning("⚠️ No se pueden procesar items sin código o descripción");
-                return items;
+                logger.warning("🔍 Columnas detectadas: " + columnas.keySet());
+                logger.warning("💡 Intentando usar cualquier columna de texto como descripción...");
+                
+                // Buscar cualquier columna que pueda servir como descripción
+                for (Cell celda : encabezado) {
+                    String valor = celda.toString().trim().toLowerCase();
+                    if (valor.contains("desc") || valor.contains("name") || valor.contains("product") || 
+                        valor.contains("item") || valor.contains("article") || valor.contains("provision")) {
+                        columnas.put("descripcion", celda.getColumnIndex());
+                        logger.info("💡 Usando '" + celda.toString() + "' como descripción");
+                        break;
+                    }
+                }
+                
+                // Si aún no tenemos descripción, usar la primera columna no vacía
+                if (!columnas.containsKey("descripcion")) {
+                    for (Cell celda : encabezado) {
+                        String valor = celda.toString().trim();
+                        if (!valor.isEmpty()) {
+                            columnas.put("descripcion", celda.getColumnIndex());
+                            logger.info("💡 Usando '" + valor + "' como descripción por defecto");
+                            break;
+                        }
+                    }
+                }
+                
+                if (!columnas.containsKey("codigo") && !columnas.containsKey("descripcion")) {
+                    logger.severe("❌ No se pueden procesar items sin código o descripción");
+                    return items;
+                }
             }
             
             logger.info("🚀 Iniciando procesamiento de datos. Filas esperadas: " + (hoja.getLastRowNum() - filaEncabezado));
@@ -293,7 +482,7 @@ public class CotizacionService {
     }
 
     /**
-     * Detecta el formato del archivo Excel basándose en patrones
+     * Detecta el formato del archivo Excel basándose en configuración
      */
     private String detectarFormato(File archivo, Row encabezado) {
         String nombreArchivo = archivo.getName().toUpperCase();
@@ -306,23 +495,56 @@ public class CotizacionService {
         
         logger.info("🔍 Detectando formato. Columnas encontradas: " + columnasEncontradas);
         
-        // Patrones de detección por formato
-        if (nombreArchivo.contains("QTN_GOF") || nombreArchivo.contains("QUOTATION") || 
-            (columnasEncontradas.contains("VESSEL COMMENTS") && columnasEncontradas.contains("SUPPLIER COMMENTS"))) {
-            return "QTN_GOF";
+        // Verificar cada formato configurado
+        for (Map.Entry<String, FormatoExcel> entry : formatosConfigurados.entrySet()) {
+            String nombreFormato = entry.getKey();
+            FormatoExcel formato = entry.getValue();
+            
+            boolean coincideArchivo = false;
+            boolean coincideColumnas = false;
+            
+            // Verificar patrones de nombre de archivo
+            for (String patron : formato.patronesArchivo) {
+                if (nombreArchivo.contains(patron.toUpperCase())) {
+                    coincideArchivo = true;
+                    break;
+                }
+            }
+            
+            // Verificar patrones de columnas
+            int columnasCoincidentes = 0;
+            for (String patron : formato.patronesColumnas) {
+                if (columnasEncontradas.contains(patron.toUpperCase())) {
+                    columnasCoincidentes++;
+                }
+            }
+            
+            if (columnasCoincidentes >= Math.min(formato.columnasMinimas, formato.patronesColumnas.size())) {
+                coincideColumnas = true;
+            }
+            
+            // Si coincide archivo O columnas, es este formato
+            if (coincideArchivo || coincideColumnas) {
+                logger.info("✅ Formato detectado: " + nombreFormato + 
+                          " (archivo:" + coincideArchivo + ", columnas:" + coincideColumnas + ")");
+                return nombreFormato;
+            }
         }
         
-        if (nombreArchivo.contains("FERNANDINA") || 
-            (columnasEncontradas.contains("UNIT OF MEASURE") && columnasEncontradas.size() <= 8)) {
-            return "FERNANDINA";
-        }
-        
-        if (columnasEncontradas.contains("SKU") || columnasEncontradas.contains("PART NUMBER")) {
-            return "INVENTARIO";
-        }
-        
-        if (columnasEncontradas.contains("INVOICE") || columnasEncontradas.contains("BILL TO")) {
-            return "FACTURA";
+        // Verificar formatos personalizados
+        for (FormatoPersonalizado formato : formatosPersonalizados.values()) {
+            // Verificar patrones de archivo
+            boolean coincideArchivo = Arrays.stream(formato.patronesArchivo)
+                    .anyMatch(patron -> nombreArchivo.contains(patron.toUpperCase()));
+            
+            // Verificar patrones de columna
+            boolean coincideColumna = Arrays.stream(formato.patronesColumna)
+                    .anyMatch(patron -> columnasEncontradas.contains(patron.toUpperCase()));
+            
+            if (coincideArchivo || coincideColumna) {
+                logger.info("🎯 Formato personalizado detectado: " + formato.nombre);
+                return formato.nombre;
+            }
         }
         
         logger.info("📋 Formato no reconocido, usando mapeo genérico");
@@ -330,24 +552,46 @@ public class CotizacionService {
     }
     
     /**
-     * Aplica mapeo específico basado en el formato detectado
+     * Aplica mapeo específico basado en la configuración del formato
      */
     private Map<String, Integer> aplicarMapeoEspecifico(Row encabezado, Map<String, Integer> columnasBase, String formato) {
         logger.info("🎯 Aplicando mapeo para formato: " + formato);
         
-        switch (formato) {
-            case "QTN_GOF":
-                return aplicarMapeoQTN_GOF(encabezado, columnasBase);
-            case "FERNANDINA":
-                return aplicarMapeoFERNANDINA(encabezado, columnasBase);
-            case "INVENTARIO":
-                return aplicarMapeoINVENTARIO(encabezado, columnasBase);
-            case "FACTURA":
-                return aplicarMapeoFACTURA(encabezado, columnasBase);
-            default:
-                logger.info("ℹ️ Usando mapeo genérico");
-                return columnasBase;
+        FormatoExcel configuracion = formatosConfigurados.get(formato);
+        if (configuracion == null) {
+            logger.info("ℹ️ No hay configuración específica, usando mapeo genérico");
+            return columnasBase;
         }
+        
+        Map<String, Integer> mapeoEspecifico = new HashMap<>(columnasBase);
+        
+        // Aplicar mapeo basado en configuración
+        for (Map.Entry<String, List<String>> mapeo : configuracion.mapeoColumnas.entrySet()) {
+            String campoInterno = mapeo.getKey();
+            List<String> columnasExternas = mapeo.getValue();
+            
+            for (Cell celda : encabezado) {
+                String valorCelda = celda.toString().trim().toUpperCase();
+                
+                // Verificar si esta celda coincide con alguna de las columnas externas
+                for (String columnaExterna : columnasExternas) {
+                    if (columnaExterna.equals("COLUMN_A") && celda.getColumnIndex() == 0) {
+                        // Caso especial para columna A (HMM BLESSING)
+                        mapeoEspecifico.put(campoInterno, 0);
+                        logger.info("   ✅ Columna A -> " + campoInterno);
+                        break;
+                    } else if (valorCelda.equals(columnaExterna.toUpperCase()) || 
+                               valorCelda.contains(columnaExterna.toUpperCase())) {
+                        mapeoEspecifico.put(campoInterno, celda.getColumnIndex());
+                        logger.info("   ✅ " + valorCelda + " -> " + campoInterno + " (columna " + (char)('A' + celda.getColumnIndex()) + ")");
+                        break;
+                    }
+                }
+            }
+        }
+        
+        logger.info("🔄 Mapeo " + formato + " completado. Columnas mapeadas: " + mapeoEspecifico.size());
+        return mapeoEspecifico;
     }
     
     /**
@@ -416,6 +660,155 @@ public class CotizacionService {
         return mapeoEspecifico;
     }
     
+    /**
+     * Mapeo específico para archivos formato PROVISION ORDER
+     */
+    private Map<String, Integer> aplicarMapeoPROVISION_ORDER(Row encabezado, Map<String, Integer> columnas) {
+        logger.info("🚢 Aplicando mapeo específico PROVISION ORDER...");
+        
+        Map<String, Integer> mapeoEspecifico = new HashMap<>(columnas);
+        
+        for (Cell celda : encabezado) {
+            String valor = celda.toString().trim().toUpperCase();
+            int col = celda.getColumnIndex();
+            
+            switch (valor) {
+                case "ITEM CODE":
+                case "CODE":
+                case "PART NO":
+                case "PART NUMBER":
+                case "NO.":
+                    mapeoEspecifico.put("codigo", col);
+                    logger.info("   ✅ " + valor + " -> codigo (columna " + (char)('A' + col) + ")");
+                    break;
+                case "DESCRIPTION":
+                case "ITEM DESCRIPTION":
+                case "PROVISION DESCRIPTION":
+                case "PRODUCT DESCRIPTION":
+                case "DESC":
+                    mapeoEspecifico.put("descripcion", col);
+                    logger.info("   ✅ " + valor + " -> descripcion (columna " + (char)('A' + col) + ")");
+                    break;
+                case "QUANTITY":
+                case "QTY":
+                case "AMOUNT":
+                case "ORDERED QTY":
+                case "ORDER QTY":
+                    mapeoEspecifico.put("cantidad", col);
+                    logger.info("   ✅ " + valor + " -> cantidad (columna " + (char)('A' + col) + ")");
+                    break;
+                case "UNIT PRICE":
+                case "PRICE":
+                case "RATE":
+                case "UNIT COST":
+                case "COST":
+                    mapeoEspecifico.put("precio", col);
+                    logger.info("   ✅ " + valor + " -> precio (columna " + (char)('A' + col) + ")");
+                    break;
+                case "UNIT":
+                case "UOM":
+                case "UNIT OF MEASURE":
+                case "U/M":
+                    mapeoEspecifico.put("unidad", col);
+                    logger.info("   ✅ " + valor + " -> unidad (columna " + (char)('A' + col) + ")");
+                    break;
+                case "TOTAL":
+                case "TOTAL AMOUNT":
+                case "LINE TOTAL":
+                case "AMOUNT TOTAL":
+                    mapeoEspecifico.put("totalbruto", col);
+                    logger.info("   ✅ " + valor + " -> totalbruto (columna " + (char)('A' + col) + ")");
+                    break;
+                case "REMARKS":
+                case "COMMENTS":
+                case "NOTES":
+                case "OBSERVATION":
+                    mapeoEspecifico.put("comentarios", col);
+                    logger.info("   ✅ " + valor + " -> comentarios (columna " + (char)('A' + col) + ")");
+                    break;
+                default:
+                    // Buscar patrones más flexibles
+                    if (valor.contains("DESCRIP") || valor.contains("DETAIL")) {
+                        mapeoEspecifico.put("descripcion", col);
+                        logger.info("   ✅ " + valor + " -> descripcion (columna " + (char)('A' + col) + ")");
+                    } else if (valor.contains("QTY") || valor.contains("QUANT")) {
+                        mapeoEspecifico.put("cantidad", col);
+                        logger.info("   ✅ " + valor + " -> cantidad (columna " + (char)('A' + col) + ")");
+                    } else if (valor.contains("PRICE") || valor.contains("COST")) {
+                        mapeoEspecifico.put("precio", col);
+                        logger.info("   ✅ " + valor + " -> precio (columna " + (char)('A' + col) + ")");
+                    } else if (valor.contains("TOTAL")) {
+                        mapeoEspecifico.put("totalbruto", col);
+                        logger.info("   ✅ " + valor + " -> totalbruto (columna " + (char)('A' + col) + ")");
+                    }
+                    break;
+            }
+        }
+        
+        logger.info("🔄 Mapeo PROVISION ORDER completado. Columnas mapeadas: " + mapeoEspecifico.size());
+        return mapeoEspecifico;
+    }
+    
+    /**
+     * Mapeo específico para archivos formato HMM BLESSING
+     */
+    private Map<String, Integer> aplicarMapeoHMM_BLESSING(Row encabezado, Map<String, Integer> columnas) {
+        logger.info("😢 Aplicando mapeo específico HMM BLESSING...");
+        
+        Map<String, Integer> mapeoEspecifico = new HashMap<>();
+        
+        // Mapeo basado en el diagnóstico del archivo real
+        // Columna A = Descripción (datos empiezan en fila 14)
+        // Columna B = Remarks 
+        // Columna C = UNIT
+        // Columna D = PRICES
+        // Columna F = CANTD (cantidad)
+        // Columna G = USD TOTAL
+        
+        for (Cell celda : encabezado) {
+            String valor = celda.toString().trim().toUpperCase();
+            int col = celda.getColumnIndex();
+            char colChar = (char)('A' + col);
+            
+            logger.info("🔍 Analizando columna " + colChar + ": [" + valor + "]");
+            
+            switch (valor) {
+                case "REMARKS":
+                    mapeoEspecifico.put("comentarios", col);
+                    logger.info("   ✅ REMARKS -> comentarios (columna " + colChar + ")");
+                    break;
+                case "UNIT":
+                    mapeoEspecifico.put("unidad", col);
+                    logger.info("   ✅ UNIT -> unidad (columna " + colChar + ")");
+                    break;
+                case "PRICES":
+                    mapeoEspecifico.put("precio", col);
+                    logger.info("   ✅ PRICES -> precio (columna " + colChar + ")");
+                    break;
+                case "CANTD":
+                    mapeoEspecifico.put("cantidad", col);
+                    logger.info("   ✅ CANTD -> cantidad (columna " + colChar + ")");
+                    break;
+                case "USD TOTAL":
+                    mapeoEspecifico.put("totalbruto", col);
+                    logger.info("   ✅ USD TOTAL -> totalbruto (columna " + colChar + ")");
+                    break;
+            }
+        }
+        
+        // La columna A contiene las descripciones (aunque no está en el encabezado)
+        mapeoEspecifico.put("descripcion", 0); // Columna A = índice 0
+        logger.info("   ✅ Columna A -> descripcion (productos)");
+        
+        // No hay códigos explícitos, usar la descripción como código también
+        mapeoEspecifico.put("codigo", 0); // Usar descripción como código
+        logger.info("   ℹ️ Usando descripción como código (no hay columna de códigos separada)");
+        
+        logger.info("🔄 Mapeo HMM BLESSING completado. Columnas mapeadas: " + mapeoEspecifico.size());
+        logger.info("📊 Mapeo final: " + mapeoEspecifico);
+        return mapeoEspecifico;
+    }
+
     /**
      * Mapeo específico para archivos formato FERNANDINA
      */
@@ -552,29 +945,79 @@ public class CotizacionService {
      * Lista todos los formatos de Excel soportados
      */
     public List<String> getFormatosSoportados() {
-        return Arrays.asList("QTN_GOF", "FERNANDINA", "INVENTARIO", "FACTURA", "GENERICO");
+        List<String> formatos = new ArrayList<>(formatosConfigurados.keySet());
+        formatos.add("GENERICO");
+        return formatos;
     }
     
     /**
      * Proporciona información sobre qué columnas espera cada formato
      */
     public void mostrarInformacionFormatos() {
-        logger.info("📊 FORMATOS DE EXCEL SOPORTADOS:");
-        logger.info("🎯 QTN_GOF: ITEM, ITEM DESCRIPTION, QUANTITY ORDER, PRICE, SUPPLIER COMMENTS, VESSEL COMMENTS");
-        logger.info("🐠 FERNANDINA: CÓDIGO, DESCRIPCIÓN, CANTIDAD, PRECIO (formato en español)");
-        logger.info("📦 INVENTARIO: SKU/PART NUMBER, PRODUCT NAME, STOCK, UNIT COST");
-        logger.info("🧾 FACTURA: INVOICE #, LINE DESCRIPTION, QTY, RATE, AMOUNT");
-        logger.info("📋 GENÉRICO: Cualquier combinación de columnas comunes (item, description, quantity, price)");
+        logger.info("📊 FORMATOS DE EXCEL CONFIGURADOS:");
+        
+        for (Map.Entry<String, FormatoExcel> entry : formatosConfigurados.entrySet()) {
+            FormatoExcel formato = entry.getValue();
+            logger.info("🎯 " + entry.getKey() + ":");
+            logger.info("   📁 Patrones de archivo: " + formato.patronesArchivo);
+            logger.info("   📋 Patrones de columnas: " + formato.patronesColumnas);
+            
+            StringBuilder mapeos = new StringBuilder("   🔗 Mapeos: ");
+            formato.mapeoColumnas.forEach((interno, externo) -> 
+                mapeos.append(interno).append("=").append(externo).append(", "));
+            logger.info(mapeos.toString());
+        }
+        
+        logger.info("📋 GENÉRICO: Cualquier combinación de columnas comunes detectadas automáticamente");
     }
     
     /**
-     * Método para registrar un nuevo formato personalizado
-     * Este método puede ser extendido para permitir configuración dinámica
+     * Agregar nuevo formato dinámicamente
      */
-    public void registrarNuevoFormato(String nombreFormato, Map<String, List<String>> patronesColumnas) {
-        logger.info("🔧 Se puede extender este método para registrar formato: " + nombreFormato);
-        logger.info("📝 Patrones proporcionados: " + patronesColumnas);
-        // TODO: Implementar sistema de configuración dinámica de formatos
+    public void agregarFormato(String nombre, FormatoExcel configuracion) {
+        formatosConfigurados.put(nombre, configuracion);
+        logger.info("✅ Nuevo formato agregado: " + nombre);
+    }
+    
+    /**
+     * Método de utilidad para crear configuraciones de formato desde código
+     */
+    public static FormatoExcel crearFormato(String nombre) {
+        return new FormatoExcel(nombre);
+    }
+    
+    // Registro de formatos personalizados
+    private final Map<String, FormatoPersonalizado> formatosPersonalizados = new HashMap<>();
+    
+    /**
+     * Clase para definir formatos personalizados
+     */
+    public static class FormatoPersonalizado {
+        public final String nombre;
+        public final String[] patronesArchivo;
+        public final String[] patronesColumna;
+        public final Map<String, String[]> mapeoColumnas;
+        
+        public FormatoPersonalizado(String nombre, String[] patronesArchivo, 
+                                   String[] patronesColumna, Map<String, String[]> mapeoColumnas) {
+            this.nombre = nombre;
+            this.patronesArchivo = patronesArchivo;
+            this.patronesColumna = patronesColumna;
+            this.mapeoColumnas = mapeoColumnas;
+        }
+    }
+    
+    /**
+     * Agrega un formato personalizado al sistema
+     */
+    public void agregarFormatoPersonalizado(String nombre, String[] patronesArchivo, 
+                                           String[] patronesColumna, Map<String, String[]> mapeoColumnas) {
+        FormatoPersonalizado formato = new FormatoPersonalizado(nombre, patronesArchivo, patronesColumna, mapeoColumnas);
+        formatosPersonalizados.put(nombre, formato);
+        logger.info("✅ Formato personalizado registrado: " + nombre);
+        logger.info("📂 Patrones de archivo: " + Arrays.toString(patronesArchivo));
+        logger.info("📊 Patrones de columna: " + Arrays.toString(patronesColumna));
+        logger.info("🔄 Mapeos: " + mapeoColumnas.size() + " columnas configuradas");
     }
 
     private String obtenerTexto(Row fila, Integer index) {
