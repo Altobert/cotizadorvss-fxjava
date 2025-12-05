@@ -34,7 +34,7 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 
 
-    public class Main extends Application {
+public class Main extends Application {
     // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
@@ -43,15 +43,9 @@ import javafx.beans.property.SimpleDoubleProperty;
     private final TableView<Producto> tablaProductos = new TableView<>();
     private ObservableList<Producto> productos;   // 👉 lista compartida para filtro y recarga
 
-<<<<<<< HEAD
     @Override
     public void start(Stage stage) {
     probarConexion();
-=======
-@Override
-public void start(Stage stage) {
-    //probarConexion();
->>>>>>> fd687438cc05bd1262c67e16834d441ac45eb224
 
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
