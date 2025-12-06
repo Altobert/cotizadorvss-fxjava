@@ -58,10 +58,16 @@ import javafx.beans.property.SimpleDoubleProperty;
     Button btnExportar = new Button("💾 Exportar Cotización");
     btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
+    // 👉 aplicar estilo corporativo VSS
+    btnCargar.getStyleClass().add("color-primario");
+    btnLimpiar.getStyleClass().add("color-primario");
+    btnExportar.getStyleClass().add("color-primario");
+
     ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar, btnExportar);
     rootCotizador.setTop(barraCotizador);
     rootCotizador.setCenter(tabla);
     configurarTabla();
+
 
     // Tab Productos
     BorderPane rootProductos = new BorderPane();
@@ -70,6 +76,12 @@ import javafx.beans.property.SimpleDoubleProperty;
     Button btnAgregar = new Button("➕ Agregar");
     Button btnEditar  = new Button("✏️ Editar");
     Button btnEliminar = new Button("🗑️ Eliminar");
+
+    // Aplicar colores corporativos VSS desde estilos.css
+    btnAgregar.getStyleClass().add("color-primario");
+    btnEditar.getStyleClass().add("color-primario");
+    btnEliminar.getStyleClass().add("color-primario");
+    rootProductos.getStyleClass().add("color-fondo");
 
     // Handlers CRUD
     btnAgregar.setOnAction(e -> abrirDialogAgregarProducto());
