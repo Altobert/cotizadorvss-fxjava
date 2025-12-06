@@ -34,7 +34,7 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 
 
-    public class Main extends Application {
+public class Main extends Application {
     // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
@@ -51,6 +51,9 @@ import javafx.beans.property.SimpleDoubleProperty;
     BorderPane rootCotizador = new BorderPane();
     Button btnCargar = new Button("📂 Cargar Excel");
     btnCargar.setOnAction(e -> cargarArchivo(stage));
+    
+    Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
+    btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
     btnLimpiar.setOnAction(e -> limpiarTabla());
@@ -58,12 +61,16 @@ import javafx.beans.property.SimpleDoubleProperty;
     Button btnExportar = new Button("💾 Exportar Cotización");
     btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
+<<<<<<< HEAD
     // 👉 aplicar estilo corporativo VSS
     btnCargar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
     btnExportar.getStyleClass().add("color-primario");
 
     ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar, btnExportar);
+=======
+    ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
+>>>>>>> 42b8cae6b25f147d6f8896caab46341b111684d3
     rootCotizador.setTop(barraCotizador);
     rootCotizador.setCenter(tabla);
     configurarTabla();
@@ -587,6 +594,37 @@ private void cargarProductos() {
     }
 }
 
+
+    private void analizarEstructuraExcel(Stage stage) {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Seleccionar archivo Excel para analizar");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));
+        File archivo = fileChooser.showOpenDialog(stage);
+
+        if (archivo != null) {
+            // Mostrar información de formatos soportados
+            cotizacionService.mostrarInformacionFormatos();
+            
+            // Ejecutar análisis
+            cotizacionService.analizarEstructuraExcel(archivo);
+            
+            // Mostrar diálogo con resumen
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Análisis Completado");
+            alert.setHeaderText("Archivo analizado: " + archivo.getName());
+            
+            StringBuilder contenido = new StringBuilder();
+            contenido.append("✅ Análisis completado exitosamente\n\n");
+            contenido.append("📊 Formatos soportados:\n");
+            for (String formato : cotizacionService.getFormatosSoportados()) {
+                contenido.append("  • ").append(formato).append("\n");
+            }
+            contenido.append("\n🔍 Revise la consola para ver el análisis detallado.");
+            
+            alert.setContentText(contenido.toString());
+            alert.showAndWait();
+        }
+    }
 
     private void cargarArchivo(Stage stage) {
 
