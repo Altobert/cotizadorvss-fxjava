@@ -45,7 +45,8 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
-    probarConexion();
+    // se comenta para que no conecte con badd cada vez que inicia una ventana
+        //probarConexion();
 
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
