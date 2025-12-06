@@ -54,14 +54,14 @@
 /* ===== Colores corporativos VSS ===== */
 
 /* Botones principales */
-.color-primario {
+.button.color-primario {
     -fx-background-color: #003366; /* azul profundo */
-    -fx-text-fill: white;
+    -fx-text-fill: white;          /* letras blancas */
     -fx-font-weight: bold;
 }
 
 /* Botones secundarios */
-.color-secundario {
+.button.color-secundario {
     -fx-background-color: #FFCC00; /* amarillo corporativo */
     -fx-text-fill: black;
     -fx-font-weight: bold;
@@ -74,11 +74,10 @@
 
 /* Encabezados de tabla */
 .table-view .column-header-background {
-    -fx-background-color: #002B5C;
+    -fx-background-color: lightgray; /* gris claro */
 }
 
-.table-view .column-header, .table-view .label {
-    -fx-text-fill: white;
+.table-view .column-header .label {
+    -fx-text-fill: black;            /* texto negro */
     -fx-font-weight: bold;
 }
-

@@ -61,16 +61,13 @@ public class Main extends Application {
     Button btnExportar = new Button("💾 Exportar Cotización");
     btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
-<<<<<<< HEAD
-    // 👉 aplicar estilo corporativo VSS
+    // 👉 aplicar estilo corporativo VSS (azul con letras blancas)
     btnCargar.getStyleClass().add("color-primario");
+    btnAnalizar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
     btnExportar.getStyleClass().add("color-primario");
 
-    ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar, btnExportar);
-=======
     ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
->>>>>>> 42b8cae6b25f147d6f8896caab46341b111684d3
     rootCotizador.setTop(barraCotizador);
     rootCotizador.setCenter(tabla);
     configurarTabla();
