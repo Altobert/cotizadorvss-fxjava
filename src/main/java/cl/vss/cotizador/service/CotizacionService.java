@@ -141,6 +141,23 @@ public class CotizacionService {
                 .minColumnas(3)
         );
         
+        // Formato específico para archivo 339-FR250126.xlsx (catálogo de códigos)
+        formatosConfigurados.put("FR250126_CATALOGO", 
+            new FormatoExcel("FR250126_CATALOGO")
+                .patronArchivo("339", "FR250126", "CATALOGO")
+                .patronColumna("BAG", "AMPOULE", "BOTTLE", "USD", "DAYS", "ITEM DESCRIPTION", "QUANTITY")
+                .mapear("codigo", "COLUMN_A") // Columna A: códigos/unidades principales
+                .mapear("descripcion", "COLUMN_P") // Columna P: descripciones reales de productos
+                .mapear("cantidad", "COLUMN_Q") // Columna Q: cantidades
+                .mapear("unidad", "COLUMN_B") // Columna B: unidades/embalajes secundarios
+                .mapear("categoria", "COLUMN_C") // Columna C: tipos/categorías
+                .mapear("medida", "COLUMN_D") // Columna D: medidas adicionales
+                .mapear("moneda", "COLUMN_F") // Columna F: monedas
+                .mapear("comentarios", "COLUMN_G") // Columna G: términos de pago
+                .rango(1, 5) // Los datos empiezan desde fila 1
+                .minColumnas(4)
+        );
+
         logger.info("📊 Formatos configurados: " + formatosConfigurados.size());
         formatosConfigurados.keySet().forEach(formato -> 
             logger.info("  • " + formato));
@@ -576,9 +593,44 @@ public class CotizacionService {
                 // Verificar si esta celda coincide con alguna de las columnas externas
                 for (String columnaExterna : columnasExternas) {
                     if (columnaExterna.equals("COLUMN_A") && celda.getColumnIndex() == 0) {
-                        // Caso especial para columna A (HMM BLESSING)
+                        // Caso especial para columna A
                         mapeoEspecifico.put(campoInterno, 0);
                         logger.info("   ✅ Columna A -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_B") && celda.getColumnIndex() == 1) {
+                        // Caso especial para columna B
+                        mapeoEspecifico.put(campoInterno, 1);
+                        logger.info("   ✅ Columna B -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_C") && celda.getColumnIndex() == 2) {
+                        // Caso especial para columna C
+                        mapeoEspecifico.put(campoInterno, 2);
+                        logger.info("   ✅ Columna C -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_D") && celda.getColumnIndex() == 3) {
+                        // Caso especial para columna D
+                        mapeoEspecifico.put(campoInterno, 3);
+                        logger.info("   ✅ Columna D -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_F") && celda.getColumnIndex() == 5) {
+                        // Caso especial para columna F
+                        mapeoEspecifico.put(campoInterno, 5);
+                        logger.info("   ✅ Columna F -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_G") && celda.getColumnIndex() == 6) {
+                        // Caso especial para columna G
+                        mapeoEspecifico.put(campoInterno, 6);
+                        logger.info("   ✅ Columna G -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_P") && celda.getColumnIndex() == 15) {
+                        // Caso especial para columna P (ITEM DESCRIPTION)
+                        mapeoEspecifico.put(campoInterno, 15);
+                        logger.info("   ✅ Columna P -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_Q") && celda.getColumnIndex() == 16) {
+                        // Caso especial para columna Q (QUANTITY)
+                        mapeoEspecifico.put(campoInterno, 16);
+                        logger.info("   ✅ Columna Q -> " + campoInterno);
                         break;
                     } else if (valorCelda.equals(columnaExterna.toUpperCase()) || 
                                valorCelda.contains(columnaExterna.toUpperCase())) {
@@ -948,6 +1000,78 @@ public class CotizacionService {
         List<String> formatos = new ArrayList<>(formatosConfigurados.keySet());
         formatos.add("GENERICO");
         return formatos;
+    }
+    
+    /**
+     * Analiza un archivo Excel específico y sugiere el mapeo
+     */
+    public void analizarArchivoEspecifico(String rutaArchivo) {
+        try {
+            File archivo = new File(rutaArchivo);
+            if (!archivo.exists()) {
+                logger.info("❌ ERROR: El archivo no existe: " + rutaArchivo);
+                return;
+            }
+
+            logger.info("\n🔍 ANALIZANDO ARCHIVO: " + archivo.getName());
+            logger.info("==========================================");
+
+            FileInputStream fis = new FileInputStream(archivo);
+            XSSFWorkbook workbook = new XSSFWorkbook(fis);
+            
+            Sheet hoja = workbook.getSheetAt(0);
+            logger.info("📋 Hoja: \"" + hoja.getSheetName() + "\" (" + (hoja.getLastRowNum() + 1) + " filas)");
+            
+            // Analizar las primeras 15 filas para encontrar encabezados
+            logger.info("\n🔎 ANALIZANDO POSIBLES ENCABEZADOS:");
+            for (int filaNum = 0; filaNum <= Math.min(15, hoja.getLastRowNum()); filaNum++) {
+                Row fila = hoja.getRow(filaNum);
+                if (fila == null) continue;
+                
+                List<String> columnas = new ArrayList<>();
+                for (int colNum = 0; colNum < Math.min(10, fila.getLastCellNum()); colNum++) {
+                    Cell celda = fila.getCell(colNum);
+                    String valor = celda != null ? celda.toString().trim() : "";
+                    columnas.add(valor);
+                }
+                
+                long columnasConTexto = columnas.stream().filter(c -> !c.isEmpty()).count();
+                if (columnasConTexto >= 3) {
+                    logger.info("📍 FILA " + (filaNum + 1) + " (" + columnasConTexto + " columnas):");
+                    for (int i = 0; i < Math.min(columnas.size(), 8); i++) {
+                        if (!columnas.get(i).isEmpty()) {
+                            char letra = (char) ('A' + i);
+                            logger.info("    " + letra + ": \"" + columnas.get(i) + "\"");
+                        }
+                    }
+                    logger.info("");
+                }
+            }
+            
+            // Sugerir mapeo basado en el nombre del archivo
+            String nombreFormato = archivo.getName().toUpperCase().replace(".XLSX", "").replace("-", "_");
+            logger.info("💡 SUGERENCIA DE MAPEO:");
+            logger.info("========================");
+            logger.info("// Agregar este código:");
+            logger.info("service.agregarFormatoPersonalizado(");
+            logger.info("    \"" + nombreFormato + "\",");
+            logger.info("    new String[]{\"" + nombreFormato.substring(0, Math.min(nombreFormato.length(), 8)) + "\", \"FR250126\"}, // patrones archivo");
+            logger.info("    new String[]{\"COLUMNA_CLAVE_1\", \"COLUMNA_CLAVE_2\"}, // patrones columna (actualizar con columnas reales)");
+            logger.info("    Map.of(");
+            logger.info("        \"codigo\", new String[]{\"CODIGO\", \"ITEM\", \"COD\"},");
+            logger.info("        \"descripcion\", new String[]{\"DESCRIPCION\", \"PRODUCTO\", \"DETALLE\"},");
+            logger.info("        \"cantidad\", new String[]{\"CANTIDAD\", \"QTY\", \"CANT\"},");
+            logger.info("        \"precio\", new String[]{\"PRECIO\", \"PRICE\", \"VALOR\"},");
+            logger.info("        \"unidad\", new String[]{\"UNIDAD\", \"UNIT\", \"UM\"}");
+            logger.info("    )");
+            logger.info(");");
+            
+            workbook.close();
+            fis.close();
+            
+        } catch (Exception e) {
+            logger.info("❌ ERROR analizando archivo: " + e.getMessage());
+        }
     }
     
     /**
