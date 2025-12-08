@@ -77,9 +77,13 @@ public class CotizacionService {
     }
     
     /**
-     * Configuración de formatos soportados
+     * Configuración de formatos soportados - Organizados por cliente
      */
     private void inicializarFormatosConfigurados() {
+        
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: GOF (Grupo de Operaciones Fluviales)
+        // ═══════════════════════════════════════════════════════════════════════════════
         
         // QTN_GOF - Formato de cotización marítima
         formatosConfigurados.put("QTN_GOF", 
@@ -98,7 +102,11 @@ public class CotizacionService {
                 .minColumnas(4)
         );
         
-        // HMM_BLESSING - Formato provision order
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: HMM (Hapag-Lloyd Mediterranean Shipping)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
+        // HMM_BLESSING - Formato provision order (buque BLESSING)
         formatosConfigurados.put("HMM_BLESSING", 
             new FormatoExcel("HMM_BLESSING")
                 .patronArchivo("HMM", "BLESSING", "PROVISION ORDER")
@@ -114,6 +122,10 @@ public class CotizacionService {
                 .minColumnas(3)
         );
         
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: FERNANDINA (Provedor Fernandina)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
         // FERNANDINA - Formato en español
         formatosConfigurados.put("FERNANDINA", 
             new FormatoExcel("FERNANDINA")
@@ -128,6 +140,10 @@ public class CotizacionService {
                 .minColumnas(3)
         );
         
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: GENERAL (Formatos genéricos)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
         // INVENTARIO - Formato de inventario general
         formatosConfigurados.put("INVENTARIO", 
             new FormatoExcel("INVENTARIO")
@@ -141,7 +157,31 @@ public class CotizacionService {
                 .minColumnas(3)
         );
         
-        // Formato específico para archivo 339-FR250126.xlsx (catálogo de códigos)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: VALPARAISO SHIP SERVICES - M/V One Sphere
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
+        // ONE_SPHERE - Formato de cotización para M/V One Sphere
+        formatosConfigurados.put("ONE_SPHERE", 
+            new FormatoExcel("ONE_SPHERE")
+                .patronArchivo("ONE SPHERE", "Valparaiso Ship Services", "Provision", "RFQ")
+                .patronColumna("ITEM DESCRIPTION", "UNIT", "PRICE", "MIN. QUANTITY")
+                .mapear("codigo", "REF") // Código de referencia
+                .mapear("descripcion", "ITEM DESCRIPTION") // Descripción del item
+                .mapear("categoria", "ITEM GROUPS") // Grupo de items
+                .mapear("especificacion", "ITEM SPECIFICATION") // Especificación del item
+                .mapear("cantidad", "MIN. QUANTITY") // Cantidad mínima
+                .mapear("precio", "PRICE") // Precio
+                .mapear("unidad", "UNIT") // Unidad de medida
+                .rango(18, 25)  // Los datos comienzan alrededor de fila 18-20
+                .minColumnas(2)
+        );
+        
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: FRESH PROVISION SUPPLIER - Catálogo 339-FR250126
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
+        // FR250126_CATALOGO - Formato específico para archivo 339-FR250126.xlsx
         formatosConfigurados.put("FR250126_CATALOGO", 
             new FormatoExcel("FR250126_CATALOGO")
                 .patronArchivo("339", "FR250126", "CATALOGO")
@@ -158,9 +198,12 @@ public class CotizacionService {
                 .minColumnas(4)
         );
 
-        logger.info("📊 Formatos configurados: " + formatosConfigurados.size());
-        formatosConfigurados.keySet().forEach(formato -> 
-            logger.info("  • " + formato));
+        logger.info("📊 Formatos configurados por cliente: " + formatosConfigurados.size());
+        logger.info("═══════════════════════════════════════════════════════════════");
+        formatosConfigurados.keySet().forEach(formato -> {
+            FormatoExcel fmt = formatosConfigurados.get(formato);
+            logger.info("  ✅ " + formato + " - Patrones: " + String.join(", ", fmt.patronesArchivo));
+        });
     }
 
     public List<ItemCotizacionExcel> leerItemsDesdeExcel(File archivo) {
@@ -184,8 +227,8 @@ public class CotizacionService {
             Row encabezado = null;
             int filaEncabezado = -1;
             
-            // Buscar encabezados en las primeras 25 filas (algunos archivos tienen encabezados muy abajo)
-            for (int i = 0; i <= Math.min(25, hoja.getLastRowNum()); i++) {
+            // Buscar encabezados en las primeras 50 filas (algunos archivos como One Sphere tienen metadatos en las primeras filas)
+            for (int i = 0; i <= Math.min(50, hoja.getLastRowNum()); i++) {
                 Row fila = hoja.getRow(i);
                 if (fila == null) continue;
                 
@@ -200,6 +243,7 @@ public class CotizacionService {
                     // Patrones expandidos para diferentes formatos
                     if (valor.contains("item description") || valor.contains("item") || 
                         valor.contains("description") || valor.contains("quantity") || 
+                        valor.contains("min. quantity") || valor.contains("min quantity") ||
                         valor.contains("price") || valor.contains("unit of measure") ||
                         valor.contains("food categories") || valor.contains("total") ||
                         valor.contains("supplier comments") || valor.contains("remarks") ||
@@ -1147,7 +1191,14 @@ public class CotizacionService {
     private String obtenerTexto(Row fila, Integer index) {
         if (index == null) return "";
         Cell celda = fila.getCell(index);
-        return (celda != null) ? celda.toString().trim() : "";
+        if (celda == null) return "";
+        
+        // No procesar fórmulas - ignorarlas
+        if (celda.getCellType() == CellType.FORMULA) {
+            return "";
+        }
+        
+        return celda.toString().trim();
     }
 
     private int obtenerEntero(Row fila, Integer index) {
@@ -1161,7 +1212,8 @@ public class CotizacionService {
             } else if (celda.getCellType() == CellType.STRING) {
                 return Integer.parseInt(celda.getStringCellValue().trim());
             } else if (celda.getCellType() == CellType.FORMULA) {
-                return (int) celda.getNumericCellValue();
+                // No procesar fórmulas - ignorar y devolver 0
+                return 0;
             }
         } catch (Exception e) {
             logger.log(Level.WARNING, "⚠️ Error leyendo cantidad en índice " + index, e);
@@ -1180,7 +1232,8 @@ public class CotizacionService {
         } else if (celda.getCellType() == CellType.STRING) {
             return Double.parseDouble(celda.getStringCellValue().trim().replace(",", "."));
         } else if (celda.getCellType() == CellType.FORMULA) {
-            return celda.getNumericCellValue();
+            // No procesar fórmulas - ignorar y devolver 0.0
+            return 0.0;
         }
     } catch (Exception e) {
         logger.log(Level.WARNING, "⚠️ Error leyendo decimal en índice " + index, e);
