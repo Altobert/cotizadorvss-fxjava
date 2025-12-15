@@ -19,12 +19,13 @@ Table tipo_cambio {
 
 Table parametros_comerciales {
   id BIGINT [pk, increment]
-  tipo_cambio_usado DECIMAL(10,4)
-  porcentaje_utilidad DECIMAL(5,2)
-  fecha_vigencia DATE
+  tipo_cambio_usado DECIMAL(10,4) [note: 'Debe ser > 0'] // Restricción CHECK en SQL
+  porcentaje_utilidad DECIMAL(5,2) [note: 'Debe estar entre 0 y 100'] // Restricción CHECK en SQL
+  fecha_vigencia DATE [not null, note: 'Fecha válida obligatoria']
   usuario_editor_id BIGINT [ref: > usuario.id]
-  fecha_actualizacion DATETIME
+  fecha_actualizacion DATETIME [note: 'DEFAULT NOW() en SQL']
 }
+
 
 Table auditoria_parametros {
   id BIGINT [pk, increment]
