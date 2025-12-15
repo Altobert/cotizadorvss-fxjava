@@ -10,6 +10,7 @@ import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
+import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.TextFieldTableCell;
@@ -23,6 +24,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.image.Image;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
@@ -150,62 +152,77 @@ Label lblMensaje = new Label();
 
 // Acción del botón
 btnGuardar.setOnAction(e -> {
-    if (txtTipoCambio.getText().isEmpty() || txtUtilidad.getText().isEmpty() || dpVigencia.getValue() == null) {
-        lblMensaje.setText("❌ Debes completar todos los campos");
-        return;
-    }
+    try {
+        // ✅ Validaciones básicas de entrada
+        if (txtTipoCambio.getText().isBlank()) {
+            lblMensaje.setText("❌ Debe ingresar un tipo de cambio");
+            return;
+        }
+        if (txtUtilidad.getText().isBlank()) {
+            lblMensaje.setText("❌ Debe ingresar un porcentaje de utilidad");
+            return;
+        }
+        if (dpVigencia.getValue() == null) {
+            lblMensaje.setText("❌ Debe seleccionar una fecha de vigencia");
+            return;
+        }
 
-    try (Connection conn = DBConnection.getConnection()) {
-        ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
-        AuditoriaDAO auditoriaDAO = new AuditoriaDAO(conn);
+        try (Connection conn = DBConnection.getConnection()) {
+            ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
+            AuditoriaDAO auditoriaDAO = new AuditoriaDAO(conn);
 
-        // 👉 Consultar valores anteriores ANTES de actualizar
-        double tipoCambioAnterior = parametrosDAO.getTipoCambioActual();
-        double utilidadAnterior = parametrosDAO.getPorcentajeUtilidadActual();
-        LocalDate vigenciaAnterior = parametrosDAO.getFechaVigenciaActual();
+            // 👉 Consultar valores anteriores ANTES de actualizar
+            double tipoCambioAnterior = parametrosDAO.getTipoCambioActual();
+            double utilidadAnterior = parametrosDAO.getPorcentajeUtilidadActual();
+            LocalDate vigenciaAnterior = parametrosDAO.getFechaVigenciaActual();
 
-        // 👉 Nuevos valores desde la UI
-        double tipoCambio = Double.parseDouble(txtTipoCambio.getText());
-        double utilidad = Double.parseDouble(txtUtilidad.getText());
-        LocalDate vigencia = dpVigencia.getValue();
+            // 👉 Nuevos valores desde la UI
+            double tipoCambio = Double.parseDouble(txtTipoCambio.getText());
+            double utilidad = Double.parseDouble(txtUtilidad.getText());
+            LocalDate vigencia = dpVigencia.getValue();
 
-        // 👉 Guardar parámetros en BD
-        parametrosDAO.actualizarParametros(tipoCambio, utilidad, vigencia, Sesion.getUsuarioActual().getId());
+            // 👉 Guardar parámetros en BD (DAO valida internamente)
+            parametrosDAO.actualizarParametros(tipoCambio, utilidad, vigencia, Sesion.getUsuarioActual().getId());
 
-        // 👉 Registrar auditoría con valores reales
-        auditoriaDAO.insertarCambio(
-            "tipo_cambio_usado",
-            String.valueOf(tipoCambioAnterior),
-            String.valueOf(tipoCambio),
-            Sesion.getUsuarioActual().getId()
-        );
+            // 👉 Registrar auditoría con valores reales
+            auditoriaDAO.insertarCambio(
+                "tipo_cambio_usado",
+                String.valueOf(tipoCambioAnterior),
+                String.valueOf(tipoCambio),
+                Sesion.getUsuarioActual().getId()
+            );
 
-        auditoriaDAO.insertarCambio(
-            "porcentaje_utilidad",
-            String.valueOf(utilidadAnterior),
-            String.valueOf(utilidad),
-            Sesion.getUsuarioActual().getId()
-        );
+            auditoriaDAO.insertarCambio(
+                "porcentaje_utilidad",
+                String.valueOf(utilidadAnterior),
+                String.valueOf(utilidad),
+                Sesion.getUsuarioActual().getId()
+            );
 
-        auditoriaDAO.insertarCambio(
-            "fecha_vigencia",
-            vigenciaAnterior != null ? vigenciaAnterior.toString() : "N/A",
-            vigencia.toString(),
-            Sesion.getUsuarioActual().getId()
-        );
+            auditoriaDAO.insertarCambio(
+                "fecha_vigencia",
+                vigenciaAnterior != null ? vigenciaAnterior.toString() : "N/A",
+                vigencia.toString(),
+                Sesion.getUsuarioActual().getId()
+            );
 
-        lblMensaje.setText("✅ Parámetros guardados y auditoría registrada");
+            lblMensaje.setText("✅ Parámetros guardados y auditoría registrada");
+        }
     } catch (NumberFormatException ex) {
         lblMensaje.setText("❌ Error: valores numéricos inválidos");
+    } catch (IllegalArgumentException ex) {
+        lblMensaje.setText("❌ Validación: " + ex.getMessage());
     } catch (SQLException ex) {
         lblMensaje.setText("❌ Error SQL: " + ex.getMessage());
         ex.printStackTrace();
     }
 });
 
+// Layout de los campos
 VBox centroParametros = new VBox(10, txtTipoCambio, txtUtilidad, dpVigencia, btnGuardar, lblMensaje);
 centroParametros.setStyle("-fx-padding: 20;");
 rootParametros.setCenter(centroParametros);
+
 
 
 
@@ -260,6 +277,11 @@ cargarProductos(); // debe usar productos.setAll(...)
     tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
     tabs.getTabs().add(new Tab("Productos", rootProductos));
     tabs.getTabs().add(new Tab("Parámetros Comerciales", rootParametros)); //  nueva pestaña
+
+
+
+
+
 
     Scene scene = new Scene(tabs, 1400, 1000);
     stage.setTitle("Cotizador VSS");
