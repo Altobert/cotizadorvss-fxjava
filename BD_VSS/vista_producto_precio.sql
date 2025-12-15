@@ -15,6 +15,6 @@ FROM producto p
 JOIN (
   SELECT tipo_cambio_usado, porcentaje_utilidad
   FROM parametros_comerciales
-  ORDER BY fecha_vigencia DESC
+  ORDER BY fecha_actualizacion DESC
   LIMIT 1
 ) pc ON true;
