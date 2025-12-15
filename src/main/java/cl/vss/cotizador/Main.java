@@ -1,8 +1,11 @@
 package cl.vss.cotizador;
+import cl.vss.cotizador.demo.LoginController;
 import cl.vss.cotizador.model.Familia;
 
 import cl.vss.cotizador.model.ItemCotizacionExcel;
+import cl.vss.cotizador.service.AuditoriaDAO;
 import cl.vss.cotizador.service.CotizacionService;
+import cl.vss.cotizador.service.ParametrosDAO;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -24,12 +27,17 @@ import java.io.InputStream;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.sql.Connection;
+import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
 import cl.vss.cotizador.model.Producto;
 import cl.vss.cotizador.service.ProductoService;
+import cl.vss.cotizador.service.UsuarioDAO;
+import cl.vss.cotizador.util.DBConnection;
+import cl.vss.cotizador.util.Sesion;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 
@@ -45,6 +53,26 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
+        // 👉 Si no hay sesión activa, abrir login
+    if (!Sesion.estaLogueado()) {
+    Connection conn;
+    try {
+        conn = DBConnection.getConnection();
+        UsuarioDAO usuarioDAO = new UsuarioDAO(conn);
+        LoginController login = new LoginController(usuarioDAO);
+        login.mostrarLogin(stage);
+        return;
+    } catch (SQLException ex) {
+        ex.printStackTrace();
+        Alert alert = new Alert(Alert.AlertType.ERROR, "❌ Error de conexión a la BD: " + ex.getMessage());
+        alert.showAndWait();
+        return;
+    }
+}
+
+
+
+
     probarConexion();
 
     // Tab Cotizador
@@ -98,6 +126,86 @@ public class Main extends Application {
    // rootProductos.setCenter(tablaProductos); ACA HICE INSERCIONNNNNN
 
   
+    // Tab Parámetros Comerciales
+BorderPane rootParametros = new BorderPane();
+
+// Campos de entrada
+TextField txtTipoCambio = new TextField();
+txtTipoCambio.setPromptText("Tipo de cambio usado");
+txtTipoCambio.setPrefWidth(120);
+txtTipoCambio.setMaxWidth(150);
+
+TextField txtUtilidad = new TextField();
+txtUtilidad.setPromptText("Porcentaje de utilidad");
+txtUtilidad.setPrefWidth(120);
+txtUtilidad.setMaxWidth(150);
+txtUtilidad.setPrefColumnCount(5);
+
+DatePicker dpVigencia = new DatePicker();
+dpVigencia.setPromptText("Fecha de vigencia");
+dpVigencia.setPrefWidth(150);
+
+Button btnGuardar = new Button("Guardar parámetros");
+Label lblMensaje = new Label();
+
+// Acción del botón
+btnGuardar.setOnAction(e -> {
+    if (txtTipoCambio.getText().isEmpty() || txtUtilidad.getText().isEmpty() || dpVigencia.getValue() == null) {
+        lblMensaje.setText("❌ Debes completar todos los campos");
+        return;
+    }
+
+    try (Connection conn = DBConnection.getConnection()) {
+        ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
+        AuditoriaDAO auditoriaDAO = new AuditoriaDAO(conn);
+
+        // 👉 Consultar valores anteriores ANTES de actualizar
+        double tipoCambioAnterior = parametrosDAO.getTipoCambioActual();
+        double utilidadAnterior = parametrosDAO.getPorcentajeUtilidadActual();
+        LocalDate vigenciaAnterior = parametrosDAO.getFechaVigenciaActual();
+
+        // 👉 Nuevos valores desde la UI
+        double tipoCambio = Double.parseDouble(txtTipoCambio.getText());
+        double utilidad = Double.parseDouble(txtUtilidad.getText());
+        LocalDate vigencia = dpVigencia.getValue();
+
+        // 👉 Guardar parámetros en BD
+        parametrosDAO.actualizarParametros(tipoCambio, utilidad, vigencia, Sesion.getUsuarioActual().getId());
+
+        // 👉 Registrar auditoría con valores reales
+        auditoriaDAO.insertarCambio(
+            "tipo_cambio_usado",
+            String.valueOf(tipoCambioAnterior),
+            String.valueOf(tipoCambio),
+            Sesion.getUsuarioActual().getId()
+        );
+
+        auditoriaDAO.insertarCambio(
+            "porcentaje_utilidad",
+            String.valueOf(utilidadAnterior),
+            String.valueOf(utilidad),
+            Sesion.getUsuarioActual().getId()
+        );
+
+        auditoriaDAO.insertarCambio(
+            "fecha_vigencia",
+            vigenciaAnterior != null ? vigenciaAnterior.toString() : "N/A",
+            vigencia.toString(),
+            Sesion.getUsuarioActual().getId()
+        );
+
+        lblMensaje.setText("✅ Parámetros guardados y auditoría registrada");
+    } catch (NumberFormatException ex) {
+        lblMensaje.setText("❌ Error: valores numéricos inválidos");
+    } catch (SQLException ex) {
+        lblMensaje.setText("❌ Error SQL: " + ex.getMessage());
+        ex.printStackTrace();
+    }
+});
+
+VBox centroParametros = new VBox(10, txtTipoCambio, txtUtilidad, dpVigencia, btnGuardar, lblMensaje);
+centroParametros.setStyle("-fx-padding: 20;");
+rootParametros.setCenter(centroParametros);
 
 
 
@@ -151,6 +259,7 @@ cargarProductos(); // debe usar productos.setAll(...)
     TabPane tabs = new TabPane();
     tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
     tabs.getTabs().add(new Tab("Productos", rootProductos));
+    tabs.getTabs().add(new Tab("Parámetros Comerciales", rootParametros)); //  nueva pestaña
 
     Scene scene = new Scene(tabs, 1400, 1000);
     stage.setTitle("Cotizador VSS");
@@ -624,19 +733,36 @@ private void cargarProductos() {
     }
 
     private void cargarArchivo(Stage stage) {
+    FileChooser fileChooser = new FileChooser();
+    fileChooser.setTitle("Seleccionar archivo Excel");
+    fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));
+    File archivo = fileChooser.showOpenDialog(stage);
 
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Seleccionar archivo Excel");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));
-        File archivo = fileChooser.showOpenDialog(stage);
+    if (archivo != null) {
+        List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
 
-        if (archivo != null) {
+        // 👉 aplicar utilidad desde BD con manejo de SQLException
+        try (Connection conn = DBConnection.getConnection()) {
+            ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
+            double utilidad = parametrosDAO.getPorcentajeUtilidadActual();
 
-            List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
-            ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
-            tabla.setItems(datos);
+            for (ItemCotizacionExcel item : items) {
+                double precioBase = item.getPrecio();
+                double precioFinal = precioBase * (1 + utilidad / 100);
+                item.setPrecio(precioFinal);
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            Alert alert = new Alert(Alert.AlertType.ERROR, "❌ Error al obtener utilidad desde BD: " + ex.getMessage());
+            alert.showAndWait();
         }
+
+        ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
+        tabla.setItems(datos);
     }
+}
+
+
 
     private void manejarAccionItem(ItemCotizacionExcel item) {
         // Buscar productos similares en la base de datos

@@ -1,0 +1,133 @@
+package cl.vss.cotizador.demo;
+
+import cl.vss.cotizador.service.UsuarioDAO;
+import cl.vss.cotizador.model.Usuario;
+import cl.vss.cotizador.util.Sesion;
+import cl.vss.cotizador.util.DBConnection;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.VBox;
+import javafx.scene.layout.HBox;
+import javafx.stage.Stage;
+import cl.vss.cotizador.Main;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+
+public class LoginController {
+    private UsuarioDAO usuarioDAO;
+
+    public LoginController(UsuarioDAO usuarioDAO) {
+        this.usuarioDAO = usuarioDAO;
+    }
+
+    public void mostrarLogin(Stage stage) {
+        // Campos de entrada
+        TextField txtCorreo = new TextField();
+        txtCorreo.setPromptText("Correo electrónico");
+
+        PasswordField txtPassword = new PasswordField();
+        txtPassword.setPromptText("Contraseña");
+
+        Button btnLogin = new Button("Ingresar");
+        Label lblMensaje = new Label();
+
+        // Acción del botón login
+        btnLogin.setOnAction(e -> {
+            Usuario usuario = usuarioDAO.validarLogin(txtCorreo.getText(), txtPassword.getText());
+            if (usuario != null) {
+                // Guardar usuario en sesión
+                Sesion.setUsuarioActual(usuario);
+                lblMensaje.setText("Bienvenido " + usuario.getNombre());
+
+                // Cerrar login y abrir la ventana principal (Main.java)
+                stage.close();
+                Stage mainStage = new Stage();
+                try {
+                    new Main().start(mainStage);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            } else {
+                lblMensaje.setText("Usuario o contraseña incorrectos");
+            }
+        });
+
+        // Pie de login: "¿No eres usuario?" + botón Crear cuenta
+        Label lblNoUsuario = new Label("¿No eres usuario?");
+        Button btnCrearCuenta = new Button("Crear cuenta");
+        btnCrearCuenta.setOnAction(e -> mostrarFormularioRegistro(stage));
+
+        HBox registroBox = new HBox(5, lblNoUsuario, btnCrearCuenta);
+        registroBox.setStyle("-fx-alignment: center;");
+
+        // Layout principal
+        VBox root = new VBox(10, txtCorreo, txtPassword, btnLogin, lblMensaje, registroBox);
+        root.setStyle("-fx-padding: 20; -fx-alignment: center;");
+
+        Scene scene = new Scene(root, 300, 220);
+        stage.setTitle("Login - Cotizador VSS");
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    // 👉 Formulario modal para crear usuario
+    private void mostrarFormularioRegistro(Stage owner) {
+        Stage registroStage = new Stage();
+        registroStage.setTitle("Crear nuevo usuario");
+
+        TextField txtNombre = new TextField();
+        txtNombre.setPromptText("Nombre completo");
+
+        TextField txtCorreo = new TextField();
+        txtCorreo.setPromptText("Correo electrónico");
+
+        PasswordField txtPassword = new PasswordField();
+        txtPassword.setPromptText("Contraseña");
+
+        ComboBox<String> cbRol = new ComboBox<>();
+        cbRol.getItems().addAll("admin", "usuario");
+        cbRol.setPromptText("Rol");
+
+        Button btnRegistrar = new Button("Registrar");
+        Label lblMensaje = new Label();
+
+        btnRegistrar.setOnAction(e -> {
+            if (txtNombre.getText().isEmpty() || txtCorreo.getText().isEmpty() ||
+                txtPassword.getText().isEmpty() || cbRol.getValue() == null) {
+                lblMensaje.setText("❌ Debes completar todos los campos");
+                return;
+            }
+
+            try (Connection conn = DBConnection.getConnection()) {
+                UsuarioDAO usuarioDAO = new UsuarioDAO(conn);
+
+                if (usuarioDAO.buscarPorCorreo(txtCorreo.getText()) != null) {
+                    lblMensaje.setText("⚠️ El usuario ya existe");
+                } else {
+                    String hash = org.mindrot.jbcrypt.BCrypt.hashpw(
+                        txtPassword.getText(), org.mindrot.jbcrypt.BCrypt.gensalt()
+                    );
+                    usuarioDAO.insertarUsuario(
+                        txtNombre.getText(),
+                        txtCorreo.getText(),
+                        cbRol.getValue(),
+                        hash
+                    );
+                    lblMensaje.setText("✅ Usuario creado correctamente");
+                    registroStage.close(); // cerrar modal
+                }
+            } catch (SQLException ex) {
+                lblMensaje.setText("❌ Error SQL: " + ex.getMessage());
+                ex.printStackTrace();
+            }
+        });
+
+        VBox registroLayout = new VBox(10, txtNombre, txtCorreo, txtPassword, cbRol, btnRegistrar, lblMensaje);
+        registroLayout.setStyle("-fx-padding: 20; -fx-alignment: center;");
+
+        registroStage.setScene(new Scene(registroLayout, 320, 250));
+        registroStage.initOwner(owner);
+        registroStage.showAndWait();
+    }
+}
