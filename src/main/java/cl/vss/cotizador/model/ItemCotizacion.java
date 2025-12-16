@@ -11,6 +11,10 @@ public class ItemCotizacion {
     private int cantidad;
     private String unidad;
     private String categoria;
+    
+    // Metadatos de origen
+    private int filaOrigen;
+    private String comentarios; // Para guardar información adicional del Excel
 
     // Constructor vacío
     public ItemCotizacion() {
@@ -43,6 +47,12 @@ public class ItemCotizacion {
 
     public String getCategoria() { return categoria; }
     public void setCategoria(String categoria) { this.categoria = categoria; }
+    
+    public int getFilaOrigen() { return filaOrigen; }
+    public void setFilaOrigen(int filaOrigen) { this.filaOrigen = filaOrigen; }
+    
+    public String getComentarios() { return comentarios; }
+    public void setComentarios(String comentarios) { this.comentarios = comentarios; }
 
     public double getSubtotal() {
         return precioUnitario * cantidad;

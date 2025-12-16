@@ -48,6 +48,17 @@ public class Main extends Application {
     // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
+    private cl.vss.cotizador.model.CabeceraCotizacion cabeceraActual;
+    
+    // Campos de texto para la cabecera
+    private TextField txtNombreCliente;
+    private TextField txtIdCliente;
+    private TextField txtEmpresa;
+    private TextField txtNumeroCotizacion;
+    private TextField txtReferencia;
+    private Label lblFecha;
+    private TextArea txtObservaciones;
+    
     // Productos
     private final ProductoService productoService = new ProductoService();
     private final TableView<Producto> tablaProductos = new TableView<>();
@@ -55,6 +66,7 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
+<<<<<<< HEAD
         // 👉 Si no hay sesión activa, abrir login
     if (!Sesion.estaLogueado()) {
     Connection conn;
@@ -76,6 +88,10 @@ public class Main extends Application {
 
 
     probarConexion();
+=======
+    // se comenta para que no conecte con badd cada vez que inicia una ventana
+        //probarConexion();
+>>>>>>> e6de9dc7f226191a2f0e32ae7f7b13060817e8fd
 
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
@@ -83,6 +99,7 @@ public class Main extends Application {
     btnCargar.setOnAction(e -> cargarArchivo(stage));
     
     Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
+    btnAnalizar.setDisable(true); // Deshabilitado inicialmente
     btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
@@ -99,7 +116,13 @@ public class Main extends Application {
 
     ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
     rootCotizador.setTop(barraCotizador);
-    rootCotizador.setCenter(tabla);
+    
+    // Crear panel con cabecera y tabla
+    VBox panelConCabecera = new VBox(5);
+    panelConCabecera.getChildren().addAll(crearPanelCabecera(), tabla);
+    VBox.setVgrow(tabla, javafx.scene.layout.Priority.ALWAYS);
+    
+    rootCotizador.setCenter(panelConCabecera);
     configurarTabla();
 
 
@@ -763,6 +786,7 @@ private void cargarProductos() {
     if (archivo != null) {
         List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
 
+<<<<<<< HEAD
         // 👉 aplicar utilidad desde BD con manejo de SQLException
         try (Connection conn = DBConnection.getConnection()) {
             ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
@@ -777,6 +801,17 @@ private void cargarProductos() {
             ex.printStackTrace();
             Alert alert = new Alert(Alert.AlertType.ERROR, "❌ Error al obtener utilidad desde BD: " + ex.getMessage());
             alert.showAndWait();
+=======
+        if (archivo != null) {
+            // Extraer cabecera
+            cabeceraActual = cotizacionService.extraerCabecera(archivo);
+            actualizarCamposCabecera();
+            
+            // Leer items
+            List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
+            ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
+            tabla.setItems(datos);
+>>>>>>> e6de9dc7f226191a2f0e32ae7f7b13060817e8fd
         }
 
         ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
@@ -785,6 +820,171 @@ private void cargarProductos() {
 }
 
 
+
+    private void actualizarCamposCabecera() {
+        if (cabeceraActual == null) {
+            return;
+        }
+        
+        // Actualizar campos de texto
+        txtNombreCliente.setText(cabeceraActual.getNombreCliente() != null ? cabeceraActual.getNombreCliente() : "");
+        txtIdCliente.setText(cabeceraActual.getIdCliente() != null ? cabeceraActual.getIdCliente() : "");
+        txtEmpresa.setText(cabeceraActual.getEmpresaCliente() != null ? cabeceraActual.getEmpresaCliente() : "");
+        txtNumeroCotizacion.setText(cabeceraActual.getNumeroCotizacion() != null ? cabeceraActual.getNumeroCotizacion() : "");
+        txtReferencia.setText(cabeceraActual.getReferencia() != null ? cabeceraActual.getReferencia() : "");
+        txtObservaciones.setText(cabeceraActual.getObservaciones() != null ? cabeceraActual.getObservaciones() : "");
+        
+        if (cabeceraActual.getFecha() != null) {
+            lblFecha.setText("📅 " + cabeceraActual.getFecha().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        } else {
+            lblFecha.setText("📅 No disponible");
+        }
+    }
+
+    private VBox crearPanelCabecera() {
+        VBox panelCabecera = new VBox(10);
+        panelCabecera.setStyle("-fx-border-color: #e0e0e0; -fx-border-width: 1; -fx-padding: 15; -fx-background-color: #f9f9f9;");
+        
+        // Título
+        Label titulo = new Label("📋 Datos de Cabecera");
+        titulo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #333333;");
+        
+        // Primer fila: Cliente y ID
+        HBox fila1 = new HBox(15);
+        fila1.setPrefHeight(60);
+        
+        VBox campoNombre = new VBox(3);
+        Label lblNombre = new Label("Cliente:");
+        lblNombre.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        txtNombreCliente = new TextField();
+        txtNombreCliente.setPromptText("Nombre del cliente...");
+        txtNombreCliente.setStyle("-fx-font-size: 11px;");
+        campoNombre.getChildren().addAll(lblNombre, txtNombreCliente);
+        
+        VBox campoId = new VBox(3);
+        Label lblId = new Label("ID Cliente:");
+        lblId.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        txtIdCliente = new TextField();
+        txtIdCliente.setPromptText("ID o código...");
+        txtIdCliente.setStyle("-fx-font-size: 11px;");
+        campoId.getChildren().addAll(lblId, txtIdCliente);
+        campoId.setPrefWidth(150);
+        
+        HBox.setHgrow(campoNombre, javafx.scene.layout.Priority.ALWAYS);
+        fila1.getChildren().addAll(campoNombre, campoId);
+        
+        // Segunda fila: Empresa
+        HBox fila2 = new HBox(15);
+        fila2.setPrefHeight(50);
+        
+        VBox campoEmpresa = new VBox(3);
+        Label lblEmpresa = new Label("Empresa/Razón Social:");
+        lblEmpresa.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        txtEmpresa = new TextField();
+        txtEmpresa.setPromptText("Empresa...");
+        txtEmpresa.setStyle("-fx-font-size: 11px;");
+        campoEmpresa.getChildren().addAll(lblEmpresa, txtEmpresa);
+        
+        HBox.setHgrow(campoEmpresa, javafx.scene.layout.Priority.ALWAYS);
+        fila2.getChildren().add(campoEmpresa);
+        
+        // Tercera fila: Cotización, Referencia y Fecha
+        HBox fila3 = new HBox(15);
+        fila3.setPrefHeight(60);
+        
+        VBox campoCotizacion = new VBox(3);
+        Label lblCotizacion = new Label("Nº Cotización:");
+        lblCotizacion.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        txtNumeroCotizacion = new TextField();
+        txtNumeroCotizacion.setPromptText("Número...");
+        txtNumeroCotizacion.setStyle("-fx-font-size: 11px;");
+        campoCotizacion.getChildren().addAll(lblCotizacion, txtNumeroCotizacion);
+        
+        VBox campoReferencia = new VBox(3);
+        Label lblReferencia = new Label("Referencia:");
+        lblReferencia.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        txtReferencia = new TextField();
+        txtReferencia.setPromptText("PO, RFQ, etc...");
+        txtReferencia.setStyle("-fx-font-size: 11px;");
+        campoReferencia.getChildren().addAll(lblReferencia, txtReferencia);
+        
+        VBox campoFecha = new VBox(3);
+        Label lblFechaLabel = new Label("Fecha:");
+        lblFechaLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        lblFecha = new Label("📅 No disponible");
+        lblFecha.setStyle("-fx-font-size: 11px; -fx-text-fill: #2196F3;");
+        campoFecha.getChildren().addAll(lblFechaLabel, lblFecha);
+        
+        fila3.getChildren().addAll(campoCotizacion, campoReferencia, campoFecha);
+        
+        // Cuarta fila: Observaciones (ancho completo)
+        HBox fila4 = new HBox(10);
+        fila4.setPrefHeight(80);
+        
+        VBox campoObservaciones = new VBox(3);
+        Label lblObservaciones = new Label("Observaciones/Comentarios:");
+        lblObservaciones.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        txtObservaciones = new TextArea();
+        txtObservaciones.setPromptText("Notas, comentarios especiales...");
+        txtObservaciones.setStyle("-fx-font-size: 11px; -fx-control-inner-background: #ffffff;");
+        txtObservaciones.setWrapText(true);
+        txtObservaciones.setPrefRowCount(3);
+        campoObservaciones.getChildren().addAll(lblObservaciones, txtObservaciones);
+        
+        HBox.setHgrow(campoObservaciones, javafx.scene.layout.Priority.ALWAYS);
+        fila4.getChildren().add(campoObservaciones);
+        
+        // Botones de acción
+        HBox filaAcciones = new HBox(10);
+        filaAcciones.setStyle("-fx-alignment: center-left;");
+        
+        Button btnLimpiarCabecera = new Button("🗑️ Limpiar Cabecera");
+        btnLimpiarCabecera.setStyle("-fx-font-size: 11px; -fx-padding: 5px 10px;");
+        btnLimpiarCabecera.setOnAction(e -> limpiarCabecera());
+        
+        Button btnCopiarCliente = new Button("📋 Copiar Datos");
+        btnCopiarCliente.setStyle("-fx-font-size: 11px; -fx-padding: 5px 10px;");
+        btnCopiarCliente.setOnAction(e -> copiarDatosCabecera());
+        
+        filaAcciones.getChildren().addAll(btnLimpiarCabecera, btnCopiarCliente);
+        
+        // Agregar todas las filas al panel
+        panelCabecera.getChildren().addAll(titulo, fila1, fila2, fila3, fila4, filaAcciones);
+        
+        return panelCabecera;
+    }
+    
+    private void limpiarCabecera() {
+        txtNombreCliente.clear();
+        txtIdCliente.clear();
+        txtEmpresa.clear();
+        txtNumeroCotizacion.clear();
+        txtReferencia.clear();
+        txtObservaciones.clear();
+        lblFecha.setText("📅 No disponible");
+        cabeceraActual = null;
+    }
+    
+    private void copiarDatosCabecera() {
+        StringBuilder datos = new StringBuilder();
+        datos.append("Cliente: ").append(txtNombreCliente.getText()).append("\n");
+        datos.append("ID: ").append(txtIdCliente.getText()).append("\n");
+        datos.append("Empresa: ").append(txtEmpresa.getText()).append("\n");
+        datos.append("Cotización: ").append(txtNumeroCotizacion.getText()).append("\n");
+        datos.append("Referencia: ").append(txtReferencia.getText()).append("\n");
+        datos.append("Observaciones: ").append(txtObservaciones.getText());
+        
+        javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
+        javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+        content.putString(datos.toString());
+        clipboard.setContent(content);
+        
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Datos Copiados");
+        alert.setHeaderText(null);
+        alert.setContentText("Los datos de la cabecera han sido copiados al portapapeles.");
+        alert.showAndWait();
+    }
 
     private void manejarAccionItem(ItemCotizacionExcel item) {
         // Buscar productos similares en la base de datos

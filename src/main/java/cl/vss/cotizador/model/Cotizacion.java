@@ -25,6 +25,12 @@ public class Cotizacion {
     private String notas;
     private String condiciones;
     
+    // Metadatos de origen (Punto 2)
+    private String archivoOrigen;
+    private String hojaOrigen;
+    private int filaOrigen;
+    private String tipoDetector; // Indica qué detector procesó este archivo
+    
     // Constructor por defecto
     public Cotizacion() {
         this.id = UUID.randomUUID().toString();
@@ -109,6 +115,19 @@ public class Cotizacion {
     
     public String getCondiciones() { return condiciones; }
     public void setCondiciones(String condiciones) { this.condiciones = condiciones; }
+    
+    // Getters y Setters para metadatos de origen
+    public String getArchivoOrigen() { return archivoOrigen; }
+    public void setArchivoOrigen(String archivoOrigen) { this.archivoOrigen = archivoOrigen; }
+    
+    public String getHojaOrigen() { return hojaOrigen; }
+    public void setHojaOrigen(String hojaOrigen) { this.hojaOrigen = hojaOrigen; }
+    
+    public int getFilaOrigen() { return filaOrigen; }
+    public void setFilaOrigen(int filaOrigen) { this.filaOrigen = filaOrigen; }
+    
+    public String getTipoDetector() { return tipoDetector; }
+    public void setTipoDetector(String tipoDetector) { this.tipoDetector = tipoDetector; }
     
     @Override
     public String toString() {
