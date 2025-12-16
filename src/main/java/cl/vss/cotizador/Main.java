@@ -65,6 +65,7 @@ public class Main extends Application {
     btnCargar.setOnAction(e -> cargarArchivo(stage));
     
     Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
+    btnAnalizar.setDisable(true); // Deshabilitado inicialmente
     btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
