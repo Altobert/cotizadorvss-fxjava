@@ -27,7 +27,7 @@ CREATE TABLE parametros_comerciales (
   fecha_vigencia DATE NOT NULL,                                    -- Fecha desde la cual aplica
   usuario_editor_id BIGINT REFERENCES usuario(id),                 -- Usuario que modificó el parámetro
   fecha_actualizacion TIMESTAMP DEFAULT NOW()                      -- Fecha de modificación
-)
+);
 
 -- Tabla de auditoría de parámetros comerciales
 CREATE TABLE auditoria_parametros (
