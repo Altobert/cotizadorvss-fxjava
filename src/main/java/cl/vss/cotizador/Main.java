@@ -66,7 +66,6 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
-<<<<<<< HEAD
         // 👉 Si no hay sesión activa, abrir login
     if (!Sesion.estaLogueado()) {
     Connection conn;
@@ -88,10 +87,6 @@ public class Main extends Application {
 
 
     probarConexion();
-=======
-    // se comenta para que no conecte con badd cada vez que inicia una ventana
-        //probarConexion();
->>>>>>> e6de9dc7f226191a2f0e32ae7f7b13060817e8fd
 
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
@@ -784,9 +779,13 @@ private void cargarProductos() {
     File archivo = fileChooser.showOpenDialog(stage);
 
     if (archivo != null) {
+        // Extraer cabecera
+        cabeceraActual = cotizacionService.extraerCabecera(archivo);
+        actualizarCamposCabecera();
+        
+        // Leer items
         List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
 
-<<<<<<< HEAD
         // 👉 aplicar utilidad desde BD con manejo de SQLException
         try (Connection conn = DBConnection.getConnection()) {
             ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
@@ -801,17 +800,6 @@ private void cargarProductos() {
             ex.printStackTrace();
             Alert alert = new Alert(Alert.AlertType.ERROR, "❌ Error al obtener utilidad desde BD: " + ex.getMessage());
             alert.showAndWait();
-=======
-        if (archivo != null) {
-            // Extraer cabecera
-            cabeceraActual = cotizacionService.extraerCabecera(archivo);
-            actualizarCamposCabecera();
-            
-            // Leer items
-            List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
-            ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
-            tabla.setItems(datos);
->>>>>>> e6de9dc7f226191a2f0e32ae7f7b13060817e8fd
         }
 
         ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
