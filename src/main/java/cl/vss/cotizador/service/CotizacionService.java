@@ -403,6 +403,110 @@ public class CotizacionService {
         return items;
     }
 
+    /**
+     * Extrae los metadatos de la cabecera del archivo Excel
+     * @param archivo Archivo Excel a procesar
+     * @return CabeceraCotizacion con los datos encontrados
+     */
+    public cl.vss.cotizador.model.CabeceraCotizacion extraerCabecera(File archivo) {
+        cl.vss.cotizador.model.CabeceraCotizacion cabecera = new cl.vss.cotizador.model.CabeceraCotizacion();
+        
+        logger.info("📋 Extrayendo cabecera del archivo: " + archivo.getName());
+        
+        try (FileInputStream fis = new FileInputStream(archivo);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+            
+            Sheet hoja = workbook.getSheetAt(0);
+            
+            // Buscar datos de cabecera en las primeras 20 filas
+            for (int i = 0; i <= Math.min(20, hoja.getLastRowNum()); i++) {
+                Row fila = hoja.getRow(i);
+                if (fila == null) continue;
+                
+                for (int j = 0; j < fila.getLastCellNum(); j++) {
+                    Cell celda = fila.getCell(j);
+                    if (celda == null) continue;
+                    
+                    String etiqueta = celda.toString().trim().toLowerCase();
+                    Cell celdaValor = fila.getCell(j + 1);
+                    String valor = celdaValor != null ? celdaValor.toString().trim() : "";
+                    
+                    // Mapear etiquetas comunes a campos específicos
+                    if (etiqueta.contains("cliente") || etiqueta.contains("customer") || 
+                        etiqueta.contains("nombre cliente") || etiqueta.contains("company")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setNombreCliente(valor);
+                            logger.info("✅ Cliente encontrado: " + valor);
+                        }
+                    } else if (etiqueta.contains("id cliente") || etiqueta.contains("customer id") ||
+                               etiqueta.contains("codigo cliente")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setIdCliente(valor);
+                            logger.info("✅ ID Cliente encontrado: " + valor);
+                        }
+                    } else if (etiqueta.contains("empresa") || etiqueta.contains("company") ||
+                               etiqueta.contains("razón social") || etiqueta.contains("razon social")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setEmpresaCliente(valor);
+                            logger.info("✅ Empresa encontrada: " + valor);
+                        }
+                    } else if (etiqueta.contains("cotización") || etiqueta.contains("quotation") ||
+                               etiqueta.contains("numero") || etiqueta.contains("number")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setNumeroCotizacion(valor);
+                            logger.info("✅ Número de cotización encontrado: " + valor);
+                        }
+                    } else if (etiqueta.contains("referencia") || etiqueta.contains("reference") ||
+                               etiqueta.contains("po") || etiqueta.contains("purchase order")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setReferencia(valor);
+                            logger.info("✅ Referencia encontrada: " + valor);
+                        }
+                    } else if (etiqueta.contains("fecha") || etiqueta.contains("date")) {
+                        if (!valor.isEmpty()) {
+                            try {
+                                if (celda.getCellType() == CellType.NUMERIC) {
+                                    java.util.Date dateValue = celda.getDateCellValue();
+                                    cabecera.setFecha(dateValue.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime());
+                                } else {
+                                    // Intentar parsear como String
+                                    cabecera.setFecha(java.time.LocalDateTime.now());
+                                }
+                                logger.info("✅ Fecha encontrada: " + valor);
+                            } catch (Exception e) {
+                                logger.fine("⚠️ No se pudo parsear fecha: " + e.getMessage());
+                            }
+                        }
+                    } else if (etiqueta.contains("observación") || etiqueta.contains("observation") ||
+                               etiqueta.contains("nota") || etiqueta.contains("note") ||
+                               etiqueta.contains("comentario") || etiqueta.contains("comment")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setObservaciones(valor);
+                            logger.info("✅ Observaciones encontradas: " + valor);
+                        }
+                    } else if (etiqueta.contains("estado") || etiqueta.contains("status")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setEstado(valor);
+                            logger.info("✅ Estado encontrado: " + valor);
+                        }
+                    }
+                    
+                    // Almacenar otros datos adicionales
+                    if (!valor.isEmpty() && !etiqueta.isEmpty()) {
+                        cabecera.agregarDatoAdicional(etiqueta, valor);
+                    }
+                }
+            }
+            
+            logger.info("✅ Extracción de cabecera completada");
+            
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "❌ Error extrayendo cabecera: " + e.getMessage(), e);
+        }
+        
+        return cabecera;
+    }
+
     public boolean exportarItemsAExcel(List<ItemCotizacionExcel> items, File archivo) {
         logger.info("📤 Iniciando exportación de " + items.size() + " items a: " + archivo.getName());
         try (Workbook workbook = new XSSFWorkbook()) {
