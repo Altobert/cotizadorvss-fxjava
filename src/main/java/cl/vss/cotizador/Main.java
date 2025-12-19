@@ -114,6 +114,7 @@ public class Main extends Application {
     Button btnEditar  = new Button("✏️ Editar");
     Button btnEliminar = new Button("🗑️ Eliminar");
 
+    
     // Aplicar colores corporativos VSS desde estilos.css
     btnAgregar.getStyleClass().add("color-primario");
     btnEditar.getStyleClass().add("color-primario");
@@ -128,9 +129,7 @@ public class Main extends Application {
     // Barra y layout
     ToolBar barraProductos = new ToolBar(btnAgregar, btnEditar, btnEliminar);
     rootProductos.setTop(barraProductos);
-   // rootProductos.setCenter(tablaProductos); ACA HICE INSERCIONNNNNN
-
-  // desde aca modifico........PARAMETROS COMERCIALES
+   
 
 // TabPane principal
     TabPane tabs = new TabPane();
@@ -320,17 +319,7 @@ rootProductos.setCenter(centroProductos);
 // 👉 Cargar datos en la misma lista productos
 cargarProductos(); // debe usar productos.setAll(...)
 
-
-
-    // TabPane principal
-    //TabPane tabs = new TabPane();
-    //tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
-    //tabs.getTabs().add(new Tab("Productos", rootProductos));
-    //tabs.getTabs().add(new Tab("Parámetros Comerciales", rootParametros)); //  nueva pestaña
-
-
-
-
+   
 
 
     Scene scene = new Scene(tabs, 1400, 1000);
