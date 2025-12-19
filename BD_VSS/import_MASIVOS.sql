@@ -87,7 +87,7 @@ CREATE TEMP TABLE temp_bebestibles (
     col11 TEXT
 );
 
-\COPY temp_bebestibles FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv'  WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_bebestibles FROM '/Users/claudioandressanmartinconcha/Desktop/bebestibles.csv'  WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 INSERT INTO producto (
     familia_id,

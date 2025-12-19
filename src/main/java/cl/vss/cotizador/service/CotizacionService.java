@@ -77,9 +77,13 @@ public class CotizacionService {
     }
     
     /**
-     * Configuración de formatos soportados
+     * Configuración de formatos soportados - Organizados por cliente
      */
     private void inicializarFormatosConfigurados() {
+        
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: GOF (Grupo de Operaciones Fluviales)
+        // ═══════════════════════════════════════════════════════════════════════════════
         
         // QTN_GOF - Formato de cotización marítima
         formatosConfigurados.put("QTN_GOF", 
@@ -98,7 +102,11 @@ public class CotizacionService {
                 .minColumnas(4)
         );
         
-        // HMM_BLESSING - Formato provision order
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: HMM (Hapag-Lloyd Mediterranean Shipping)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
+        // HMM_BLESSING - Formato provision order (buque BLESSING)
         formatosConfigurados.put("HMM_BLESSING", 
             new FormatoExcel("HMM_BLESSING")
                 .patronArchivo("HMM", "BLESSING", "PROVISION ORDER")
@@ -114,6 +122,10 @@ public class CotizacionService {
                 .minColumnas(3)
         );
         
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: FERNANDINA (Provedor Fernandina)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
         // FERNANDINA - Formato en español
         formatosConfigurados.put("FERNANDINA", 
             new FormatoExcel("FERNANDINA")
@@ -128,6 +140,10 @@ public class CotizacionService {
                 .minColumnas(3)
         );
         
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: GENERAL (Formatos genéricos)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
         // INVENTARIO - Formato de inventario general
         formatosConfigurados.put("INVENTARIO", 
             new FormatoExcel("INVENTARIO")
@@ -141,9 +157,53 @@ public class CotizacionService {
                 .minColumnas(3)
         );
         
-        logger.info("📊 Formatos configurados: " + formatosConfigurados.size());
-        formatosConfigurados.keySet().forEach(formato -> 
-            logger.info("  • " + formato));
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: VALPARAISO SHIP SERVICES - M/V One Sphere
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
+        // ONE_SPHERE - Formato de cotización para M/V One Sphere
+        formatosConfigurados.put("ONE_SPHERE", 
+            new FormatoExcel("ONE_SPHERE")
+                .patronArchivo("ONE SPHERE", "Valparaiso Ship Services", "Provision", "RFQ")
+                .patronColumna("ITEM DESCRIPTION", "UNIT", "PRICE", "MIN. QUANTITY")
+                .mapear("codigo", "REF") // Código de referencia
+                .mapear("descripcion", "ITEM DESCRIPTION") // Descripción del item
+                .mapear("categoria", "ITEM GROUPS") // Grupo de items
+                .mapear("especificacion", "ITEM SPECIFICATION") // Especificación del item
+                .mapear("cantidad", "MIN. QUANTITY") // Cantidad mínima
+                .mapear("precio", "PRICE") // Precio
+                .mapear("unidad", "UNIT") // Unidad de medida
+                .rango(18, 25)  // Los datos comienzan alrededor de fila 18-20
+                .minColumnas(2)
+        );
+        
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CLIENTE: FRESH PROVISION SUPPLIER - Catálogo 339-FR250126
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
+        // FR250126_CATALOGO - Formato específico para archivo 339-FR250126.xlsx
+        formatosConfigurados.put("FR250126_CATALOGO", 
+            new FormatoExcel("FR250126_CATALOGO")
+                .patronArchivo("339", "FR250126", "CATALOGO")
+                .patronColumna("BAG", "AMPOULE", "BOTTLE", "USD", "DAYS", "ITEM DESCRIPTION", "QUANTITY")
+                .mapear("codigo", "COLUMN_A") // Columna A: códigos/unidades principales
+                .mapear("descripcion", "COLUMN_P") // Columna P: descripciones reales de productos
+                .mapear("cantidad", "COLUMN_Q") // Columna Q: cantidades
+                .mapear("unidad", "COLUMN_B") // Columna B: unidades/embalajes secundarios
+                .mapear("categoria", "COLUMN_C") // Columna C: tipos/categorías
+                .mapear("medida", "COLUMN_D") // Columna D: medidas adicionales
+                .mapear("moneda", "COLUMN_F") // Columna F: monedas
+                .mapear("comentarios", "COLUMN_G") // Columna G: términos de pago
+                .rango(1, 5) // Los datos empiezan desde fila 1
+                .minColumnas(4)
+        );
+
+        logger.info("📊 Formatos configurados por cliente: " + formatosConfigurados.size());
+        logger.info("═══════════════════════════════════════════════════════════════");
+        formatosConfigurados.keySet().forEach(formato -> {
+            FormatoExcel fmt = formatosConfigurados.get(formato);
+            logger.info("  ✅ " + formato + " - Patrones: " + String.join(", ", fmt.patronesArchivo));
+        });
     }
 
     public List<ItemCotizacionExcel> leerItemsDesdeExcel(File archivo) {
@@ -167,8 +227,8 @@ public class CotizacionService {
             Row encabezado = null;
             int filaEncabezado = -1;
             
-            // Buscar encabezados en las primeras 25 filas (algunos archivos tienen encabezados muy abajo)
-            for (int i = 0; i <= Math.min(25, hoja.getLastRowNum()); i++) {
+            // Buscar encabezados en las primeras 50 filas (algunos archivos como One Sphere tienen metadatos en las primeras filas)
+            for (int i = 0; i <= Math.min(50, hoja.getLastRowNum()); i++) {
                 Row fila = hoja.getRow(i);
                 if (fila == null) continue;
                 
@@ -183,6 +243,7 @@ public class CotizacionService {
                     // Patrones expandidos para diferentes formatos
                     if (valor.contains("item description") || valor.contains("item") || 
                         valor.contains("description") || valor.contains("quantity") || 
+                        valor.contains("min. quantity") || valor.contains("min quantity") ||
                         valor.contains("price") || valor.contains("unit of measure") ||
                         valor.contains("food categories") || valor.contains("total") ||
                         valor.contains("supplier comments") || valor.contains("remarks") ||
@@ -340,6 +401,110 @@ public class CotizacionService {
 
         logger.info("✅ Procesamiento completado. Items leídos: " + items.size());
         return items;
+    }
+
+    /**
+     * Extrae los metadatos de la cabecera del archivo Excel
+     * @param archivo Archivo Excel a procesar
+     * @return CabeceraCotizacion con los datos encontrados
+     */
+    public cl.vss.cotizador.model.CabeceraCotizacion extraerCabecera(File archivo) {
+        cl.vss.cotizador.model.CabeceraCotizacion cabecera = new cl.vss.cotizador.model.CabeceraCotizacion();
+        
+        logger.info("📋 Extrayendo cabecera del archivo: " + archivo.getName());
+        
+        try (FileInputStream fis = new FileInputStream(archivo);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+            
+            Sheet hoja = workbook.getSheetAt(0);
+            
+            // Buscar datos de cabecera en las primeras 20 filas
+            for (int i = 0; i <= Math.min(20, hoja.getLastRowNum()); i++) {
+                Row fila = hoja.getRow(i);
+                if (fila == null) continue;
+                
+                for (int j = 0; j < fila.getLastCellNum(); j++) {
+                    Cell celda = fila.getCell(j);
+                    if (celda == null) continue;
+                    
+                    String etiqueta = celda.toString().trim().toLowerCase();
+                    Cell celdaValor = fila.getCell(j + 1);
+                    String valor = celdaValor != null ? celdaValor.toString().trim() : "";
+                    
+                    // Mapear etiquetas comunes a campos específicos
+                    if (etiqueta.contains("cliente") || etiqueta.contains("customer") || 
+                        etiqueta.contains("nombre cliente") || etiqueta.contains("company")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setNombreCliente(valor);
+                            logger.info("✅ Cliente encontrado: " + valor);
+                        }
+                    } else if (etiqueta.contains("id cliente") || etiqueta.contains("customer id") ||
+                               etiqueta.contains("codigo cliente")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setIdCliente(valor);
+                            logger.info("✅ ID Cliente encontrado: " + valor);
+                        }
+                    } else if (etiqueta.contains("empresa") || etiqueta.contains("company") ||
+                               etiqueta.contains("razón social") || etiqueta.contains("razon social")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setEmpresaCliente(valor);
+                            logger.info("✅ Empresa encontrada: " + valor);
+                        }
+                    } else if (etiqueta.contains("cotización") || etiqueta.contains("quotation") ||
+                               etiqueta.contains("numero") || etiqueta.contains("number")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setNumeroCotizacion(valor);
+                            logger.info("✅ Número de cotización encontrado: " + valor);
+                        }
+                    } else if (etiqueta.contains("referencia") || etiqueta.contains("reference") ||
+                               etiqueta.contains("po") || etiqueta.contains("purchase order")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setReferencia(valor);
+                            logger.info("✅ Referencia encontrada: " + valor);
+                        }
+                    } else if (etiqueta.contains("fecha") || etiqueta.contains("date")) {
+                        if (!valor.isEmpty()) {
+                            try {
+                                if (celda.getCellType() == CellType.NUMERIC) {
+                                    java.util.Date dateValue = celda.getDateCellValue();
+                                    cabecera.setFecha(dateValue.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime());
+                                } else {
+                                    // Intentar parsear como String
+                                    cabecera.setFecha(java.time.LocalDateTime.now());
+                                }
+                                logger.info("✅ Fecha encontrada: " + valor);
+                            } catch (Exception e) {
+                                logger.fine("⚠️ No se pudo parsear fecha: " + e.getMessage());
+                            }
+                        }
+                    } else if (etiqueta.contains("observación") || etiqueta.contains("observation") ||
+                               etiqueta.contains("nota") || etiqueta.contains("note") ||
+                               etiqueta.contains("comentario") || etiqueta.contains("comment")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setObservaciones(valor);
+                            logger.info("✅ Observaciones encontradas: " + valor);
+                        }
+                    } else if (etiqueta.contains("estado") || etiqueta.contains("status")) {
+                        if (!valor.isEmpty()) {
+                            cabecera.setEstado(valor);
+                            logger.info("✅ Estado encontrado: " + valor);
+                        }
+                    }
+                    
+                    // Almacenar otros datos adicionales
+                    if (!valor.isEmpty() && !etiqueta.isEmpty()) {
+                        cabecera.agregarDatoAdicional(etiqueta, valor);
+                    }
+                }
+            }
+            
+            logger.info("✅ Extracción de cabecera completada");
+            
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "❌ Error extrayendo cabecera: " + e.getMessage(), e);
+        }
+        
+        return cabecera;
     }
 
     public boolean exportarItemsAExcel(List<ItemCotizacionExcel> items, File archivo) {
@@ -576,9 +741,44 @@ public class CotizacionService {
                 // Verificar si esta celda coincide con alguna de las columnas externas
                 for (String columnaExterna : columnasExternas) {
                     if (columnaExterna.equals("COLUMN_A") && celda.getColumnIndex() == 0) {
-                        // Caso especial para columna A (HMM BLESSING)
+                        // Caso especial para columna A
                         mapeoEspecifico.put(campoInterno, 0);
                         logger.info("   ✅ Columna A -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_B") && celda.getColumnIndex() == 1) {
+                        // Caso especial para columna B
+                        mapeoEspecifico.put(campoInterno, 1);
+                        logger.info("   ✅ Columna B -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_C") && celda.getColumnIndex() == 2) {
+                        // Caso especial para columna C
+                        mapeoEspecifico.put(campoInterno, 2);
+                        logger.info("   ✅ Columna C -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_D") && celda.getColumnIndex() == 3) {
+                        // Caso especial para columna D
+                        mapeoEspecifico.put(campoInterno, 3);
+                        logger.info("   ✅ Columna D -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_F") && celda.getColumnIndex() == 5) {
+                        // Caso especial para columna F
+                        mapeoEspecifico.put(campoInterno, 5);
+                        logger.info("   ✅ Columna F -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_G") && celda.getColumnIndex() == 6) {
+                        // Caso especial para columna G
+                        mapeoEspecifico.put(campoInterno, 6);
+                        logger.info("   ✅ Columna G -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_P") && celda.getColumnIndex() == 15) {
+                        // Caso especial para columna P (ITEM DESCRIPTION)
+                        mapeoEspecifico.put(campoInterno, 15);
+                        logger.info("   ✅ Columna P -> " + campoInterno);
+                        break;
+                    } else if (columnaExterna.equals("COLUMN_Q") && celda.getColumnIndex() == 16) {
+                        // Caso especial para columna Q (QUANTITY)
+                        mapeoEspecifico.put(campoInterno, 16);
+                        logger.info("   ✅ Columna Q -> " + campoInterno);
                         break;
                     } else if (valorCelda.equals(columnaExterna.toUpperCase()) || 
                                valorCelda.contains(columnaExterna.toUpperCase())) {
@@ -951,6 +1151,78 @@ public class CotizacionService {
     }
     
     /**
+     * Analiza un archivo Excel específico y sugiere el mapeo
+     */
+    public void analizarArchivoEspecifico(String rutaArchivo) {
+        try {
+            File archivo = new File(rutaArchivo);
+            if (!archivo.exists()) {
+                logger.info("❌ ERROR: El archivo no existe: " + rutaArchivo);
+                return;
+            }
+
+            logger.info("\n🔍 ANALIZANDO ARCHIVO: " + archivo.getName());
+            logger.info("==========================================");
+
+            FileInputStream fis = new FileInputStream(archivo);
+            XSSFWorkbook workbook = new XSSFWorkbook(fis);
+            
+            Sheet hoja = workbook.getSheetAt(0);
+            logger.info("📋 Hoja: \"" + hoja.getSheetName() + "\" (" + (hoja.getLastRowNum() + 1) + " filas)");
+            
+            // Analizar las primeras 15 filas para encontrar encabezados
+            logger.info("\n🔎 ANALIZANDO POSIBLES ENCABEZADOS:");
+            for (int filaNum = 0; filaNum <= Math.min(15, hoja.getLastRowNum()); filaNum++) {
+                Row fila = hoja.getRow(filaNum);
+                if (fila == null) continue;
+                
+                List<String> columnas = new ArrayList<>();
+                for (int colNum = 0; colNum < Math.min(10, fila.getLastCellNum()); colNum++) {
+                    Cell celda = fila.getCell(colNum);
+                    String valor = celda != null ? celda.toString().trim() : "";
+                    columnas.add(valor);
+                }
+                
+                long columnasConTexto = columnas.stream().filter(c -> !c.isEmpty()).count();
+                if (columnasConTexto >= 3) {
+                    logger.info("📍 FILA " + (filaNum + 1) + " (" + columnasConTexto + " columnas):");
+                    for (int i = 0; i < Math.min(columnas.size(), 8); i++) {
+                        if (!columnas.get(i).isEmpty()) {
+                            char letra = (char) ('A' + i);
+                            logger.info("    " + letra + ": \"" + columnas.get(i) + "\"");
+                        }
+                    }
+                    logger.info("");
+                }
+            }
+            
+            // Sugerir mapeo basado en el nombre del archivo
+            String nombreFormato = archivo.getName().toUpperCase().replace(".XLSX", "").replace("-", "_");
+            logger.info("💡 SUGERENCIA DE MAPEO:");
+            logger.info("========================");
+            logger.info("// Agregar este código:");
+            logger.info("service.agregarFormatoPersonalizado(");
+            logger.info("    \"" + nombreFormato + "\",");
+            logger.info("    new String[]{\"" + nombreFormato.substring(0, Math.min(nombreFormato.length(), 8)) + "\", \"FR250126\"}, // patrones archivo");
+            logger.info("    new String[]{\"COLUMNA_CLAVE_1\", \"COLUMNA_CLAVE_2\"}, // patrones columna (actualizar con columnas reales)");
+            logger.info("    Map.of(");
+            logger.info("        \"codigo\", new String[]{\"CODIGO\", \"ITEM\", \"COD\"},");
+            logger.info("        \"descripcion\", new String[]{\"DESCRIPCION\", \"PRODUCTO\", \"DETALLE\"},");
+            logger.info("        \"cantidad\", new String[]{\"CANTIDAD\", \"QTY\", \"CANT\"},");
+            logger.info("        \"precio\", new String[]{\"PRECIO\", \"PRICE\", \"VALOR\"},");
+            logger.info("        \"unidad\", new String[]{\"UNIDAD\", \"UNIT\", \"UM\"}");
+            logger.info("    )");
+            logger.info(");");
+            
+            workbook.close();
+            fis.close();
+            
+        } catch (Exception e) {
+            logger.info("❌ ERROR analizando archivo: " + e.getMessage());
+        }
+    }
+    
+    /**
      * Proporciona información sobre qué columnas espera cada formato
      */
     public void mostrarInformacionFormatos() {
@@ -1023,7 +1295,14 @@ public class CotizacionService {
     private String obtenerTexto(Row fila, Integer index) {
         if (index == null) return "";
         Cell celda = fila.getCell(index);
-        return (celda != null) ? celda.toString().trim() : "";
+        if (celda == null) return "";
+        
+        // No procesar fórmulas - ignorarlas
+        if (celda.getCellType() == CellType.FORMULA) {
+            return "";
+        }
+        
+        return celda.toString().trim();
     }
 
     private int obtenerEntero(Row fila, Integer index) {
@@ -1037,7 +1316,8 @@ public class CotizacionService {
             } else if (celda.getCellType() == CellType.STRING) {
                 return Integer.parseInt(celda.getStringCellValue().trim());
             } else if (celda.getCellType() == CellType.FORMULA) {
-                return (int) celda.getNumericCellValue();
+                // No procesar fórmulas - ignorar y devolver 0
+                return 0;
             }
         } catch (Exception e) {
             logger.log(Level.WARNING, "⚠️ Error leyendo cantidad en índice " + index, e);
@@ -1056,7 +1336,8 @@ public class CotizacionService {
         } else if (celda.getCellType() == CellType.STRING) {
             return Double.parseDouble(celda.getStringCellValue().trim().replace(",", "."));
         } else if (celda.getCellType() == CellType.FORMULA) {
-            return celda.getNumericCellValue();
+            // No procesar fórmulas - ignorar y devolver 0.0
+            return 0.0;
         }
     } catch (Exception e) {
         logger.log(Level.WARNING, "⚠️ Error leyendo decimal en índice " + index, e);

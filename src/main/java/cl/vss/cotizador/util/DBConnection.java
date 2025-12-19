@@ -49,8 +49,8 @@ public class DBConnection {
     /**
      * Inicializa las variables de conexión desde las propiedades
      */
-    private static void initializeConnectionProperties() {
-        URL = properties.getProperty("db.url", "jdbc:postgresql://localhost:5432/sistema_cotizacion");
+   private static void initializeConnectionProperties() {
+        URL = properties.getProperty("db.url", "jdbc:postgresql://localhost:5432/sistema_cotizacion_2025");
         USER = properties.getProperty("db.username", "albertosanmartin");
         PASSWORD = properties.getProperty("db.password", "");
         DRIVER = properties.getProperty("db.driver", "org.postgresql.Driver");
@@ -70,13 +70,13 @@ public class DBConnection {
      * Establece valores por defecto en caso de error al cargar propiedades
      */
     private static void setDefaultProperties() {
-        properties.setProperty("db.url", "jdbc:postgresql://localhost:5432/sistema_cotizacion");
+        properties.setProperty("db.url", "jdbc:postgresql://localhost:5432/sistema_cotizacion_2025");
         properties.setProperty("db.username", "albertosanmartin");
         properties.setProperty("db.password", "");
         properties.setProperty("db.driver", "org.postgresql.Driver");
         properties.setProperty("db.connection.timeout", "30000");
         properties.setProperty("app.debug", "false");
-        System.out.println("⚠️ Usando configuración por defecto");
+        System.out.println("⚠️************ Usando configuración por defecto************");
     }
     
     /**
