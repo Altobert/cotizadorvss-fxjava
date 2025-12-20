@@ -145,8 +145,56 @@ public class Main extends Application {
     btnEliminar.setOnAction(e -> eliminarProductoSeleccionado());
 
     // Barra y layout
-    ToolBar barraProductos = new ToolBar(btnAgregar, btnEditar, btnEliminar);
-    rootProductos.setTop(barraProductos);
+    // 👉 Campo de búsqueda
+TextField txtBuscar = new TextField();
+txtBuscar.setPromptText("Buscar producto...");
+txtBuscar.setPrefWidth(200);
+
+// 👉 ComboBox de familias
+ComboBox<String> comboFamilias = new ComboBox<>();
+comboFamilias.setPromptText("Todas");
+
+// 👉 Barra superior completa
+ToolBar barraProductos = new ToolBar(
+    btnAgregar, btnEditar, btnEliminar,
+    new Separator(),
+    new Label("Buscar:"), txtBuscar,
+    new Separator(),
+    new Label("Familia:"), comboFamilias
+);
+rootProductos.setTop(barraProductos);
+
+
+    // 👉 Configurar columnas de la tabla
+configurarTablaProductos();
+
+// 👉 Lista base
+productos = FXCollections.observableArrayList(productoService.listarProductos());
+
+// 👉 Lista filtrada
+FilteredList<Producto> filtrados = new FilteredList<>(productos, p -> true);
+tablaProductos.setItems(filtrados);
+
+// 👉 Filtro por texto
+txtBuscar.textProperty().addListener((obs, oldValue, newValue) -> {
+    aplicarFiltros(filtrados, txtBuscar.getText(), comboFamilias.getValue());
+});
+
+// 👉 Filtro por familia
+comboFamilias.setOnAction(e -> {
+    aplicarFiltros(filtrados, txtBuscar.getText(), comboFamilias.getValue());
+});
+
+// 👉 Cargar familias
+comboFamilias.getItems().add("Todas");
+comboFamilias.getItems().addAll(productoService.listarFamiliasNombres());
+comboFamilias.setValue("Todas");
+
+// 👉 Contenedor central solo con la tabla
+VBox centroProductos = new VBox(10, tablaProductos);
+centroProductos.setStyle("-fx-padding: 10;");
+rootProductos.setCenter(centroProductos);
+
    
 
 // TabPane principal
@@ -293,49 +341,8 @@ public class Main extends Application {
     tabs.getTabs().add(new Tab("Auditoría Parámetros", vistaAuditoria));
 
 
-// Configurar columnas de la tabla primero
-configurarTablaProductos();
 
-// 👉 Lista y filtrado
-    productos = FXCollections.observableArrayList(productoService.listarProductos());
-    FilteredList<Producto> filtrados = new FilteredList<>(productos, p -> true);
 
-// 👉 Asignar lista filtrada a la tabla
-    tablaProductos.setItems(filtrados);
-
-// 👉 Campo de búsqueda
-    TextField txtBuscar = new TextField();
-    txtBuscar.setPromptText("Buscar producto...");
-
-// 👉 Listener de búsqueda
-    txtBuscar.textProperty().addListener((obs, oldValue, newValue) -> {
-    filtrados.setPredicate(producto -> {
-        if (newValue == null || newValue.isEmpty()) {
-            return true;
-        }
-        String filtro = newValue.toLowerCase();
-
-        String descEs = producto.getDescripcionEs() != null ? producto.getDescripcionEs().toLowerCase() : "";
-        String descEn = producto.getDescripcionEn() != null ? producto.getDescripcionEn().toLowerCase() : "";
-        String unidad = producto.getUnidadMedida() != null ? producto.getUnidadMedida().toLowerCase() : "";
-        String id = String.valueOf(producto.getId()).toLowerCase();
-        String valor = String.valueOf(producto.getValorPesos()).toLowerCase();
-
-        return descEs.contains(filtro)
-            || descEn.contains(filtro)
-            || unidad.contains(filtro)
-            || id.contains(filtro)
-            || valor.contains(filtro);
-    });
-});
-
-// 👉 Contenedor central con búsqueda + tabla
-VBox centroProductos = new VBox(10, txtBuscar, tablaProductos);
-centroProductos.setStyle("-fx-padding: 10;");
-rootProductos.setCenter(centroProductos);
-
-// 👉 Cargar datos en la misma lista productos
-cargarProductos(); // debe usar productos.setAll(...)
 
    
 
@@ -1663,8 +1670,35 @@ private Familia buscarFamiliaPorId(int idFamilia) {
         alert.showAndWait();
     }
 
+       private void aplicarFiltros(FilteredList<Producto> filtrados, String texto, String familiaNombre) {
+    filtrados.setPredicate(producto -> {
+
+        // ✅ Filtro por familia
+        if (familiaNombre != null && !familiaNombre.equals("Todas")) {
+            int idFamiliaFiltro = productoService.obtenerIdFamiliaPorNombre(familiaNombre);
+            if (producto.getFamiliaId() != idFamiliaFiltro) {
+                return false;
+            }
+        }
+
+        // ✅ Filtro por texto
+        if (texto == null || texto.isEmpty()) {
+            return true;
+        }
+
+        String filtro = texto.toLowerCase();
+
+        return producto.getDescripcionEs().toLowerCase().contains(filtro)
+            || producto.getDescripcionEn().toLowerCase().contains(filtro)
+            || producto.getUnidadMedida().toLowerCase().contains(filtro)
+            || String.valueOf(producto.getId()).contains(filtro)
+            || String.valueOf(producto.getValorPesos()).contains(filtro);
+    });
+}
+
     // ⚠️ El main siempre al final
     public static void main(String[] args) {
         launch(args);
     }
+
 }
