@@ -8,7 +8,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ProductoService {
 
@@ -131,7 +133,7 @@ public class ProductoService {
         return lista;
     }
 
-    // ✅ NUEVO: Convertir nombre de familia → id de familia
+    // ✅ Convertir nombre de familia → id de familia
     public int obtenerIdFamiliaPorNombre(String nombreFamilia) {
         String sql = "SELECT id FROM familia_producto WHERE nombre = ?";
         try (Connection conn = DBConnection.getConnection();
@@ -147,6 +149,25 @@ public class ProductoService {
             e.printStackTrace();
         }
         return -1; // si no existe
+    }
+
+    // ✅ NUEVO: Mapa optimizado nombre → id (para filtros rápidos)
+    public Map<String, Integer> obtenerMapaFamilias() {
+        Map<String, Integer> mapa = new HashMap<>();
+        String sql = "SELECT id, nombre FROM familia_producto";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                mapa.put(rs.getString("nombre"), rs.getInt("id"));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return mapa;
     }
 
     // UPDATE
