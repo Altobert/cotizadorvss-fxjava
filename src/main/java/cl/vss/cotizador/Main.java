@@ -1701,7 +1701,12 @@ private Familia buscarFamiliaPorId(int idFamilia) {
         // Normalizar familia
         String familia = (familiaNombre == null) ? "" : familiaNombre.trim();
 
-        System.out.println("Filtrando por familia = " + familia);
+        // Log informativo según el filtro aplicado
+        if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {
+            System.out.println("🔍 Filtrando productos por familia específica: '" + familia + "'");
+        } else {
+            System.out.println("📋 Mostrando todas las familias (sin filtro de familia)");
+        }
 
         // 👉 Filtro por familia
         if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {
@@ -1714,7 +1719,7 @@ private Familia buscarFamiliaPorId(int idFamilia) {
 
             int idFamiliaFiltro = mapaFamilias.getOrDefault(familia, -1);
 
-            System.out.println("ID filtro = " + idFamiliaFiltro + " | ID producto = " + producto.getFamiliaId());
+            System.out.println("   → ID familia filtro: " + idFamiliaFiltro + " | Evaluando producto ID familia: " + producto.getFamiliaId());
 
             if (producto.getFamiliaId() != idFamiliaFiltro) {
                 return false;
