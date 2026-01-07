@@ -988,15 +988,16 @@ private void cargarProductos() {
         HBox filaAcciones = new HBox(10);
         filaAcciones.setStyle("-fx-alignment: center-left;");
         
-        Button btnLimpiarCabecera = new Button("🗑️ Limpiar Cabecera");
+        /*Button btnLimpiarCabecera = new Button("🗑️ Limpiar Cabecera");
         btnLimpiarCabecera.setStyle("-fx-font-size: 11px; -fx-padding: 5px 10px;");
-        btnLimpiarCabecera.setOnAction(e -> limpiarCabecera());
+        btnLimpiarCabecera.setOnAction(e -> limpiarCabecera());*/
         
-        Button btnCopiarCliente = new Button("📋 Copiar Datos");
+        /*Button btnCopiarCliente = new Button("📋 Copiar Datos");
         btnCopiarCliente.setStyle("-fx-font-size: 11px; -fx-padding: 5px 10px;");
-        btnCopiarCliente.setOnAction(e -> copiarDatosCabecera());
+        btnCopiarCliente.setOnAction(e -> copiarDatosCabecera());*/
         
-        filaAcciones.getChildren().addAll(btnLimpiarCabecera, btnCopiarCliente);
+        //filaAcciones.getChildren().addAll(btnLimpiarCabecera, btnCopiarCliente);
+        //filaAcciones.getChildren().addAll(btnLimpiarCabecera, btnCopiarCliente);
         
         // Agregar todas las filas al panel
         //panelCabecera.getChildren().addAll(titulo, fila1, fila2, fila3, fila4, filaAcciones);
