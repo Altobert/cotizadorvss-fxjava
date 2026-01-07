@@ -12,7 +12,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -27,7 +26,6 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.image.Image;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
@@ -96,9 +94,6 @@ public class Main extends Application {
     }
 }
 
-
-
-
     probarConexion();
 
     // Tab Cotizador
@@ -106,9 +101,9 @@ public class Main extends Application {
     Button btnCargar = new Button("📂 Cargar Excel");
     btnCargar.setOnAction(e -> cargarArchivo(stage));
     
-    Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
-    btnAnalizar.setDisable(true); // Deshabilitado inicialmente
-    btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
+    //Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
+    //btnAnalizar.setDisable(true); // Deshabilitado inicialmente
+    //btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
     btnLimpiar.setOnAction(e -> limpiarTabla());
@@ -118,11 +113,12 @@ public class Main extends Application {
 
     // 👉 aplicar estilo corporativo VSS (azul con letras blancas)
     btnCargar.getStyleClass().add("color-primario");
-    btnAnalizar.getStyleClass().add("color-primario");
+    //btnAnalizar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
     btnExportar.getStyleClass().add("color-primario");
 
-    ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
+    //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
+    ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar,new Separator(), btnExportar);
     rootCotizador.setTop(barraCotizador);
     
     // Crear panel con cabecera y tabla
@@ -191,43 +187,39 @@ FilteredList<Producto> filtrados = new FilteredList<>(productos, p -> true);
 SortedList<Producto> ordenados = new SortedList<>(filtrados);
 ordenados.comparatorProperty().bind(tablaProductos.comparatorProperty());
 
-// 👉 Asignar a la tabla
-tablaProductos.setItems(ordenados);
+    // 👉 Asignar a la tabla
+    tablaProductos.setItems(ordenados);
 
 // 👉 Ordenar por descripción automáticamente
-tablaProductos.getSortOrder().clear();
-colDescEs.setSortType(TableColumn.SortType.ASCENDING);
-tablaProductos.getSortOrder().add(colDescEs);
+    tablaProductos.getSortOrder().clear();
+    colDescEs.setSortType(TableColumn.SortType.ASCENDING);
+    tablaProductos.getSortOrder().add(colDescEs);
 
 
 
 // 👉 Cargar familias
-comboFamilias.getItems().add("Todas");
-comboFamilias.getItems().addAll(productoService.listarFamiliasNombres());
-comboFamilias.setValue("Todas");
+    comboFamilias.getItems().add("Todas");
+    comboFamilias.getItems().addAll(productoService.listarFamiliasNombres());
+    comboFamilias.setValue("Todas");
 
 // 👉 Listeners
-txtBuscar.textProperty().addListener((obs, oldValue, newValue) -> {
-    aplicarFiltros(filtrados, newValue, comboFamilias.getValue());
-});
+    txtBuscar.textProperty().addListener((obs, oldValue, newValue) -> {
+        aplicarFiltros(filtrados, newValue, comboFamilias.getValue());
+    });
 
-comboFamilias.setOnAction(e -> {
-    aplicarFiltros(filtrados, txtBuscar.getText(), comboFamilias.getValue());
-});
+    comboFamilias.setOnAction(e -> {
+        aplicarFiltros(filtrados, txtBuscar.getText(), comboFamilias.getValue());
+    });
 
-
-
-// 👉 Contenedor central solo con la tabla
-VBox centroProductos = new VBox(10, tablaProductos);
-centroProductos.setStyle("-fx-padding: 10;");
-rootProductos.setCenter(centroProductos);
+    // 👉 Contenedor central solo con la tabla
+    VBox centroProductos = new VBox(10, tablaProductos);
+    centroProductos.setStyle("-fx-padding: 10;");
+    rootProductos.setCenter(centroProductos);
 
 
-   
-
-// TabPane principal
+    // TabPane principal
     TabPane tabs = new TabPane();
-    tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
+    tabs.getTabs().add(new Tab("Cotizador", rootCotizador));    
     tabs.getTabs().add(new Tab("Productos", rootProductos));
 
     // ----------------------
@@ -904,29 +896,29 @@ private void cargarProductos() {
         panelCabecera.setStyle("-fx-border-color: #e0e0e0; -fx-border-width: 1; -fx-padding: 15; -fx-background-color: #f9f9f9;");
         
         // Título
-        Label titulo = new Label("📋 Datos de Cabecera");
-        titulo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #333333;");
+        //Label titulo = new Label("📋 Datos de Cabecera");
+        //titulo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #333333;");
         
         // Primer fila: Cliente y ID
         HBox fila1 = new HBox(15);
         fila1.setPrefHeight(60);
         
         VBox campoNombre = new VBox(3);
-        Label lblNombre = new Label("Cliente:");
-        lblNombre.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
-        txtNombreCliente = new TextField();
-        txtNombreCliente.setPromptText("Nombre del cliente...");
-        txtNombreCliente.setStyle("-fx-font-size: 11px;");
-        campoNombre.getChildren().addAll(lblNombre, txtNombreCliente);
+        //Label lblNombre = new Label("Cliente:");
+        //lblNombre.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        //txtNombreCliente = new TextField();
+        //txtNombreCliente.setPromptText("Nombre del cliente...");
+        //txtNombreCliente.setStyle("-fx-font-size: 11px;");
+        //campoNombre.getChildren().addAll(lblNombre, txtNombreCliente);
         
         VBox campoId = new VBox(3);
-        Label lblId = new Label("ID Cliente:");
-        lblId.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
-        txtIdCliente = new TextField();
-        txtIdCliente.setPromptText("ID o código...");
-        txtIdCliente.setStyle("-fx-font-size: 11px;");
-        campoId.getChildren().addAll(lblId, txtIdCliente);
-        campoId.setPrefWidth(150);
+        //Label lblId = new Label("ID Cliente:");
+        //lblId.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        //txtIdCliente = new TextField();
+        //txtIdCliente.setPromptText("ID o código...");
+        //txtIdCliente.setStyle("-fx-font-size: 11px;");
+        //campoId.getChildren().addAll(lblId, txtIdCliente);
+        //campoId.setPrefWidth(150);
         
         HBox.setHgrow(campoNombre, javafx.scene.layout.Priority.ALWAYS);
         fila1.getChildren().addAll(campoNombre, campoId);
@@ -935,19 +927,19 @@ private void cargarProductos() {
         HBox fila2 = new HBox(15);
         fila2.setPrefHeight(50);
         
-        VBox campoEmpresa = new VBox(3);
-        Label lblEmpresa = new Label("Empresa/Razón Social:");
-        lblEmpresa.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
-        txtEmpresa = new TextField();
-        txtEmpresa.setPromptText("Empresa...");
-        txtEmpresa.setStyle("-fx-font-size: 11px;");
-        campoEmpresa.getChildren().addAll(lblEmpresa, txtEmpresa);
+        //VBox campoEmpresa = new VBox(3);
+        //Label lblEmpresa = new Label("Empresa/Razón Social:");
+        //lblEmpresa.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        //txtEmpresa = new TextField();
+        //txtEmpresa.setPromptText("Empresa...");
+        //txtEmpresa.setStyle("-fx-font-size: 11px;");
+        //campoEmpresa.getChildren().addAll(lblEmpresa, txtEmpresa);
         
-        HBox.setHgrow(campoEmpresa, javafx.scene.layout.Priority.ALWAYS);
-        fila2.getChildren().add(campoEmpresa);
+        //HBox.setHgrow(campoEmpresa, javafx.scene.layout.Priority.ALWAYS);
+        //fila2.getChildren().add(campoEmpresa);
         
         // Tercera fila: Cotización, Referencia y Fecha
-        HBox fila3 = new HBox(15);
+        /*HBox fila3 = new HBox(15);
         fila3.setPrefHeight(60);
         
         VBox campoCotizacion = new VBox(3);
@@ -971,12 +963,12 @@ private void cargarProductos() {
         lblFechaLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
         lblFecha = new Label("📅 No disponible");
         lblFecha.setStyle("-fx-font-size: 11px; -fx-text-fill: #2196F3;");
-        campoFecha.getChildren().addAll(lblFechaLabel, lblFecha);
+        campoFecha.getChildren().addAll(lblFechaLabel, lblFecha);*/
         
-        fila3.getChildren().addAll(campoCotizacion, campoReferencia, campoFecha);
+        //fila3.getChildren().addAll(campoCotizacion, campoReferencia, campoFecha);
         
         // Cuarta fila: Observaciones (ancho completo)
-        HBox fila4 = new HBox(10);
+        /*HBox fila4 = new HBox(10);
         fila4.setPrefHeight(80);
         
         VBox campoObservaciones = new VBox(3);
@@ -987,10 +979,10 @@ private void cargarProductos() {
         txtObservaciones.setStyle("-fx-font-size: 11px; -fx-control-inner-background: #ffffff;");
         txtObservaciones.setWrapText(true);
         txtObservaciones.setPrefRowCount(3);
-        campoObservaciones.getChildren().addAll(lblObservaciones, txtObservaciones);
+        //campoObservaciones.getChildren().addAll(lblObservaciones, txtObservaciones);*/
         
-        HBox.setHgrow(campoObservaciones, javafx.scene.layout.Priority.ALWAYS);
-        fila4.getChildren().add(campoObservaciones);
+        //HBox.setHgrow(campoObservaciones, javafx.scene.layout.Priority.ALWAYS);
+        //fila4.getChildren().add(campoObservaciones);
         
         // Botones de acción
         HBox filaAcciones = new HBox(10);
@@ -1007,7 +999,9 @@ private void cargarProductos() {
         filaAcciones.getChildren().addAll(btnLimpiarCabecera, btnCopiarCliente);
         
         // Agregar todas las filas al panel
-        panelCabecera.getChildren().addAll(titulo, fila1, fila2, fila3, fila4, filaAcciones);
+        //panelCabecera.getChildren().addAll(titulo, fila1, fila2, fila3, fila4, filaAcciones);
+        //panelCabecera.getChildren().addAll(fila1, fila2, fila3, fila4, filaAcciones);
+        panelCabecera.getChildren().addAll(fila1, fila2, filaAcciones);
         
         return panelCabecera;
     }
