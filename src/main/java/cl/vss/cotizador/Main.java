@@ -1,4 +1,8 @@
 package cl.vss.cotizador;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import cl.vss.cotizador.demo.LoginController;
 import cl.vss.cotizador.model.Familia;
 
@@ -12,7 +16,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -27,13 +30,11 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.image.Image;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.text.DecimalFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,6 +52,8 @@ import javafx.beans.property.SimpleDoubleProperty;
 
 
 public class Main extends Application {
+    private static final Logger logger = LogManager.getLogger(Main.class);
+    
     // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
@@ -69,40 +72,19 @@ public class Main extends Application {
     private final ProductoService productoService = new ProductoService();
     private final TableView<Producto> tablaProductos = new TableView<>();
     private ObservableList<Producto> productos;   // 👉 lista compartida para filtro y recarga
-
-    // 👉 Columnas visibles en toda la clase
     private TableColumn<Producto, String> colDescEs;
     private TableColumn<Producto, String> colDescEn;
     private TableColumn<Producto, String> colUnidad;
     private TableColumn<Producto, Double> colValor;
 
-    // 👉 Columnas nuevas con precios calculados
-    private TableColumn<Producto, Double> colPrecioUSD;
-    private TableColumn<Producto, Double> colPrecioUtil;
-    private TableColumn<Producto, Double> colPrecioFinalCLP;
-
-    // 👉 Parámetros comerciales cargados desde la BD
-    private double tipoCambioActual;
-    private double utilidadActual;
-
-    private final DecimalFormat formatoUSD = new DecimalFormat("#,##0.00");
-    private final DecimalFormat formatoCLP = new DecimalFormat("#,###");
-
-    // 👉 Filtros y búsqueda para Productos
-    private FilteredList<Producto> filteredProductos;
-
-    // 👉 Controles usados en el filtrado (se inicializan en la UI)
-    private TextField txtBuscar;
-    private ComboBox<String> comboFamilias;
-
-    // 👉 Mapa de familias para filtrar por ID
-    private Map<String, Integer> mapaFamilias;
-
-    // 👉 Labels del banner de parámetros comerciales
+    // 👉 Variables para parámetros comerciales en productos
+    private double tipoCambioActual = 1.0;
+    private double utilidadActual = 0.0;
     private Label lblTipoCambioUsado;
     private Label lblUtilidadUsada;
 
-
+    // ✅ Mapa en memoria para filtros instantáneos
+    private Map<String, Integer> mapaFamilias;
 
     @Override
     public void start(Stage stage) {
@@ -116,6 +98,7 @@ public class Main extends Application {
         login.mostrarLogin(stage);
         return;
     } catch (SQLException ex) {
+        logger.error("Error crítico al conectar con la base de datos", ex);
         ex.printStackTrace();
         Alert alert = new Alert(Alert.AlertType.ERROR, "❌ Error de conexión a la BD: " + ex.getMessage());
         alert.showAndWait();
@@ -123,11 +106,9 @@ public class Main extends Application {
     }
 }
 
-
     probarConexion();
 
-    
-// 👉 Cargar parámetros comerciales ANTES de construir la tabla de productos
+    // 👉 Cargar parámetros comerciales ANTES de construir la tabla de productos
     try (Connection conn = DBConnection.getConnection()) {
         ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
         tipoCambioActual = parametrosDAO.getTipoCambioActual();
@@ -138,19 +119,14 @@ public class Main extends Application {
         utilidadActual = 0.0;
     }
 
-
-
-    
-
-    
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
     Button btnCargar = new Button("📂 Cargar Excel");
     btnCargar.setOnAction(e -> cargarArchivo(stage));
-
-    Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
-    btnAnalizar.setDisable(true); // Deshabilitado inicialmente
-    btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
+    
+    //Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
+    //btnAnalizar.setDisable(true); // Deshabilitado inicialmente
+    //btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
     btnLimpiar.setOnAction(e -> limpiarTabla());
@@ -158,30 +134,28 @@ public class Main extends Application {
     Button btnExportar = new Button("💾 Exportar Cotización");
     btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
-
     // 👉 aplicar estilo corporativo VSS (azul con letras blancas)
     btnCargar.getStyleClass().add("color-primario");
-    btnAnalizar.getStyleClass().add("color-primario");
+    //btnAnalizar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
     btnExportar.getStyleClass().add("color-primario");
 
-    ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
+    //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
+    ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar,new Separator(), btnExportar);
     rootCotizador.setTop(barraCotizador);
     
     // Crear panel con cabecera y tabla
-    VBox panelConCabecera = new VBox(5);
-    panelConCabecera.getChildren().addAll(crearPanelCabecera(), tabla);
-    VBox.setVgrow(tabla, javafx.scene.layout.Priority.ALWAYS);
+    //VBox panelConCabecera = new VBox(5);
+    //panelConCabecera.getChildren().addAll(crearPanelCabecera(), tabla);
+    //VBox.setVgrow(tabla, javafx.scene.layout.Priority.ALWAYS);
     
-    rootCotizador.setCenter(panelConCabecera);
+    //rootCotizador.setCenter(panelConCabecera);
+    rootCotizador.setCenter(tabla);  // 👈 Solo mostrar la tabla sin cabecera
     configurarTabla();
 
 
     // Tab Productos
     BorderPane rootProductos = new BorderPane();
-
-    // Tab Parámetros Comerciales
-    BorderPane rootParametros = new BorderPane();
 
     // Botones con handlers
     Button btnAgregar = new Button("➕ Agregar");
@@ -201,15 +175,14 @@ public class Main extends Application {
     btnEliminar.setOnAction(e -> eliminarProductoSeleccionado());
 
     // Barra y layout
-    // 👉 Campo de búsqueda (variable de clase)
-    txtBuscar = new TextField();
+    // 👉 Campo de búsqueda
+    TextField txtBuscar = new TextField();
     txtBuscar.setPromptText("Buscar producto...");
     txtBuscar.setPrefWidth(200);
 
-    // 👉 ComboBox de familias (variable de clase)
-    comboFamilias = new ComboBox<>();
+    // 👉 ComboBox de familias
+    ComboBox<String> comboFamilias = new ComboBox<>();
     comboFamilias.setPromptText("Todas");
-
 
     // 👉 Barra superior completa
     ToolBar barraProductos = new ToolBar(
@@ -242,20 +215,7 @@ public class Main extends Application {
     "-fx-background-radius: 6px;"
 );
 
-// ===============================
-// CARGAR PARÁMETROS COMERCIALES
-// ===============================
-try (Connection conn = DBConnection.getConnection()) {
-    ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
-    tipoCambioActual = parametrosDAO.getTipoCambioActual();
-    utilidadActual = parametrosDAO.getPorcentajeUtilidadActual();
-} catch (SQLException ex) {
-    ex.printStackTrace();
-    tipoCambioActual = 1.0;
-    utilidadActual = 0.0;
-}
-
-// 3️⃣ Ahora que los labels existen, recién aquí se actualizan
+// 3️⃣ Actualizar los labels con los valores cargados
     lblTipoCambioUsado.setText("💱 Tipo de cambio aplicado: " + tipoCambioActual);
     lblUtilidadUsada.setText("📈 Utilidad aplicada: " + utilidadActual + "%");
 
@@ -264,40 +224,23 @@ try (Connection conn = DBConnection.getConnection()) {
     rootProductos.setTop(topProductos);
 
 
-// ===============================
-// TABLA DE PRODUCTOS
-// ===============================
-//tablaProductos = new TableView<>();
-    configurarTablaProductos(); // ← tu método con columnas y cálculos
-    rootProductos.setCenter(tablaProductos);
-
-// ===============================
-// FILTROS Y BÚSQUEDA
-// ===============================
-    txtBuscar.textProperty().addListener((obs, oldV, newV) -> filtrarProductos());
-    comboFamilias.valueProperty().addListener((obs, oldV, newV) -> filtrarProductos());
-
-
-
-
-// 👉 Configurar columnas de la tabla
-
-    configurarTablaProductos();
+  // 👉 Configurar columnas de la tabla
+configurarTablaProductos();
 
 // 👉 Lista base
-    productos = FXCollections.observableArrayList(productoService.listarProductos());
+productos = FXCollections.observableArrayList(productoService.listarProductos());
 
 // 👉 Cargar mapa de familias
-    mapaFamilias = productoService.obtenerMapaFamilias();
+mapaFamilias = productoService.obtenerMapaFamilias();
 
 // 👉 Lista filtrada
-    FilteredList<Producto> filtrados = new FilteredList<>(productos, p -> true);
+FilteredList<Producto> filtrados = new FilteredList<>(productos, p -> true);
 
 // 👉 Lista ordenada
-    SortedList<Producto> ordenados = new SortedList<>(filtrados);
-    ordenados.comparatorProperty().bind(tablaProductos.comparatorProperty());
+SortedList<Producto> ordenados = new SortedList<>(filtrados);
+ordenados.comparatorProperty().bind(tablaProductos.comparatorProperty());
 
-// 👉 Asignar a la tabla
+    // 👉 Asignar a la tabla
     tablaProductos.setItems(ordenados);
 
 // 👉 Ordenar por descripción automáticamente
@@ -314,124 +257,130 @@ try (Connection conn = DBConnection.getConnection()) {
 
 // 👉 Listeners
     txtBuscar.textProperty().addListener((obs, oldValue, newValue) -> {
-    aplicarFiltros(filtrados, newValue, comboFamilias.getValue());
-});
+        aplicarFiltros(filtrados, newValue, comboFamilias.getValue());
+    });
 
     comboFamilias.setOnAction(e -> {
-    aplicarFiltros(filtrados, txtBuscar.getText(), comboFamilias.getValue());
-});
+        aplicarFiltros(filtrados, txtBuscar.getText(), comboFamilias.getValue());
+    });
 
-
-
-// 👉 Contenedor central solo con la tabla
+    // 👉 Contenedor central solo con la tabla
     VBox centroProductos = new VBox(10, tablaProductos);
     centroProductos.setStyle("-fx-padding: 10;");
     rootProductos.setCenter(centroProductos);
 
 
+    // TabPane principal
+    TabPane tabs = new TabPane();
+    tabs.getTabs().add(new Tab("Cotizador", rootCotizador));    
+    tabs.getTabs().add(new Tab("Productos", rootProductos));
 
+    // ----------------------
+    // Tab Parámetros Comerciales
+    BorderPane rootParametros = new BorderPane();
 
-// Campos de entrada
-TextField txtTipoCambio = new TextField();
-txtTipoCambio.setPromptText("Tipo de cambio usado");
-txtTipoCambio.setPrefWidth(120);
-txtTipoCambio.setMaxWidth(150);
+    // Campos de entrada
+    TextField txtTipoCambio = new TextField();
+    txtTipoCambio.setPromptText("Tipo de cambio usado");
+    txtTipoCambio.setPrefWidth(120);
+    txtTipoCambio.setMaxWidth(150);
 
-TextField txtUtilidad = new TextField();
-txtUtilidad.setPromptText("Porcentaje de utilidad");
-txtUtilidad.setPrefWidth(120);
-txtUtilidad.setMaxWidth(150);
-txtUtilidad.setPrefColumnCount(5);
+    TextField txtUtilidad = new TextField();
+    txtUtilidad.setPromptText("Porcentaje de utilidad");
+    txtUtilidad.setPrefWidth(120);
+    txtUtilidad.setMaxWidth(150);
+    txtUtilidad.setPrefColumnCount(5);
 
-DatePicker dpVigencia = new DatePicker();
-dpVigencia.setPromptText("Fecha de vigencia");
-dpVigencia.setPrefWidth(150);
+    DatePicker dpVigencia = new DatePicker();
+    dpVigencia.setPromptText("Fecha de vigencia");
+    dpVigencia.setPrefWidth(150);
 
-Button btnGuardar = new Button("Guardar parámetros");
-Label lblMensaje = new Label();
+    Button btnGuardar = new Button("Guardar parámetros");
+    Label lblMensaje = new Label();
 
-btnGuardar.setOnAction(e -> {
-    try {
-        // Validaciones
-        if (txtTipoCambio.getText().isBlank()) {
-            lblMensaje.setText("❌ Debe ingresar un tipo de cambio");
-            return;
+    // Acción del botón
+    btnGuardar.setOnAction(e -> {
+        try {
+            // ✅ Validaciones básicas de entrada
+            if (txtTipoCambio.getText().isBlank()) {
+                lblMensaje.setText("❌ Debe ingresar un tipo de cambio");
+                return;
+            }
+            if (txtUtilidad.getText().isBlank()) {
+                lblMensaje.setText("❌ Debe ingresar un porcentaje de utilidad");
+                return;
+            }
+            if (dpVigencia.getValue() == null) {
+                lblMensaje.setText("❌ Debe seleccionar una fecha de vigencia");
+                return;
+            }
+
+            try (Connection conn = DBConnection.getConnection()) {
+                ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
+                AuditoriaDAO auditoriaDAO = new AuditoriaDAO(conn);
+
+                // 👉 Consultar valores anteriores ANTES de actualizar
+                double tipoCambioAnterior = parametrosDAO.getTipoCambioActual();
+                double utilidadAnterior = parametrosDAO.getPorcentajeUtilidadActual();
+                LocalDate vigenciaAnterior = parametrosDAO.getFechaVigenciaActual();
+
+                // 👉 Nuevos valores desde la UI
+                double tipoCambio = Double.parseDouble(txtTipoCambio.getText());
+                double utilidad = Double.parseDouble(txtUtilidad.getText());
+                LocalDate vigencia = dpVigencia.getValue();
+
+                // 👉 Guardar parámetros en BD
+                parametrosDAO.actualizarParametros(tipoCambio, utilidad, vigencia, Sesion.getUsuarioActual().getId());
+
+                // 👉 Registrar auditoría
+                auditoriaDAO.insertarCambio("tipo_cambio_usado",
+                    String.valueOf(tipoCambioAnterior),
+                    String.valueOf(tipoCambio),
+                    Sesion.getUsuarioActual().getId());
+
+                auditoriaDAO.insertarCambio("porcentaje_utilidad",
+                    String.valueOf(utilidadAnterior),
+                    String.valueOf(utilidad),
+                    Sesion.getUsuarioActual().getId());
+
+                auditoriaDAO.insertarCambio("fecha_vigencia",
+                    vigenciaAnterior != null ? vigenciaAnterior.toString() : "N/A",
+                    vigencia.toString(),
+                    Sesion.getUsuarioActual().getId());
+
+                // 👉 Actualizar variables en memoria
+                tipoCambioActual = tipoCambio;
+                utilidadActual = utilidad;
+
+                // 👉 Actualizar banner de productos
+                lblTipoCambioUsado.setText("💱 Tipo de cambio aplicado: " + tipoCambioActual);
+                lblUtilidadUsada.setText("📈 Utilidad aplicada: " + utilidadActual + "%");
+
+                // 👉 Refrescar tabla de productos
+                tablaProductos.refresh();
+
+                lblMensaje.setText("✅ Parámetros guardados y auditoría registrada");
+            }
+        } catch (NumberFormatException ex) {
+            logger.error("Error al parsear valores numéricos en parámetros comerciales", ex);
+            lblMensaje.setText("❌ Error: valores numéricos inválidos");
+        } catch (IllegalArgumentException ex) {
+            logger.warn("Validación fallida en parámetros comerciales: {}", ex.getMessage());
+            lblMensaje.setText("❌ Validación: " + ex.getMessage());
+        } catch (SQLException ex) {
+            logger.error("Error SQL al actualizar parámetros comerciales", ex);
+            lblMensaje.setText("❌ Error SQL: " + ex.getMessage());
+            ex.printStackTrace();
         }
-        if (txtUtilidad.getText().isBlank()) {
-            lblMensaje.setText("❌ Debe ingresar un porcentaje de utilidad");
-            return;
-        }
-        if (dpVigencia.getValue() == null) {
-            lblMensaje.setText("❌ Debe seleccionar una fecha de vigencia");
-            return;
-        }
-
-        // Nuevos valores
-        double tipoCambio = Double.parseDouble(txtTipoCambio.getText());
-        double utilidadIngresada = Double.parseDouble(txtUtilidad.getText());
-        double utilidad = utilidadIngresada;
-        LocalDate vigencia = dpVigencia.getValue();
-
-        try (Connection conn = DBConnection.getConnection()) {
-            ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
-            AuditoriaDAO auditoriaDAO = new AuditoriaDAO(conn);
-
-            double tipoCambioAnterior = parametrosDAO.getTipoCambioActual();
-            double utilidadAnterior = parametrosDAO.getPorcentajeUtilidadActual();
-            LocalDate vigenciaAnterior = parametrosDAO.getFechaVigenciaActual();
-
-            parametrosDAO.actualizarParametros(tipoCambio, utilidad, vigencia, Sesion.getUsuarioActual().getId());
-
-            auditoriaDAO.insertarCambio("tipo_cambio_usado",
-                String.valueOf(tipoCambioAnterior),
-                String.valueOf(tipoCambio),
-                Sesion.getUsuarioActual().getId());
-
-            auditoriaDAO.insertarCambio("porcentaje_utilidad",
-                String.valueOf(utilidadAnterior),
-                String.valueOf(utilidad),
-                Sesion.getUsuarioActual().getId());
-
-            auditoriaDAO.insertarCambio("fecha_vigencia",
-                vigenciaAnterior != null ? vigenciaAnterior.toString() : "N/A",
-                vigencia.toString(),
-                Sesion.getUsuarioActual().getId());
-        }
-
-        // Actualizar variables en memoria
-        tipoCambioActual = tipoCambio;
-        utilidadActual = utilidad;
-
-        // Refrescar tabla
-        tablaProductos.refresh();
-
-        lblMensaje.setText("✅ Parámetros guardados y auditoría registrada");
-
-        // Limpiar formulario
-        txtTipoCambio.clear();
-        txtUtilidad.clear();
-        dpVigencia.setValue(null);
-        lblMensaje.setText("");
-
-
-    } catch (NumberFormatException ex) {
-        lblMensaje.setText("❌ Error: valores numéricos inválidos");
-    } catch (IllegalArgumentException ex) {
-        lblMensaje.setText("❌ Validación: " + ex.getMessage());
-    } catch (SQLException ex) {
-        lblMensaje.setText("❌ Error SQL: " + ex.getMessage());
-        ex.printStackTrace();
-    }
-});
+    });
 
     // Layout de los campos
     VBox centroParametros = new VBox(10, txtTipoCambio, txtUtilidad, dpVigencia, btnGuardar, lblMensaje);
     centroParametros.setStyle("-fx-padding: 20;");
     rootParametros.setCenter(centroParametros);
 
-
     // 👉 Pestaña Parámetros Comerciales
-   //tabs.getTabs().add(new Tab("Parámetros Comerciales", rootParametros));
+    tabs.getTabs().add(new Tab("Parámetros Comerciales", rootParametros));
 
     // ----------------------
     // Tab Auditoría Parámetros
@@ -474,34 +423,12 @@ btnGuardar.setOnAction(e -> {
 }
 
 
-
-
-    // ===============================
-    // CREAR TABPANE PRINCIPAL
-    // ===============================
-    TabPane tabs = new TabPane();
-
-    Tab tabCotizador = new Tab("Cotizador", rootCotizador);
-    Tab tabProductosTab = new Tab("Productos", rootProductos);
-    Tab tabParametrosTab = new Tab("Parámetros Comerciales", rootParametros);
-
-    tabCotizador.setClosable(false);
-    tabProductosTab.setClosable(false);
-    tabParametrosTab.setClosable(false);
-
-    // Agregar pestañas principales
-    tabs.getTabs().addAll(tabCotizador, tabProductosTab, tabParametrosTab);
+    // Agregar pestaña
+    
     tabs.getTabs().add(new Tab("Auditoría Parámetros", vistaAuditoria));
 
-    // Listener para recargar parámetros al cambiar a la pestaña Productos
-    tabs.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> {
-    if (newTab.getText().equals("Productos")) {
-        recargarParametrosDesdeBD();
-        actualizarBannerParametros();
-        tablaProductos.refresh();
-    }
-});
 
+   
 
 
     Scene scene = new Scene(tabs, 1400, 1000);
@@ -622,129 +549,50 @@ btnGuardar.setOnAction(e -> {
 
 
     
-  private void configurarTablaProductos() {
-    
-    tablaProductos.getColumns().clear();
-
-    // ============================
-    // FORMATOS NUMÉRICOS
-    // ============================
-    DecimalFormat formatoUSD = new DecimalFormat("#,##0.00");
-    DecimalFormat formatoCLP = new DecimalFormat("#,###");
-
-    // 👉 Columna: Descripción ES
+    private void configurarTablaProductos() {
     colDescEs = new TableColumn<>("Descripción ES");
-    colDescEs.setCellValueFactory(cell ->
-        new SimpleStringProperty(cell.getValue().getDescripcionEs())
-    );
+    colDescEs.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getDescripcionEs()));
 
-    // 👉 Columna: Descripción EN
     colDescEn = new TableColumn<>("Descripción EN");
-    colDescEn.setCellValueFactory(cell ->
-        new SimpleStringProperty(cell.getValue().getDescripcionEn())
-    );
+    colDescEn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getDescripcionEn()));
 
-    // 👉 Columna: Unidad de medida
     colUnidad = new TableColumn<>("Unidad");
-    colUnidad.setCellValueFactory(cell ->
-        new SimpleStringProperty(cell.getValue().getUnidadMedida())
-    );
+    colUnidad.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getUnidadMedida()));
 
-    // 👉 Columna: Valor en pesos (precio base)
     colValor = new TableColumn<>("Valor Pesos");
-    colValor.setCellValueFactory(cell ->
-        new SimpleDoubleProperty(cell.getValue().getValorPesos()).asObject()
-    );
+    colValor.setCellValueFactory(cell -> new SimpleDoubleProperty(cell.getValue().getValorPesos()).asObject());
 
-    // ============================================================
-    // 🔥 NUEVAS COLUMNAS CALCULADAS SEGÚN PARÁMETROS COMERCIALES
-    // ============================================================
-
-    // 👉 Precio en USD
-    colPrecioUSD = new TableColumn<>("Precio USD");
-    colPrecioUSD.setCellValueFactory(cell -> {
-        double usd = 0.0;
-        if (tipoCambioActual != 0) {
-            usd = cell.getValue().getValorPesos() / tipoCambioActual;
-        }
-        return new SimpleDoubleProperty(usd).asObject();
+    // 👉 Columna Valor USD (calculado con tipo de cambio)
+    TableColumn<Producto, Double> colValorUSD = new TableColumn<>("Valor USD");
+    colValorUSD.setCellValueFactory(cell -> {
+        double valorPesos = cell.getValue().getValorPesos();
+        double valorUSD = tipoCambioActual > 0 ? valorPesos / tipoCambioActual : 0;
+        return new SimpleDoubleProperty(valorUSD).asObject();
     });
-    colPrecioUSD.setCellFactory(col -> new TableCell<Producto, Double>() {
-        @Override
-        protected void updateItem(Double value, boolean empty) {
-            super.updateItem(value, empty);
-            if (empty || value == null) {
-                setText(null);
-            } else {
-                setText(formatoUSD.format(value));
+
+    // 👉 Columna Precio Final (con utilidad aplicada)
+    TableColumn<Producto, Double> colPrecioFinal = new TableColumn<>("Precio Final");
+    colPrecioFinal.setCellValueFactory(cell -> {
+        double valorPesos = cell.getValue().getValorPesos();
+        double precioFinal = valorPesos * (1 + utilidadActual / 100);
+        return new SimpleDoubleProperty(precioFinal).asObject();
+    });
+
+    tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colValor, colValorUSD, colPrecioFinal);
+    
+    // 👉 Efecto hover amarillo en las filas
+    tablaProductos.setRowFactory(tv -> {
+        TableRow<Producto> row = new TableRow<>();
+        row.setOnMouseEntered(event -> {
+            if (!row.isEmpty()) {
+                row.setStyle("-fx-background-color: #FFEB3B; -fx-font-weight: bold;");
             }
-        }
+        });
+        row.setOnMouseExited(event -> {
+            row.setStyle("");
+        });
+        return row;
     });
-
-    /// 👉 Precio en USD + utilidad
-colPrecioUtil = new TableColumn<>("Precio + Utilidad (USD)");
-colPrecioUtil.setCellValueFactory(cell -> {
-    double usd = 0.0;
-    if (tipoCambioActual != 0) {
-        usd = cell.getValue().getValorPesos() / tipoCambioActual;
-    }
-    double conUtil = usd * utilidadActual; // ✔ 5.47 * 1.55 = 8.48
-    return new SimpleDoubleProperty(conUtil).asObject();
-});
-
-    colPrecioUtil.setCellFactory(col -> new TableCell<Producto, Double>() {
-        @Override
-        protected void updateItem(Double value, boolean empty) {
-            super.updateItem(value, empty);
-            if (empty || value == null) {
-                setText(null);
-            } else {
-                setText(formatoUSD.format(value));
-            }
-        }
-    });
-
-    // 👉 Precio final en CLP
-colPrecioFinalCLP = new TableColumn<>("Precio Final CLP");
-colPrecioFinalCLP.setCellValueFactory(cell -> {
-    double usd = 0.0;
-    if (tipoCambioActual != 0) {
-        usd = cell.getValue().getValorPesos() / tipoCambioActual;
-    }
-    double conUtil = usd * utilidadActual; // ✔ 8.48 USD
-    double finalClp = conUtil * tipoCambioActual; // ✔ 8.48 * 920 = 7801.6
-    return new SimpleDoubleProperty(finalClp).asObject();
-});
-
-    colPrecioFinalCLP.setCellFactory(col -> new TableCell<Producto, Double>() {
-        @Override
-        protected void updateItem(Double value, boolean empty) {
-            super.updateItem(value, empty);
-            if (empty || value == null) {
-                setText(null);
-            } else {
-                setText("$ " + formatoCLP.format(value));
-            }
-        }
-    });
-
-    // ============================================================
-    // 👉 Agregar todas las columnas a la tabla
-    // ============================================================
-    tablaProductos.getColumns().addAll(
-        colDescEs,
-        colDescEn,
-        colUnidad,
-        colValor,
-        colPrecioUSD,
-        colPrecioUtil,
-        colPrecioFinalCLP
-    );
-
-    // 👉 Estilos opcionales
-    tablaProductos.getStylesheets().add(
-        getClass().getResource("/productos.css").toExternalForm()
-    );
 }
 
 
@@ -764,8 +612,8 @@ private void cargarProductos() {
         colCodigo.setCellValueFactory(cellData -> cellData.getValue().codigoProperty());
         colCodigo.setCellFactory(TextFieldTableCell.forTableColumn());
         colCodigo.setOnEditCommit(event -> {
-        ItemCotizacionExcel item = event.getRowValue();
-        item.setCodigo(event.getNewValue());
+            ItemCotizacionExcel item = event.getRowValue();
+            item.setCodigo(event.getNewValue());
         });
 
         TableColumn<ItemCotizacionExcel, String> colDescripcion = new TableColumn<>("Descripción");
@@ -1091,8 +939,8 @@ private void cargarProductos() {
 
     if (archivo != null) {
         // Extraer cabecera
-        cabeceraActual = cotizacionService.extraerCabecera(archivo);
-        actualizarCamposCabecera();
+        //cabeceraActual = cotizacionService.extraerCabecera(archivo);
+        //actualizarCamposCabecera();
         
         // Leer items
         List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
@@ -1145,29 +993,29 @@ private void cargarProductos() {
         panelCabecera.setStyle("-fx-border-color: #e0e0e0; -fx-border-width: 1; -fx-padding: 15; -fx-background-color: #f9f9f9;");
         
         // Título
-        Label titulo = new Label("📋 Datos de Cabecera");
-        titulo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #333333;");
+        //Label titulo = new Label("📋 Datos de Cabecera");
+        //titulo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #333333;");
         
         // Primer fila: Cliente y ID
         HBox fila1 = new HBox(15);
         fila1.setPrefHeight(60);
         
         VBox campoNombre = new VBox(3);
-        Label lblNombre = new Label("Cliente:");
-        lblNombre.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
-        txtNombreCliente = new TextField();
-        txtNombreCliente.setPromptText("Nombre del cliente...");
-        txtNombreCliente.setStyle("-fx-font-size: 11px;");
-        campoNombre.getChildren().addAll(lblNombre, txtNombreCliente);
+        //Label lblNombre = new Label("Cliente:");
+        //lblNombre.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        //txtNombreCliente = new TextField();
+        //txtNombreCliente.setPromptText("Nombre del cliente...");
+        //txtNombreCliente.setStyle("-fx-font-size: 11px;");
+        //campoNombre.getChildren().addAll(lblNombre, txtNombreCliente);
         
         VBox campoId = new VBox(3);
-        Label lblId = new Label("ID Cliente:");
-        lblId.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
-        txtIdCliente = new TextField();
-        txtIdCliente.setPromptText("ID o código...");
-        txtIdCliente.setStyle("-fx-font-size: 11px;");
-        campoId.getChildren().addAll(lblId, txtIdCliente);
-        campoId.setPrefWidth(150);
+        //Label lblId = new Label("ID Cliente:");
+        //lblId.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        //txtIdCliente = new TextField();
+        //txtIdCliente.setPromptText("ID o código...");
+        //txtIdCliente.setStyle("-fx-font-size: 11px;");
+        //campoId.getChildren().addAll(lblId, txtIdCliente);
+        //campoId.setPrefWidth(150);
         
         HBox.setHgrow(campoNombre, javafx.scene.layout.Priority.ALWAYS);
         fila1.getChildren().addAll(campoNombre, campoId);
@@ -1176,19 +1024,19 @@ private void cargarProductos() {
         HBox fila2 = new HBox(15);
         fila2.setPrefHeight(50);
         
-        VBox campoEmpresa = new VBox(3);
-        Label lblEmpresa = new Label("Empresa/Razón Social:");
-        lblEmpresa.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
-        txtEmpresa = new TextField();
-        txtEmpresa.setPromptText("Empresa...");
-        txtEmpresa.setStyle("-fx-font-size: 11px;");
-        campoEmpresa.getChildren().addAll(lblEmpresa, txtEmpresa);
+        //VBox campoEmpresa = new VBox(3);
+        //Label lblEmpresa = new Label("Empresa/Razón Social:");
+        //lblEmpresa.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
+        //txtEmpresa = new TextField();
+        //txtEmpresa.setPromptText("Empresa...");
+        //txtEmpresa.setStyle("-fx-font-size: 11px;");
+        //campoEmpresa.getChildren().addAll(lblEmpresa, txtEmpresa);
         
-        HBox.setHgrow(campoEmpresa, javafx.scene.layout.Priority.ALWAYS);
-        fila2.getChildren().add(campoEmpresa);
+        //HBox.setHgrow(campoEmpresa, javafx.scene.layout.Priority.ALWAYS);
+        //fila2.getChildren().add(campoEmpresa);
         
         // Tercera fila: Cotización, Referencia y Fecha
-        HBox fila3 = new HBox(15);
+        /*HBox fila3 = new HBox(15);
         fila3.setPrefHeight(60);
         
         VBox campoCotizacion = new VBox(3);
@@ -1212,12 +1060,12 @@ private void cargarProductos() {
         lblFechaLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: #555;");
         lblFecha = new Label("📅 No disponible");
         lblFecha.setStyle("-fx-font-size: 11px; -fx-text-fill: #2196F3;");
-        campoFecha.getChildren().addAll(lblFechaLabel, lblFecha);
+        campoFecha.getChildren().addAll(lblFechaLabel, lblFecha);*/
         
-        fila3.getChildren().addAll(campoCotizacion, campoReferencia, campoFecha);
+        //fila3.getChildren().addAll(campoCotizacion, campoReferencia, campoFecha);
         
         // Cuarta fila: Observaciones (ancho completo)
-        HBox fila4 = new HBox(10);
+        /*HBox fila4 = new HBox(10);
         fila4.setPrefHeight(80);
         
         VBox campoObservaciones = new VBox(3);
@@ -1228,27 +1076,30 @@ private void cargarProductos() {
         txtObservaciones.setStyle("-fx-font-size: 11px; -fx-control-inner-background: #ffffff;");
         txtObservaciones.setWrapText(true);
         txtObservaciones.setPrefRowCount(3);
-        campoObservaciones.getChildren().addAll(lblObservaciones, txtObservaciones);
+        //campoObservaciones.getChildren().addAll(lblObservaciones, txtObservaciones);*/
         
-        HBox.setHgrow(campoObservaciones, javafx.scene.layout.Priority.ALWAYS);
-        fila4.getChildren().add(campoObservaciones);
+        //HBox.setHgrow(campoObservaciones, javafx.scene.layout.Priority.ALWAYS);
+        //fila4.getChildren().add(campoObservaciones);
         
         // Botones de acción
         HBox filaAcciones = new HBox(10);
         filaAcciones.setStyle("-fx-alignment: center-left;");
         
-        Button btnLimpiarCabecera = new Button("🗑️ Limpiar Cabecera");
+        /*Button btnLimpiarCabecera = new Button("🗑️ Limpiar Cabecera");
         btnLimpiarCabecera.setStyle("-fx-font-size: 11px; -fx-padding: 5px 10px;");
-        btnLimpiarCabecera.setOnAction(e -> limpiarCabecera());
+        btnLimpiarCabecera.setOnAction(e -> limpiarCabecera());*/
         
-        Button btnCopiarCliente = new Button("📋 Copiar Datos");
+        /*Button btnCopiarCliente = new Button("📋 Copiar Datos");
         btnCopiarCliente.setStyle("-fx-font-size: 11px; -fx-padding: 5px 10px;");
-        btnCopiarCliente.setOnAction(e -> copiarDatosCabecera());
+        btnCopiarCliente.setOnAction(e -> copiarDatosCabecera());*/
         
-        filaAcciones.getChildren().addAll(btnLimpiarCabecera, btnCopiarCliente);
+        //filaAcciones.getChildren().addAll(btnLimpiarCabecera, btnCopiarCliente);
+        //filaAcciones.getChildren().addAll(btnLimpiarCabecera, btnCopiarCliente);
         
         // Agregar todas las filas al panel
-        panelCabecera.getChildren().addAll(titulo, fila1, fila2, fila3, fila4, filaAcciones);
+        //panelCabecera.getChildren().addAll(titulo, fila1, fila2, fila3, fila4, filaAcciones);
+        //panelCabecera.getChildren().addAll(fila1, fila2, fila3, fila4, filaAcciones);
+        panelCabecera.getChildren().addAll(fila1, fila2, filaAcciones);
         
         return panelCabecera;
     }
@@ -1400,7 +1251,7 @@ private void cargarProductos() {
         btnGuardarComentario.setPrefWidth(150);
         
         // Acción para guardar el comentario
-            btnGuardarComentario.setOnAction(e -> {
+        btnGuardarComentario.setOnAction(e -> {
             String nuevoComentario = txtComentarios.getText().trim();
             item.setComentarios(nuevoComentario);
             
@@ -1695,8 +1546,10 @@ private void cargarProductos() {
 
                 return nuevo;
             } catch (NumberFormatException nfe) {
+                logger.error("Error al parsear valor numérico en agregar producto", nfe);
                 mostrarError("Valor inválido", "El campo 'Valor Pesos' debe ser numérico.\n" + nfe.getMessage());
             } catch (Exception ex) {
+                logger.error("Error al validar datos de nuevo producto", ex);
                 mostrarError("Datos inválidos", "Revisa los campos.\n" + ex.getMessage());
             }
         }
@@ -1716,6 +1569,7 @@ private void cargarProductos() {
             alert.showAndWait();
 
         } catch (Exception e) {
+            logger.error("Error al guardar producto en base de datos", e);
             mostrarError("Error al guardar", e.getMessage());
         }
     });
@@ -1935,7 +1789,6 @@ private Familia buscarFamiliaPorId(int idFamilia) {
         alert.showAndWait();
     }
 
-    
     private void aplicarFiltros(FilteredList<Producto> filtrados, String texto, String familiaNombre) {
 
     filtrados.setPredicate(producto -> {
@@ -1943,7 +1796,13 @@ private Familia buscarFamiliaPorId(int idFamilia) {
         // Normalizar familia
         String familia = (familiaNombre == null) ? "" : familiaNombre.trim();
 
-        System.out.println("Filtrando por familia = " + familia);
+        // Se comenta para no ir logeuando cada vez que se filtra
+        // Log informativo según el filtro aplicado
+        /*if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {
+            System.out.println("🔍 Filtrando productos por familia específica: '" + familia + "'");
+        } else {
+            System.out.println("📋 git (sin filtro de familia)");
+        }*/
 
         // 👉 Filtro por familia
         if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {
@@ -1956,7 +1815,7 @@ private Familia buscarFamiliaPorId(int idFamilia) {
 
             int idFamiliaFiltro = mapaFamilias.getOrDefault(familia, -1);
 
-            System.out.println("ID filtro = " + idFamiliaFiltro + " | ID producto = " + producto.getFamiliaId());
+            System.out.println("   → ID familia filtro: " + idFamiliaFiltro + " | Evaluando producto ID familia: " + producto.getFamiliaId());
 
             if (producto.getFamiliaId() != idFamiliaFiltro) {
                 return false;
@@ -1983,43 +1842,6 @@ private Familia buscarFamiliaPorId(int idFamilia) {
             || id.contains(filtro)
             || valor.contains(filtro);
     });
-}
-
-// ===============================
-// FILTRAR PRODUCTOS (usa aplicarFiltros)
-// ===============================
-private void filtrarProductos() {
-
-    if (productos == null) {
-        System.out.println("⚠️ productos es NULL, no se puede filtrar.");
-        return;
-    }
-
-    // Crear lista filtrada si no existe
-    if (filteredProductos == null) {
-        filteredProductos = new FilteredList<>(productos, p -> true);
-        tablaProductos.setItems(filteredProductos);
-    }
-
-    String texto = txtBuscar.getText();
-    String familia = comboFamilias.getValue();
-
-    aplicarFiltros(filteredProductos, texto, familia);
-}
-
-private void recargarParametrosDesdeBD() {
-    try (Connection conn = DBConnection.getConnection()) {
-        ParametrosDAO dao = new ParametrosDAO(conn);
-        tipoCambioActual = dao.getTipoCambioActual();
-        utilidadActual = dao.getPorcentajeUtilidadActual();
-    } catch (Exception ex) {
-        ex.printStackTrace();
-    }
-}
-
-private void actualizarBannerParametros() {
-    lblTipoCambioUsado.setText("💱 Tipo de cambio aplicado: " + tipoCambioActual);
-    lblUtilidadUsada.setText("📈 Utilidad aplicada: " + utilidadActual + "%");
 }
 
 
