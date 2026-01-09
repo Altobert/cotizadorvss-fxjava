@@ -19,9 +19,10 @@ public class ParametrosDAO {
         if (tipoCambio <= 0) {
             throw new IllegalArgumentException("El tipo de cambio debe ser mayor a 0");
         }
-        if (utilidad < 0 || utilidad > 100) {
-            throw new IllegalArgumentException("La utilidad debe estar entre 0 y 100");
+        if (utilidad < 0) {
+            throw new IllegalArgumentException("La utilidad no puede ser negativa");
         }
+
         if (vigencia == null) {
             throw new IllegalArgumentException("La fecha de vigencia es obligatoria");
         }
