@@ -64,8 +64,8 @@ public class DBConnection {
             System.out.println("   Driver: " + DRIVER);
             System.out.println("   Timeout: " + CONNECTION_TIMEOUT + "ms");
         }
-    }
-    
+
+      }   
     /**
      * Establece valores por defecto en caso de error al cargar propiedades
      */

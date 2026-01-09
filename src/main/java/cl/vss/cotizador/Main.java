@@ -1,4 +1,5 @@
 package cl.vss.cotizador;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cl.vss.cotizador.demo.LoginController;
@@ -47,6 +48,7 @@ import cl.vss.cotizador.util.DBConnection;
 import cl.vss.cotizador.util.Sesion;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import cl.vss.cotizador.view.UserCrudView;
 
 
 public class Main extends Application {
@@ -102,7 +104,7 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
-        // 👉 Si no hay sesión activa, abrir login
+        // 👉 Si no hay sesión activa, abrir login 
     if (!Sesion.estaLogueado()) {
     Connection conn;
     try {
@@ -486,8 +488,72 @@ tabAuditoria.setOnSelectionChanged(e -> {
 
 tabs.getTabs().add(tabAuditoria);
 
-Scene scene = new Scene(tabs, 1400, 1000);
+// ===============================
+// MENÚ SUPERIOR (Archivo + Administración)
+// ===============================
+
+// Crear layout principal que contendrá menú + tabs
+BorderPane root = new BorderPane();
+
+// Insertar las pestañas en el centro
+root.setCenter(tabs);
+
+// Crear barra de menú
+MenuBar menuBar = new MenuBar();
+
+// Menú Archivo
+Menu menuArchivo = new Menu("Archivo");
+MenuItem salir = new MenuItem("Salir");
+salir.setOnAction(e -> stage.close());
+menuArchivo.getItems().add(salir);
+
+// Menú Administración (solo admin)
+Menu menuAdmin = new Menu("Administración");
+
+if (Sesion.getUsuarioActual() != null &&
+    "admin".equalsIgnoreCase(Sesion.getUsuarioActual().getRol())) {
+
+    // ============================
+    // 1) Crear usuario (modal)
+    // ============================
+    MenuItem crearUsuario = new MenuItem("Crear usuario");
+
+    crearUsuario.setOnAction(e -> {
+        LoginController login = new LoginController(null);
+        login.mostrarFormularioRegistro(stage);
+    });
+
+    // ============================
+    // 2) Gestionar usuarios (CRUD en pestaña)
+    // ============================
+    MenuItem gestionarUsuarios = new MenuItem("Gestionar usuarios");
+
+    gestionarUsuarios.setOnAction(e -> {
+        Tab tabUsuarios = new Tab("Usuarios");
+        tabUsuarios.setClosable(true);
+
+        UserCrudView vista = new UserCrudView(); // ← Clase que crearemos
+        tabUsuarios.setContent(vista.getRoot());
+
+        tabs.getTabs().add(tabUsuarios);
+        tabs.getSelectionModel().select(tabUsuarios);
+    });
+
+    // Agregar ambos al menú Administración
+    menuAdmin.getItems().addAll(crearUsuario, gestionarUsuarios);
+}
+
+// Agregar menús a la barra
+menuBar.getMenus().addAll(menuArchivo, menuAdmin);
+
+// Insertar menú arriba del layout
+root.setTop(menuBar);
+
+// 👉 AHORA SÍ crear la escena usando root (NO tabs)
+Scene scene = new Scene(root, 1400, 1000);
 stage.setTitle("Cotizador VSS");
+
+
 
 // Aplicar hoja de estilos CSS
 try {

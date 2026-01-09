@@ -81,3 +81,17 @@
     -fx-text-fill: black;            /* texto negro */
     -fx-font-weight: bold;
 }
+/* Restaurar selección SOLO para tabla de usuarios */
+.table-view.tabla-usuarios {
+    -fx-selection-bar: #ffeb8a; /* amarillo */
+    -fx-selection-bar-non-focused: #ffeb8a;
+}
+
+.table-view.tabla-usuarios .table-row-cell:selected {
+    -fx-background-color: #ffeb8a !important;
+    -fx-text-fill: black !important;
+}
+
+.table-view.tabla-usuarios .table-row-cell:selected .table-cell {
+    -fx-background-color: #ffeb8a !important;
+}

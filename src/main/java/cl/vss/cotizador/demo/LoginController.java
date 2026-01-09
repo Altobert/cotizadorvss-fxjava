@@ -7,7 +7,6 @@ import cl.vss.cotizador.util.DBConnection;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
-import javafx.scene.layout.HBox;
 import javafx.stage.Stage;
 import cl.vss.cotizador.Main;
 
@@ -36,43 +35,52 @@ public class LoginController {
         btnLogin.setOnAction(e -> {
             Usuario usuario = usuarioDAO.validarLogin(txtCorreo.getText(), txtPassword.getText());
             if (usuario != null) {
+
+                // Mensaje de bienvenida visible
+                lblMensaje.setText("Bienvenido " + usuario.getNombre());
+                lblMensaje.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+
                 // Guardar usuario en sesión
                 Sesion.setUsuarioActual(usuario);
-                lblMensaje.setText("Bienvenido " + usuario.getNombre());
 
-                // Cerrar login y abrir la ventana principal (Main.java)
-                stage.close();
-                Stage mainStage = new Stage();
-                try {
-                    new Main().start(mainStage);
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
+                // Esperar un momento para mostrar el mensaje
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(800); // 0.8 segundos visibles
+                    } catch (InterruptedException ignored) {}
+
+                    javafx.application.Platform.runLater(() -> {
+                        stage.close();
+                        Stage mainStage = new Stage();
+                        try {
+                            new Main().start(mainStage);
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    });
+                }).start();
+
             } else {
                 lblMensaje.setText("Usuario o contraseña incorrectos");
+                lblMensaje.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
             }
         });
 
-        // Pie de login: "¿No eres usuario?" + botón Crear cuenta
-        Label lblNoUsuario = new Label("¿No eres usuario?");
-        Button btnCrearCuenta = new Button("Crear cuenta");
-        btnCrearCuenta.setOnAction(e -> mostrarFormularioRegistro(stage));
+        // Layout principal (SIN botón de crear cuenta)
+        VBox root = new VBox(12, txtCorreo, txtPassword, btnLogin, lblMensaje);
+        root.setStyle("-fx-padding: 25; -fx-alignment: center;");
 
-        HBox registroBox = new HBox(5, lblNoUsuario, btnCrearCuenta);
-        registroBox.setStyle("-fx-alignment: center;");
-
-        // Layout principal
-        VBox root = new VBox(10, txtCorreo, txtPassword, btnLogin, lblMensaje, registroBox);
-        root.setStyle("-fx-padding: 20; -fx-alignment: center;");
-
-        Scene scene = new Scene(root, 300, 220);
+        // Ventana más grande y centrada
+        Scene scene = new Scene(root, 480, 320);
         stage.setTitle("Login - Cotizador VSS");
         stage.setScene(scene);
+        stage.setResizable(false);
+        stage.centerOnScreen();
         stage.show();
     }
 
-    // 👉 Formulario modal para crear usuario
-    private void mostrarFormularioRegistro(Stage owner) {
+    // 👉 Formulario modal para crear usuario (lo usa el menú Administración)
+    public void mostrarFormularioRegistro(Stage owner) {
         Stage registroStage = new Stage();
         registroStage.setTitle("Crear nuevo usuario");
 
@@ -96,6 +104,7 @@ public class LoginController {
             if (txtNombre.getText().isEmpty() || txtCorreo.getText().isEmpty() ||
                 txtPassword.getText().isEmpty() || cbRol.getValue() == null) {
                 lblMensaje.setText("❌ Debes completar todos los campos");
+                lblMensaje.setStyle("-fx-text-fill: red;");
                 return;
             }
 
@@ -104,6 +113,7 @@ public class LoginController {
 
                 if (usuarioDAO.buscarPorCorreo(txtCorreo.getText()) != null) {
                     lblMensaje.setText("⚠️ El usuario ya existe");
+                    lblMensaje.setStyle("-fx-text-fill: orange;");
                 } else {
                     String hash = org.mindrot.jbcrypt.BCrypt.hashpw(
                         txtPassword.getText(), org.mindrot.jbcrypt.BCrypt.gensalt()
@@ -115,18 +125,22 @@ public class LoginController {
                         hash
                     );
                     lblMensaje.setText("✅ Usuario creado correctamente");
-                    registroStage.close(); // cerrar modal
+                    lblMensaje.setStyle("-fx-text-fill: green;");
+                    registroStage.close();
                 }
             } catch (SQLException ex) {
                 lblMensaje.setText("❌ Error SQL: " + ex.getMessage());
+                lblMensaje.setStyle("-fx-text-fill: red;");
                 ex.printStackTrace();
             }
         });
 
-        VBox registroLayout = new VBox(10, txtNombre, txtCorreo, txtPassword, cbRol, btnRegistrar, lblMensaje);
-        registroLayout.setStyle("-fx-padding: 20; -fx-alignment: center;");
+        VBox registroLayout = new VBox(12, txtNombre, txtCorreo, txtPassword, cbRol, btnRegistrar, lblMensaje);
+        registroLayout.setStyle("-fx-padding: 25; -fx-alignment: center;");
 
-        registroStage.setScene(new Scene(registroLayout, 320, 250));
+        registroStage.setScene(new Scene(registroLayout, 420, 320));
+        registroStage.setResizable(false);
+        registroStage.centerOnScreen();
         registroStage.initOwner(owner);
         registroStage.showAndWait();
     }
