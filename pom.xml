@@ -115,20 +115,7 @@
                 <version>${javafx.maven.plugin.version}</version>
                 <configuration>
                     <mainClass>${main.class}</mainClass>
-                    <javafxVersion>${javafx.version}</javafxVersion>
-                    <modules>
-                        <module>javafx.controls</module>
-                        <module>javafx.fxml</module>
-                    </modules>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>default-cli</id>
-                        <configuration>
-                            <mainClass>${main.class}</mainClass>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
             
             <!-- Maven Surefire Plugin -->
