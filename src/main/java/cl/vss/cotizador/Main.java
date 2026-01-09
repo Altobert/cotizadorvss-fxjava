@@ -1,11 +1,8 @@
 package cl.vss.cotizador;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import cl.vss.cotizador.demo.LoginController;
 import cl.vss.cotizador.model.Familia;
-
 import cl.vss.cotizador.model.ItemCotizacionExcel;
 import cl.vss.cotizador.service.AuditoriaDAO;
 import cl.vss.cotizador.service.AuditoriaRegistro;
@@ -35,6 +32,7 @@ import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.text.DecimalFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -77,6 +75,22 @@ public class Main extends Application {
     private TableColumn<Producto, String> colUnidad;
     private TableColumn<Producto, Double> colValor;
 
+        // 👉 Columnas nuevas con precios calculados
+    private TableColumn<Producto, Double> colPrecioUSD;
+    private TableColumn<Producto, Double> colPrecioUtil;
+    private TableColumn<Producto, Double> colPrecioFinalCLP;
+
+    // 👉 Formatos numéricos
+    private final DecimalFormat formatoUSD = new DecimalFormat("#,##0.00");
+    private final DecimalFormat formatoCLP = new DecimalFormat("#,###");
+
+    // 👉 Filtros y búsqueda para Productos
+    private FilteredList<Producto> filteredProductos;
+
+    // 👉 Controles usados en el filtrado (se inicializan en la UI)
+    private TextField txtBuscar;
+    private ComboBox<String> comboFamilias;
+ 
     // 👉 Variables para parámetros comerciales en productos
     private double tipoCambioActual = 1.0;
     private double utilidadActual = 0.0;
@@ -175,16 +189,17 @@ public class Main extends Application {
     btnEliminar.setOnAction(e -> eliminarProductoSeleccionado());
 
     // Barra y layout
-    // 👉 Campo de búsqueda
-    TextField txtBuscar = new TextField();
+    // Campo de búsqueda
+    txtBuscar = new TextField();
     txtBuscar.setPromptText("Buscar producto...");
     txtBuscar.setPrefWidth(200);
 
-    // 👉 ComboBox de familias
-    ComboBox<String> comboFamilias = new ComboBox<>();
+    // ComboBox de familias
+    comboFamilias = new ComboBox<>();
     comboFamilias.setPromptText("Todas");
 
-    // 👉 Barra superior completa
+
+    // Barra superior completa
     ToolBar barraProductos = new ToolBar(
     btnAgregar, btnEditar, btnEliminar,
     new Separator(),
@@ -233,47 +248,61 @@ productos = FXCollections.observableArrayList(productoService.listarProductos())
 // 👉 Cargar mapa de familias
 mapaFamilias = productoService.obtenerMapaFamilias();
 
-// 👉 Lista filtrada
-FilteredList<Producto> filtrados = new FilteredList<>(productos, p -> true);
+// ============================================================
+// 🔵 Lista filtrada (atributo de clase)
+// ============================================================
+filteredProductos = new FilteredList<>(productos, p -> true);
 
-// 👉 Lista ordenada
-SortedList<Producto> ordenados = new SortedList<>(filtrados);
+// ============================================================
+// 🔵 Lista ordenada
+// ============================================================
+SortedList<Producto> ordenados = new SortedList<>(filteredProductos);
 ordenados.comparatorProperty().bind(tablaProductos.comparatorProperty());
 
-    // 👉 Asignar a la tabla
-    tablaProductos.setItems(ordenados);
+// 👉 Asignar a la tabla
+tablaProductos.setItems(ordenados);
 
 // 👉 Ordenar por descripción automáticamente
-    tablaProductos.getSortOrder().clear();
-    colDescEs.setSortType(TableColumn.SortType.ASCENDING);
-    tablaProductos.getSortOrder().add(colDescEs);
-
-
+tablaProductos.getSortOrder().clear();
+colDescEs.setSortType(TableColumn.SortType.ASCENDING);
+tablaProductos.getSortOrder().add(colDescEs);
 
 // 👉 Cargar familias
-    comboFamilias.getItems().add("Todas");
-    comboFamilias.getItems().addAll(productoService.listarFamiliasNombres());
-    comboFamilias.setValue("Todas");
+comboFamilias.getItems().add("Todas");
+comboFamilias.getItems().addAll(productoService.listarFamiliasNombres());
+comboFamilias.setValue("Todas");
 
-// 👉 Listeners
-    txtBuscar.textProperty().addListener((obs, oldValue, newValue) -> {
-        aplicarFiltros(filtrados, newValue, comboFamilias.getValue());
-    });
+// ============================================================
+// 🔵 Listeners NUEVOS (usan filtrarProductos())
+// ============================================================
+txtBuscar.textProperty().addListener((obs, oldValue, newValue) -> filtrarProductos());
 
-    comboFamilias.setOnAction(e -> {
-        aplicarFiltros(filtrados, txtBuscar.getText(), comboFamilias.getValue());
-    });
+comboFamilias.valueProperty().addListener((obs, oldValue, newValue) -> filtrarProductos());
 
-    // 👉 Contenedor central solo con la tabla
-    VBox centroProductos = new VBox(10, tablaProductos);
-    centroProductos.setStyle("-fx-padding: 10;");
-    rootProductos.setCenter(centroProductos);
+// 👉 Contenedor central solo con la tabla
+VBox centroProductos = new VBox(10, tablaProductos);
+centroProductos.setStyle("-fx-padding: 10;");
+rootProductos.setCenter(centroProductos);
 
 
     // TabPane principal
-    TabPane tabs = new TabPane();
-    tabs.getTabs().add(new Tab("Cotizador", rootCotizador));    
-    tabs.getTabs().add(new Tab("Productos", rootProductos));
+TabPane tabs = new TabPane();
+
+// 👉 Pestaña Cotizador (queda igual)
+tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
+
+// 👉 Pestaña Productos (versión corregida con listener)
+Tab tabProductos = new Tab("Productos", rootProductos);
+
+tabProductos.setOnSelectionChanged(event -> {
+    if (tabProductos.isSelected()) {
+        recargarParametrosDesdeBD();
+        tablaProductos.refresh();
+    }
+});
+
+tabs.getTabs().add(tabProductos);
+
 
     // ----------------------
     // Tab Parámetros Comerciales
@@ -360,6 +389,21 @@ ordenados.comparatorProperty().bind(tablaProductos.comparatorProperty());
                 tablaProductos.refresh();
 
                 lblMensaje.setText("✅ Parámetros guardados y auditoría registrada");
+                // 🔄 Limpiar campos después de guardar
+                txtTipoCambio.clear();
+                txtUtilidad.clear();
+                dpVigencia.setValue(null);
+
+                // 🔄 Limpiar mensaje después de unos segundos
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(2500);
+                        javafx.application.Platform.runLater(() -> lblMensaje.setText(""));
+                    } catch (InterruptedException ignored) {}
+                }).start();
+
+
+
             }
         } catch (NumberFormatException ex) {
             logger.error("Error al parsear valores numéricos en parámetros comerciales", ex);
@@ -423,25 +467,37 @@ ordenados.comparatorProperty().bind(tablaProductos.comparatorProperty());
 }
 
 
-    // Agregar pestaña
-    
-    tabs.getTabs().add(new Tab("Auditoría Parámetros", vistaAuditoria));
+   // 👉 Pestaña Auditoría Parámetros con recarga automática
+Tab tabAuditoria = new Tab("Auditoría Parámetros", vistaAuditoria);
 
+tabAuditoria.setOnSelectionChanged(e -> {
+    if (tabAuditoria.isSelected()) {
+        try (Connection conn = DBConnection.getConnection()) {
+            AuditoriaDAO auditoriaDAO = new AuditoriaDAO(conn);
 
-   
+            tablaAuditoria.getItems().clear();
+            tablaAuditoria.getItems().addAll(auditoriaDAO.listarCambios());
 
-
-    Scene scene = new Scene(tabs, 1400, 1000);
-    stage.setTitle("Cotizador VSS");
-    
-    // Aplicar hoja de estilos CSS
-    try {
-        String cssPath = getClass().getResource("/estilos.css").toExternalForm();
-        scene.getStylesheets().add(cssPath);
-        System.out.println("Hoja de estilos cargada: " + cssPath);
-    } catch (Exception e) {
-        System.out.println("No se pudo cargar la hoja de estilos: " + e.getMessage());
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
     }
+});
+
+tabs.getTabs().add(tabAuditoria);
+
+Scene scene = new Scene(tabs, 1400, 1000);
+stage.setTitle("Cotizador VSS");
+
+// Aplicar hoja de estilos CSS
+try {
+    String cssPath = getClass().getResource("/estilos.css").toExternalForm();
+    scene.getStylesheets().add(cssPath);
+    System.out.println("Hoja de estilos cargada: " + cssPath);
+} catch (Exception e) {
+    System.out.println("No se pudo cargar la hoja de estilos: " + e.getMessage());
+}
+
     
     // Configurar iconos de la aplicación (múltiples tamaños para mejor compatibilidad)
     configurarIconosAplicacion(stage);
@@ -550,50 +606,129 @@ ordenados.comparatorProperty().bind(tablaProductos.comparatorProperty());
 
     
     private void configurarTablaProductos() {
+
+    // Limpiar columnas anteriores para evitar duplicados
+    tablaProductos.getColumns().clear();
+
+    // ============================
+    // FORMATOS NUMÉRICOS
+    // ============================
+    DecimalFormat formatoUSD = new DecimalFormat("#,##0.00");
+    DecimalFormat formatoCLP = new DecimalFormat("#,###");
+
+    // 👉 Columna: Descripción ES
     colDescEs = new TableColumn<>("Descripción ES");
-    colDescEs.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getDescripcionEs()));
+    colDescEs.setCellValueFactory(cell ->
+        new SimpleStringProperty(cell.getValue().getDescripcionEs())
+    );
 
+    // 👉 Columna: Descripción EN
     colDescEn = new TableColumn<>("Descripción EN");
-    colDescEn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getDescripcionEn()));
+    colDescEn.setCellValueFactory(cell ->
+        new SimpleStringProperty(cell.getValue().getDescripcionEn())
+    );
 
+    // 👉 Columna: Unidad de medida
     colUnidad = new TableColumn<>("Unidad");
-    colUnidad.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getUnidadMedida()));
+    colUnidad.setCellValueFactory(cell ->
+        new SimpleStringProperty(cell.getValue().getUnidadMedida())
+    );
 
+    // 👉 Columna: Valor en pesos (precio base)
     colValor = new TableColumn<>("Valor Pesos");
-    colValor.setCellValueFactory(cell -> new SimpleDoubleProperty(cell.getValue().getValorPesos()).asObject());
+    colValor.setCellValueFactory(cell ->
+        new SimpleDoubleProperty(cell.getValue().getValorPesos()).asObject()
+    );
 
-    // 👉 Columna Valor USD (calculado con tipo de cambio)
-    TableColumn<Producto, Double> colValorUSD = new TableColumn<>("Valor USD");
-    colValorUSD.setCellValueFactory(cell -> {
-        double valorPesos = cell.getValue().getValorPesos();
-        double valorUSD = tipoCambioActual > 0 ? valorPesos / tipoCambioActual : 0;
-        return new SimpleDoubleProperty(valorUSD).asObject();
+    // ============================================================
+    // 🔥 NUEVAS COLUMNAS CALCULADAS SEGÚN PARÁMETROS COMERCIALES
+    // ============================================================
+
+    // 👉 Precio en USD
+    colPrecioUSD = new TableColumn<>("Precio USD");
+    colPrecioUSD.setCellValueFactory(cell -> {
+        double usd = 0.0;
+        if (tipoCambioActual != 0) {
+            usd = cell.getValue().getValorPesos() / tipoCambioActual;
+        }
+        return new SimpleDoubleProperty(usd).asObject();
     });
-
-    // 👉 Columna Precio Final (con utilidad aplicada)
-    TableColumn<Producto, Double> colPrecioFinal = new TableColumn<>("Precio Final");
-    colPrecioFinal.setCellValueFactory(cell -> {
-        double valorPesos = cell.getValue().getValorPesos();
-        double precioFinal = valorPesos * (1 + utilidadActual / 100);
-        return new SimpleDoubleProperty(precioFinal).asObject();
-    });
-
-    tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colValor, colValorUSD, colPrecioFinal);
-    
-    // 👉 Efecto hover amarillo en las filas
-    tablaProductos.setRowFactory(tv -> {
-        TableRow<Producto> row = new TableRow<>();
-        row.setOnMouseEntered(event -> {
-            if (!row.isEmpty()) {
-                row.setStyle("-fx-background-color: #FFEB3B; -fx-font-weight: bold;");
+    colPrecioUSD.setCellFactory(col -> new TableCell<Producto, Double>() {
+        @Override
+        protected void updateItem(Double value, boolean empty) {
+            super.updateItem(value, empty);
+            if (empty || value == null) {
+                setText(null);
+            } else {
+                setText(formatoUSD.format(value));
             }
-        });
-        row.setOnMouseExited(event -> {
-            row.setStyle("");
-        });
-        return row;
+        }
     });
+
+    // 👉 Precio USD + utilidad (multiplicador)
+    colPrecioUtil = new TableColumn<>("Precio + Utilidad (USD)");
+    colPrecioUtil.setCellValueFactory(cell -> {
+        double usd = 0.0;
+        if (tipoCambioActual != 0) {
+            usd = cell.getValue().getValorPesos() / tipoCambioActual;
+        }
+        double conUtil = usd * utilidadActual; // ✔ multiplicador correcto
+        return new SimpleDoubleProperty(conUtil).asObject();
+    });
+    colPrecioUtil.setCellFactory(col -> new TableCell<Producto, Double>() {
+        @Override
+        protected void updateItem(Double value, boolean empty) {
+            super.updateItem(value, empty);
+            if (empty || value == null) {
+                setText(null);
+            } else {
+                setText(formatoUSD.format(value));
+            }
+        }
+    });
+
+    // 👉 Precio final en CLP
+    colPrecioFinalCLP = new TableColumn<>("Precio Final CLP");
+    colPrecioFinalCLP.setCellValueFactory(cell -> {
+        double usd = 0.0;
+        if (tipoCambioActual != 0) {
+            usd = cell.getValue().getValorPesos() / tipoCambioActual;
+        }
+        double conUtil = usd * utilidadActual;
+        double finalClp = conUtil * tipoCambioActual;
+        return new SimpleDoubleProperty(finalClp).asObject();
+    });
+    colPrecioFinalCLP.setCellFactory(col -> new TableCell<Producto, Double>() {
+        @Override
+        protected void updateItem(Double value, boolean empty) {
+            super.updateItem(value, empty);
+            if (empty || value == null) {
+                setText(null);
+            } else {
+                setText("$ " + formatoCLP.format(value));
+            }
+        }
+    });
+
+    // ============================================================
+    // 👉 Agregar todas las columnas a la tabla
+    // ============================================================
+    tablaProductos.getColumns().addAll(
+        colDescEs,
+        colDescEn,
+        colUnidad,
+        colValor,
+        colPrecioUSD,
+        colPrecioUtil,
+        colPrecioFinalCLP
+    );
+
+    // 👉 Estilos opcionales
+    tablaProductos.getStylesheets().add(
+        getClass().getResource("/productos.css").toExternalForm()
+    );
 }
+
 
 
 
@@ -1795,15 +1930,6 @@ private Familia buscarFamiliaPorId(int idFamilia) {
 
         // Normalizar familia
         String familia = (familiaNombre == null) ? "" : familiaNombre.trim();
-
-        // Se comenta para no ir logeuando cada vez que se filtra
-        // Log informativo según el filtro aplicado
-        /*if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {
-            System.out.println("🔍 Filtrando productos por familia específica: '" + familia + "'");
-        } else {
-            System.out.println("📋 git (sin filtro de familia)");
-        }*/
-
         // 👉 Filtro por familia
         if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {
 
@@ -1843,6 +1969,73 @@ private Familia buscarFamiliaPorId(int idFamilia) {
             || valor.contains(filtro);
     });
 }
+ // ============================================================
+// 🔵 RECARGAR PARÁMETROS COMERCIALES DESDE LA BD
+// ============================================================
+private void recargarParametrosDesdeBD() {
+    try {
+        // Obtener conexión desde tu clase real
+        Connection conn = DBConnection.getConnection();
+
+        ParametrosDAO dao = new ParametrosDAO(conn);
+
+        // Cargar valores reales desde la BD
+        tipoCambioActual = dao.getTipoCambioActual();
+        utilidadActual = dao.getPorcentajeUtilidadActual();
+
+        // Actualizar banner y tabla
+        actualizarBannerParametros();
+        tablaProductos.refresh();
+
+    } catch (Exception e) {
+        logger.error("Error al cargar parámetros comerciales", e);
+    }
+}
+
+
+// ============================================================
+// 🔵 ACTUALIZAR BANNER DE PARÁMETROS
+// ============================================================
+private void actualizarBannerParametros() {
+    if (lblTipoCambioUsado != null) {
+        lblTipoCambioUsado.setText("💱 Tipo de cambio aplicado: " + tipoCambioActual);
+    }
+    if (lblUtilidadUsada != null) {
+        lblUtilidadUsada.setText("📈 Utilidad aplicada: " + utilidadActual + "%");
+    }
+}
+
+// ============================================================
+// 🔵 FILTRADO AVANZADO DE PRODUCTOS
+// ============================================================
+private void filtrarProductos() {
+    if (filteredProductos == null) return;
+
+    filteredProductos.setPredicate(prod -> {
+        if (prod == null) return false;
+
+        String texto = txtBuscar.getText() != null ? txtBuscar.getText().toLowerCase() : "";
+        String familiaSeleccionada = comboFamilias.getValue();
+
+        boolean coincideTexto =
+                prod.getDescripcionEs().toLowerCase().contains(texto) ||
+                prod.getDescripcionEn().toLowerCase().contains(texto);
+
+        boolean coincideFamilia = true;
+        if (familiaSeleccionada != null && !familiaSeleccionada.equals("Todas")) {
+
+            Integer idFamiliaSeleccionada = mapaFamilias.get(familiaSeleccionada);
+
+            coincideFamilia =
+                    idFamiliaSeleccionada != null &&
+                    idFamiliaSeleccionada == prod.getFamiliaId();
+        }
+
+        return coincideTexto && coincideFamilia;
+    });
+}
+
+
 
 
 
