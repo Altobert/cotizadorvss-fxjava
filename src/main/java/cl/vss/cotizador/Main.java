@@ -1696,12 +1696,13 @@ private Familia buscarFamiliaPorId(int idFamilia) {
         // Normalizar familia
         String familia = (familiaNombre == null) ? "" : familiaNombre.trim();
 
+        // Se comenta para no ir logeuando cada vez que se filtra
         // Log informativo según el filtro aplicado
-        if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {
+        /*if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {
             System.out.println("🔍 Filtrando productos por familia específica: '" + familia + "'");
         } else {
             System.out.println("📋 Mostrando todas las familias (sin filtro de familia)");
-        }
+        }*/
 
         // 👉 Filtro por familia
         if (!familia.equalsIgnoreCase("Todas") && !familia.isEmpty()) {

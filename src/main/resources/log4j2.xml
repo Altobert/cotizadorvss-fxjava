@@ -8,11 +8,49 @@
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="[LOG4J2] %d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
         </Console>
+        
+        <!-- File Appender para operaciones de Base de Datos -->
+        <RollingFile name="DatabaseLog" fileName="logs/database.log" 
+                     filePattern="logs/database-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="30"/>
+        </RollingFile>
+        
+        <!-- File Appender para Auditoría de cambios -->
+        <RollingFile name="AuditoriaLog" fileName="logs/auditoria.log" 
+                     filePattern="logs/auditoria-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="30"/>
+        </RollingFile>
     </Appenders>
     
     <Loggers>
         <!-- Logger específico para Apache POI con nivel WARNING para reducir ruido -->
         <Logger name="org.apache.poi" level="WARN" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- Logger para operaciones de Base de Datos -->
+        <Logger name="cl.vss.cotizador.service" level="INFO" additivity="false">
+            <AppenderRef ref="DatabaseLog"/>
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- Logger específico para Auditoría -->
+        <Logger name="cl.vss.cotizador.service.AuditoriaDAO" level="INFO" additivity="false">
+            <AppenderRef ref="AuditoriaLog"/>
             <AppenderRef ref="Console"/>
         </Logger>
         
