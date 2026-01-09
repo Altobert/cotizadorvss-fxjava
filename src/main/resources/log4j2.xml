@@ -34,6 +34,19 @@
             </Policies>
             <DefaultRolloverStrategy max="30"/>
         </RollingFile>
+        
+        <!-- File Appender para Mantenedor de Productos -->
+        <RollingFile name="ProductosLog" fileName="logs/productos.log" 
+                     filePattern="logs/productos-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="30"/>
+        </RollingFile>
     </Appenders>
     
     <Loggers>
@@ -51,6 +64,13 @@
         <!-- Logger específico para Auditoría -->
         <Logger name="cl.vss.cotizador.service.AuditoriaDAO" level="INFO" additivity="false">
             <AppenderRef ref="AuditoriaLog"/>
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- Logger específico para Mantenedor de Productos -->
+        <Logger name="cl.vss.cotizador.service.ProductoService" level="INFO" additivity="false">
+            <AppenderRef ref="ProductosLog"/>
+            <AppenderRef ref="DatabaseLog"/>
             <AppenderRef ref="Console"/>
         </Logger>
         

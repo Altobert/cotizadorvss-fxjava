@@ -1,5 +1,8 @@
 package cl.vss.cotizador.service;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import cl.vss.cotizador.model.Producto;
 import cl.vss.cotizador.model.Familia;
 import cl.vss.cotizador.util.DBConnection;
@@ -13,9 +16,13 @@ import java.util.List;
 import java.util.Map;
 
 public class ProductoService {
+    private static final Logger logger = LogManager.getLogger(ProductoService.class);
 
     // CREATE
     public void agregarProducto(Producto p) throws Exception {
+        logger.info("Agregando producto: {} | Familia ID: {} | Precio: ${}", 
+                    p.getDescripcionEs(), p.getFamiliaId(), p.getValorPesos());
+        
         String sql = "INSERT INTO producto (descripcion_es, descripcion_en, unidad_medida, valor_pesos, familia_id, fecha_actualizacion) " +
                      "VALUES (?, ?, ?, ?, ?, NOW())";
         try (Connection conn = DBConnection.getConnection();
@@ -26,11 +33,16 @@ public class ProductoService {
             ps.setDouble(4, p.getValorPesos());
             ps.setInt(5, p.getFamiliaId());
             ps.executeUpdate();
+            logger.info("Producto agregado exitosamente: {}", p.getDescripcionEs());
+        } catch (Exception e) {
+            logger.error("Error al agregar producto: {}", p.getDescripcionEs(), e);
+            throw e;
         }
     }
 
     // READ productos
     public List<Producto> listarProductos() {
+        logger.debug("Consultando lista de productos");
         List<Producto> lista = new ArrayList<>();
         String sql = "SELECT id, descripcion_es, descripcion_en, unidad_medida, valor_pesos, familia_id, fecha_actualizacion " +
                      "FROM producto ORDER BY id DESC";
@@ -50,7 +62,9 @@ public class ProductoService {
                 }
                 lista.add(p);
             }
+            logger.info("Se recuperaron {} productos", lista.size());
         } catch (Exception e) {
+            logger.error("Error al listar productos", e);
             e.printStackTrace();
         }
         return lista;
@@ -58,6 +72,7 @@ public class ProductoService {
 
     // READ familias (como objetos)
     public List<Familia> listarFamilias() {
+        logger.debug("Consultando lista de familias");
         List<Familia> lista = new ArrayList<>();
         String sql = "SELECT id, nombre FROM familia_producto ORDER BY nombre";
         try (Connection conn = DBConnection.getConnection();
@@ -69,7 +84,9 @@ public class ProductoService {
                 f.setNombre(rs.getString("nombre"));
                 lista.add(f);
             }
+            logger.info("Se recuperaron {} familias", lista.size());
         } catch (Exception e) {
+            logger.error("Error al listar familias", e);
             e.printStackTrace();
         }
         return lista;
@@ -96,6 +113,7 @@ public class ProductoService {
 
     // ✅ Listar productos por familia
     public List<Producto> listarPorFamilia(String familiaNombre) {
+        logger.debug("Consultando productos por familia: {}", familiaNombre);
         List<Producto> lista = new ArrayList<>();
         String sql = """
             SELECT p.id, p.descripcion_es, p.descripcion_en, p.unidad_medida, 
@@ -125,8 +143,10 @@ public class ProductoService {
                 }
                 lista.add(p);
             }
+            logger.info("Se recuperaron {} productos para familia: {}", lista.size(), familiaNombre);
 
         } catch (Exception e) {
+            logger.error("Error al listar productos por familia: {}", familiaNombre, e);
             e.printStackTrace();
         }
 
@@ -172,6 +192,9 @@ public class ProductoService {
 
     // UPDATE
     public void actualizarProducto(Producto p) throws Exception {
+        logger.info("Actualizando producto ID {}: {} | Familia ID: {} | Precio: ${}", 
+                    p.getId(), p.getDescripcionEs(), p.getFamiliaId(), p.getValorPesos());
+        
         String sql = "UPDATE producto SET descripcion_es=?, descripcion_en=?, unidad_medida=?, valor_pesos=?, familia_id=?, fecha_actualizacion=NOW() " +
                      "WHERE id=?";
         try (Connection conn = DBConnection.getConnection();
@@ -183,16 +206,30 @@ public class ProductoService {
             ps.setInt(5, p.getFamiliaId());
             ps.setInt(6, p.getId());
             ps.executeUpdate();
+            logger.info("Producto ID {} actualizado exitosamente", p.getId());
+        } catch (Exception e) {
+            logger.error("Error al actualizar producto ID {}: {}", p.getId(), p.getDescripcionEs(), e);
+            throw e;
         }
     }
 
     // DELETE
     public void eliminarProducto(int id) throws Exception {
+        logger.warn("Eliminando producto ID: {}", id);
+        
         String sql = "DELETE FROM producto WHERE id=?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
-            ps.executeUpdate();
+            int rowsAffected = ps.executeUpdate();
+            if (rowsAffected > 0) {
+                logger.info("Producto ID {} eliminado exitosamente", id);
+            } else {
+                logger.warn("No se encontró producto con ID {} para eliminar", id);
+            }
+        } catch (Exception e) {
+            logger.error("Error al eliminar producto ID: {}", id, e);
+            throw e;
         }
     }
 }
