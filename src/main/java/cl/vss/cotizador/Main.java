@@ -1,4 +1,8 @@
 package cl.vss.cotizador;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import cl.vss.cotizador.demo.LoginController;
 import cl.vss.cotizador.model.Familia;
 
@@ -48,6 +52,8 @@ import javafx.beans.property.SimpleDoubleProperty;
 
 
 public class Main extends Application {
+    private static final Logger logger = LogManager.getLogger(Main.class);
+    
     // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
@@ -87,6 +93,7 @@ public class Main extends Application {
         login.mostrarLogin(stage);
         return;
     } catch (SQLException ex) {
+        logger.error("Error crítico al conectar con la base de datos", ex);
         ex.printStackTrace();
         Alert alert = new Alert(Alert.AlertType.ERROR, "❌ Error de conexión a la BD: " + ex.getMessage());
         alert.showAndWait();
@@ -298,10 +305,13 @@ ordenados.comparatorProperty().bind(tablaProductos.comparatorProperty());
                 lblMensaje.setText("✅ Parámetros guardados y auditoría registrada");
             }
         } catch (NumberFormatException ex) {
+            logger.error("Error al parsear valores numéricos en parámetros comerciales", ex);
             lblMensaje.setText("❌ Error: valores numéricos inválidos");
         } catch (IllegalArgumentException ex) {
+            logger.warn("Validación fallida en parámetros comerciales: {}", ex.getMessage());
             lblMensaje.setText("❌ Validación: " + ex.getMessage());
         } catch (SQLException ex) {
+            logger.error("Error SQL al actualizar parámetros comerciales", ex);
             lblMensaje.setText("❌ Error SQL: " + ex.getMessage());
             ex.printStackTrace();
         }
@@ -1449,8 +1459,10 @@ private void cargarProductos() {
 
                 return nuevo;
             } catch (NumberFormatException nfe) {
+                logger.error("Error al parsear valor numérico en agregar producto", nfe);
                 mostrarError("Valor inválido", "El campo 'Valor Pesos' debe ser numérico.\n" + nfe.getMessage());
             } catch (Exception ex) {
+                logger.error("Error al validar datos de nuevo producto", ex);
                 mostrarError("Datos inválidos", "Revisa los campos.\n" + ex.getMessage());
             }
         }
@@ -1470,6 +1482,7 @@ private void cargarProductos() {
             alert.showAndWait();
 
         } catch (Exception e) {
+            logger.error("Error al guardar producto en base de datos", e);
             mostrarError("Error al guardar", e.getMessage());
         }
     });

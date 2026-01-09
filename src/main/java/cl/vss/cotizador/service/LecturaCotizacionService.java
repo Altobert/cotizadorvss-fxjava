@@ -1,5 +1,8 @@
 package cl.vss.cotizador.service;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import cl.vss.cotizador.model.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -16,6 +19,7 @@ import java.util.List;
  * Soporta formatos .xlsx y .xls
  */
 public class LecturaCotizacionService {
+    private static final Logger logger = LogManager.getLogger(LecturaCotizacionService.class);
     
     private static LecturaCotizacionService instance;
     

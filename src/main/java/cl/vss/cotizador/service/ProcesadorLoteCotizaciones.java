@@ -1,5 +1,8 @@
 package cl.vss.cotizador.service;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import cl.vss.cotizador.detector.*;
 import cl.vss.cotizador.model.Cotizacion;
 import cl.vss.cotizador.model.ResultadoProcesamiento;
@@ -16,8 +19,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Servicio para procesar múltiples archivos de cotizaciones
@@ -28,7 +29,7 @@ import java.util.logging.Logger;
  */
 public class ProcesadorLoteCotizaciones {
     
-    private static final Logger logger = Logger.getLogger(ProcesadorLoteCotizaciones.class.getName());
+    private static final Logger logger = LogManager.getLogger(ProcesadorLoteCotizaciones.class);
     private List<DetectorFormatoCotizacion> detectores;
     
     public ProcesadorLoteCotizaciones() {
@@ -114,7 +115,7 @@ public class ProcesadorLoteCotizaciones {
                         archivo.getName(), 
                         "No se pudieron extraer cotizaciones del archivo"
                     ));
-                    logger.warning("✗ " + archivo.getName() + ": Sin datos extraídos");
+                    logger.warn("✗ " + archivo.getName() + ": Sin datos extraídos");
                 }
                 
             } catch (Exception e) {
@@ -126,7 +127,7 @@ public class ProcesadorLoteCotizaciones {
                 error.setDetallesTecnicos(e.getClass().getName());
                 resultado.agregarError(error);
                 
-                logger.log(Level.WARNING, "Error procesando " + archivo.getName(), e);
+                logger.warn( "Error procesando " + archivo.getName(), e);
             }
         }
         
@@ -178,7 +179,7 @@ public class ProcesadorLoteCotizaciones {
                         cotizacionesHoja.size()));
                     
                 } catch (Exception e) {
-                    logger.log(Level.WARNING, 
+                    logger.warn( 
                         String.format("    ✗ Error en hoja %s: %s", 
                             sheet.getSheetName(), e.getMessage()), e);
                     // Continuar con la siguiente hoja
@@ -188,7 +189,7 @@ public class ProcesadorLoteCotizaciones {
             workbook.close();
             
         } catch (OutOfMemoryError e) {
-            logger.severe("Error de memoria procesando: " + nombreArchivo);
+            logger.error("Error de memoria procesando: " + nombreArchivo);
             throw new IOException("Archivo demasiado grande: " + nombreArchivo, e);
         }
         
@@ -225,7 +226,7 @@ public class ProcesadorLoteCotizaciones {
         }
         
         // Si ningún detector puede procesar, retornar lista vacía
-        logger.warning("    No se encontró detector compatible para esta hoja");
+        logger.warn("    No se encontró detector compatible para esta hoja");
         return new ArrayList<>();
     }
     

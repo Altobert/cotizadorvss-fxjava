@@ -47,6 +47,34 @@
             </Policies>
             <DefaultRolloverStrategy max="30"/>
         </RollingFile>
+        
+        <!-- File Appender para Excepciones de la Aplicación -->
+        <RollingFile name="ErrorLog" fileName="logs/errors.log" 
+                     filePattern="logs/errors-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="30"/>
+            <!-- Solo capturar ERROR y FATAL -->
+            <ThresholdFilter level="ERROR" onMatch="ACCEPT" onMismatch="DENY"/>
+        </RollingFile>
+        
+        <!-- File Appender para la Aplicación general -->
+        <RollingFile name="AppLog" fileName="logs/application.log" 
+                     filePattern="logs/application-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="30"/>
+        </RollingFile>
     </Appenders>
     
     <Loggers>
@@ -58,12 +86,14 @@
         <!-- Logger para operaciones de Base de Datos -->
         <Logger name="cl.vss.cotizador.service" level="INFO" additivity="false">
             <AppenderRef ref="DatabaseLog"/>
+            <AppenderRef ref="AppLog"/>
             <AppenderRef ref="Console"/>
         </Logger>
         
         <!-- Logger específico para Auditoría -->
         <Logger name="cl.vss.cotizador.service.AuditoriaDAO" level="INFO" additivity="false">
             <AppenderRef ref="AuditoriaLog"/>
+            <AppenderRef ref="AppLog"/>
             <AppenderRef ref="Console"/>
         </Logger>
         
@@ -71,11 +101,19 @@
         <Logger name="cl.vss.cotizador.service.ProductoService" level="INFO" additivity="false">
             <AppenderRef ref="ProductosLog"/>
             <AppenderRef ref="DatabaseLog"/>
+            <AppenderRef ref="AppLog"/>
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- Logger para la aplicación principal -->
+        <Logger name="cl.vss.cotizador" level="INFO" additivity="false">
+            <AppenderRef ref="AppLog"/>
             <AppenderRef ref="Console"/>
         </Logger>
         
         <!-- Root logger con nivel ERROR para minimizar interferencia -->
         <Root level="ERROR">
+            <AppenderRef ref="ErrorLog"/>
             <AppenderRef ref="Console"/>
         </Root>
     </Loggers>

@@ -1,5 +1,8 @@
 package cl.vss.cotizador.service;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import cl.vss.cotizador.model.ItemCotizacionExcel;
 import cl.vss.cotizador.model.ProductoSimilar;
 import cl.vss.cotizador.util.DBConnection;
@@ -14,14 +17,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.logging.Logger;
-import java.util.logging.Level;
-import cl.vss.cotizador.util.LoggingConfig;
 import java.util.regex.Pattern;
 
 public class CotizacionService {
     
-    private static final Logger logger = LoggingConfig.getLogger(CotizacionService.class);
+    private static final Logger logger = LogManager.getLogger(CotizacionService.class);
     
     // Configuración de formatos
     private final Map<String, FormatoExcel> formatosConfigurados = new HashMap<>();
@@ -271,20 +271,20 @@ public class CotizacionService {
             }
 
             if (encabezado == null) {
-                logger.severe("❌ No se encontró fila de encabezado válida en archivo: " + archivo.getName());
-                logger.severe("🔍 DIAGNÓSTICO DETALLADO:");
+                logger.error("❌ No se encontró fila de encabezado válida en archivo: " + archivo.getName());
+                logger.error("🔍 DIAGNÓSTICO DETALLADO:");
                 
                 // Mostrar todas las filas para diagnóstico
                 for (int i = 0; i <= Math.min(15, hoja.getLastRowNum()); i++) {
                     Row filaDebug = hoja.getRow(i);
                     if (filaDebug != null) {
-                        logger.severe("   Fila " + (i + 1) + ":");
+                        logger.error("   Fila " + (i + 1) + ":");
                         for (int j = 0; j < Math.min(10, filaDebug.getLastCellNum()); j++) {
                             Cell celdaDebug = filaDebug.getCell(j);
                             if (celdaDebug != null) {
                                 String valorDebug = celdaDebug.toString().trim();
                                 if (!valorDebug.isEmpty()) {
-                                    logger.severe("     Col " + (char)('A' + j) + ": [" + valorDebug + "]");
+                                    logger.error("     Col " + (char)('A' + j) + ": [" + valorDebug + "]");
                                 }
                             }
                         }
@@ -307,9 +307,9 @@ public class CotizacionService {
 
             // Verificar que al menos tengamos descripción o código
             if (!columnas.containsKey("codigo") && !columnas.containsKey("descripcion")) {
-                logger.warning("⚠️ Encabezados clave faltantes: 'codigo' y/o 'descripcion' en archivo: " + archivo.getName());
-                logger.warning("🔍 Columnas detectadas: " + columnas.keySet());
-                logger.warning("💡 Intentando usar cualquier columna de texto como descripción...");
+                logger.warn("⚠️ Encabezados clave faltantes: 'codigo' y/o 'descripcion' en archivo: " + archivo.getName());
+                logger.warn("🔍 Columnas detectadas: " + columnas.keySet());
+                logger.warn("💡 Intentando usar cualquier columna de texto como descripción...");
                 
                 // Buscar cualquier columna que pueda servir como descripción
                 for (Cell celda : encabezado) {
@@ -335,7 +335,7 @@ public class CotizacionService {
                 }
                 
                 if (!columnas.containsKey("codigo") && !columnas.containsKey("descripcion")) {
-                    logger.severe("❌ No se pueden procesar items sin código o descripción");
+                    logger.error("❌ No se pueden procesar items sin código o descripción");
                     return items;
                 }
             }
@@ -396,7 +396,7 @@ public class CotizacionService {
             }
 
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "❌ Error al leer archivo Excel: " + archivo.getName(), e);
+            logger.error("❌ Error al leer archivo Excel: " + archivo.getName(), e);
         }
 
         logger.info("✅ Procesamiento completado. Items leídos: " + items.size());
@@ -474,7 +474,7 @@ public class CotizacionService {
                                 }
                                 logger.info("✅ Fecha encontrada: " + valor);
                             } catch (Exception e) {
-                                logger.fine("⚠️ No se pudo parsear fecha: " + e.getMessage());
+                                logger.debug("⚠️ No se pudo parsear fecha: " + e.getMessage());
                             }
                         }
                     } else if (etiqueta.contains("observación") || etiqueta.contains("observation") ||
@@ -501,7 +501,7 @@ public class CotizacionService {
             logger.info("✅ Extracción de cabecera completada");
             
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "❌ Error extrayendo cabecera: " + e.getMessage(), e);
+            logger.error("❌ Error extrayendo cabecera: " + e.getMessage(), e);
         }
         
         return cabecera;
@@ -546,7 +546,7 @@ public class CotizacionService {
             logger.info("✅ Exportación completada exitosamente: " + archivo.getName());
             return true;
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "❌ Error al exportar items a Excel: " + archivo.getName(), e);
+            logger.error("❌ Error al exportar items a Excel: " + archivo.getName(), e);
             return false;
         }
     }
@@ -598,7 +598,7 @@ public class CotizacionService {
             }
             
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "❌ Error analizando estructura del Excel", e);
+            logger.error("❌ Error analizando estructura del Excel", e);
         }
     }
 
@@ -1320,7 +1320,7 @@ public class CotizacionService {
                 return 0;
             }
         } catch (Exception e) {
-            logger.log(Level.WARNING, "⚠️ Error leyendo cantidad en índice " + index, e);
+            logger.warn("⚠️ Error leyendo cantidad en índice " + index, e);
         }
         return 0;
     }
@@ -1340,7 +1340,7 @@ public class CotizacionService {
             return 0.0;
         }
     } catch (Exception e) {
-        logger.log(Level.WARNING, "⚠️ Error leyendo decimal en índice " + index, e);
+        logger.warn("⚠️ Error leyendo decimal en índice " + index, e);
     }
 
     return 0.0;
@@ -1415,7 +1415,7 @@ public class CotizacionService {
       logger.info("💰 Consultando precio para descripción: " + descripcion);
       
       if (descripcion == null || descripcion.trim().isEmpty()) {
-          logger.warning("⚠️ Descripción vacía o nula para consulta de precio");
+          logger.warn("⚠️ Descripción vacía o nula para consulta de precio");
           return 0.0;
       }
       
@@ -1436,8 +1436,8 @@ public class CotizacionService {
           statement.setString(1, descripcionBusqueda);
           statement.setString(2, descripcionBusqueda);
           
-          logger.fine("🔍 Ejecutando consulta SQL: " + sql);
-          logger.fine("🔍 Parámetro búsqueda: " + descripcionBusqueda);
+          logger.debug("🔍 Ejecutando consulta SQL: " + sql);
+          logger.debug("🔍 Parámetro búsqueda: " + descripcionBusqueda);
           
           try (ResultSet resultSet = statement.executeQuery()) {
               if (resultSet.next()) {
@@ -1445,13 +1445,13 @@ public class CotizacionService {
                   logger.info("✅ Precio encontrado: $" + precio + " para descripción: " + descripcion);
                   return precio;
               } else {
-                  logger.warning("⚠️ No se encontró precio para descripción: " + descripcion);
+                  logger.warn("⚠️ No se encontró precio para descripción: " + descripcion);
                   return 0.0;
               }
           }
           
       } catch (SQLException e) {
-          logger.log(Level.SEVERE, "❌ Error al consultar precio para descripción: " + descripcion, e);
+          logger.error("❌ Error al consultar precio para descripción: " + descripcion, e);
           return 0.0;
       }
   }
@@ -1465,7 +1465,7 @@ public class CotizacionService {
       logger.info("💰 Consultando precio exacto para descripción: " + descripcion);
       
       if (descripcion == null || descripcion.trim().isEmpty()) {
-          logger.warning("⚠️ Descripción vacía o nula para consulta de precio exacto");
+          logger.warn("⚠️ Descripción vacía o nula para consulta de precio exacto");
           return 0.0;
       }
       
@@ -1480,8 +1480,8 @@ public class CotizacionService {
           statement.setString(1, descripcion.trim());
           statement.setString(2, descripcion.trim());
           
-          logger.fine("🔍 Ejecutando consulta SQL exacta: " + sql);
-          logger.fine("🔍 Parámetro: " + descripcion.trim());
+          logger.debug("🔍 Ejecutando consulta SQL exacta: " + sql);
+          logger.debug("🔍 Parámetro: " + descripcion.trim());
           
           try (ResultSet resultSet = statement.executeQuery()) {
               if (resultSet.next()) {
@@ -1489,13 +1489,13 @@ public class CotizacionService {
                   logger.info("✅ Precio exacto encontrado: $" + precio + " para descripción: " + descripcion);
                   return precio;
               } else {
-                  logger.warning("⚠️ No se encontró precio exacto para descripción: " + descripcion);
+                  logger.warn("⚠️ No se encontró precio exacto para descripción: " + descripcion);
                   return 0.0;
               }
           }
           
       } catch (SQLException e) {
-          logger.log(Level.SEVERE, "❌ Error al consultar precio exacto para descripción: " + descripcion, e);
+          logger.error("❌ Error al consultar precio exacto para descripción: " + descripcion, e);
           return 0.0;
       }
   }
@@ -1512,7 +1512,7 @@ public class CotizacionService {
       List<ProductoSimilar> productos = new ArrayList<>();
       
       if (descripcion == null || descripcion.trim().isEmpty()) {
-          logger.warning("⚠️ Descripción vacía o nula para búsqueda de productos similares");
+          logger.warn("⚠️ Descripción vacía o nula para búsqueda de productos similares");
           return productos;
       }
       
@@ -1530,7 +1530,7 @@ public class CotizacionService {
                   int totalProductos = countResult.getInt("total");
                   logger.info("📊 Total productos en tabla: " + totalProductos);
                   if (totalProductos == 0) {
-                      logger.warning("⚠️ La tabla producto está vacía");
+                      logger.warn("⚠️ La tabla producto está vacía");
                       return productos;
                   }
               }
@@ -1564,7 +1564,7 @@ public class CotizacionService {
                   }
                   
                   if (contador == 0) {
-                      logger.warning("⚠️ La consulta no devolvió ningún resultado");
+                      logger.warn("⚠️ La consulta no devolvió ningún resultado");
                       // Hacer una consulta de prueba más simple
                       String testSql = "SELECT descripcion_es FROM producto LIMIT 5";
                       try (PreparedStatement testStatement = connection.prepareStatement(testSql);
@@ -1582,8 +1582,8 @@ public class CotizacionService {
           }
           
       } catch (SQLException e) {
-          logger.log(Level.SEVERE, "❌ Error al buscar productos similares para descripción: " + descripcion, e);
-          logger.log(Level.SEVERE, "❌ Detalles del error SQL: " + e.getSQLState() + " - " + e.getErrorCode());
+          logger.error("❌ Error al buscar productos similares para descripción: " + descripcion, e);
+          logger.error("❌ Detalles del error SQL: " + e.getSQLState() + " - " + e.getErrorCode());
       }
       
       return productos;
@@ -1599,7 +1599,7 @@ public class CotizacionService {
       logger.info("💰 Consultando precio neto para descripción: " + descripcion);
       
       if (descripcion == null || descripcion.trim().isEmpty()) {
-          logger.warning("⚠️ Descripción vacía o nula para consulta de precio neto");
+          logger.warn("⚠️ Descripción vacía o nula para consulta de precio neto");
           return 0.0;
       }
       
@@ -1617,8 +1617,8 @@ public class CotizacionService {
           statement.setString(1, descripcionBusqueda);
           statement.setString(2, descripcionBusqueda);
           
-          logger.fine("🔍 Ejecutando consulta SQL precio neto: " + sql);
-          logger.fine("🔍 Parámetro búsqueda: " + descripcionBusqueda);
+          logger.debug("🔍 Ejecutando consulta SQL precio neto: " + sql);
+          logger.debug("🔍 Parámetro búsqueda: " + descripcionBusqueda);
           
           try (ResultSet resultSet = statement.executeQuery()) {
               if (resultSet.next()) {
@@ -1626,13 +1626,13 @@ public class CotizacionService {
                   logger.info("✅ Precio neto encontrado: $" + precioNeto + " para descripción: " + descripcion);
                   return precioNeto;
               } else {
-                  logger.warning("⚠️ No se encontró precio neto para descripción: " + descripcion);
+                  logger.warn("⚠️ No se encontró precio neto para descripción: " + descripcion);
                   return 0.0;
               }
           }
           
       } catch (SQLException e) {
-          logger.log(Level.SEVERE, "❌ Error al consultar precio neto para descripción: " + descripcion, e);
+          logger.error("❌ Error al consultar precio neto para descripción: " + descripcion, e);
           return 0.0;
       }
   }
@@ -1651,7 +1651,7 @@ public class CotizacionService {
               if (resultSet.next()) {
                   logger.info("✅ Tabla 'producto' existe");
               } else {
-                  logger.severe("❌ Tabla 'producto' NO existe");
+                  logger.error("❌ Tabla 'producto' NO existe");
                   return;
               }
           }
@@ -1680,12 +1680,12 @@ public class CotizacionService {
                             ", Precio: " + resultSet.getDouble("valor_pesos"));
               }
               if (count == 0) {
-                  logger.warning("⚠️ No hay datos en la tabla producto");
+                  logger.warn("⚠️ No hay datos en la tabla producto");
               }
           }
           
       } catch (SQLException e) {
-          logger.log(Level.SEVERE, "❌ Error en diagnóstico de tabla producto", e);
+          logger.error("❌ Error en diagnóstico de tabla producto", e);
       }
   }
 
@@ -1729,7 +1729,7 @@ public class CotizacionService {
           }
           
       } catch (SQLException e) {
-          logger.log(Level.WARNING, "⚠️ Error al construir consulta con vista, usando consulta simple", e);
+          logger.warn("⚠️ Error al construir consulta con vista, usando consulta simple", e);
       }
       
       // Fallback: consulta simple sin JOIN
@@ -1793,7 +1793,7 @@ public class CotizacionService {
                   }
                   
               } else {
-                  logger.warning("❌ Vista vista_producto_precio no existe");
+                  logger.warn("❌ Vista vista_producto_precio no existe");
                   
                   // Listar todas las vistas disponibles
                   String allViewsSql = "SELECT table_name FROM information_schema.views";
@@ -1810,7 +1810,7 @@ public class CotizacionService {
           }
           
       } catch (SQLException e) {
-          logger.log(Level.SEVERE, "❌ Error en diagnóstico de vista_producto_precio", e);
+          logger.error("❌ Error en diagnóstico de vista_producto_precio", e);
       }
   }
 
