@@ -3,9 +3,11 @@ package cl.vss.cotizador;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cl.vss.cotizador.demo.LoginController;
+import cl.vss.cotizador.model.Broker;
 import cl.vss.cotizador.model.Familia;
 import cl.vss.cotizador.model.ItemCotizacionExcel;
 import cl.vss.cotizador.service.AuditoriaDAO;
+import cl.vss.cotizador.service.BrokerDAO;
 import cl.vss.cotizador.service.AuditoriaRegistro;
 import cl.vss.cotizador.service.CotizacionService;
 import cl.vss.cotizador.service.ParametrosDAO;
@@ -92,6 +94,10 @@ public class Main extends Application {
     // 👉 Controles usados en el filtrado (se inicializan en la UI)
     private TextField txtBuscar;
     private ComboBox<String> comboFamilias;
+    
+    // 👉 ComboBox para brokers en la pestaña Cotización
+    private ComboBox<Broker> comboBrokers;
+    private ObservableList<Broker> listaBrokers;
  
     // 👉 Variables para parámetros comerciales en productos
     private double tipoCambioActual = 1.0;
@@ -150,6 +156,12 @@ public class Main extends Application {
     Button btnExportar = new Button("💾 Exportar Cotización");
     btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
+    // 👉 ComboBox de Brokers
+    comboBrokers = new ComboBox<>();
+    comboBrokers.setPromptText("Seleccionar Broker...");
+    comboBrokers.setPrefWidth(200);
+    cargarBrokers(); // Cargar brokers desde la BD
+
     // 👉 aplicar estilo corporativo VSS (azul con letras blancas)
     btnCargar.getStyleClass().add("color-primario");
     //btnAnalizar.getStyleClass().add("color-primario");
@@ -157,7 +169,15 @@ public class Main extends Application {
     btnExportar.getStyleClass().add("color-primario");
 
     //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
-    ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar,new Separator(), btnExportar);
+    ToolBar barraCotizador = new ToolBar(
+        btnCargar, 
+        new Separator(), 
+        btnLimpiar,
+        new Separator(), 
+        btnExportar,
+        new Separator(),
+        new Label("Broker:"), comboBrokers
+    );
     rootCotizador.setTop(barraCotizador);
     
     // Crear panel con cabecera y tabla
@@ -2100,6 +2120,30 @@ private void filtrarProductos() {
         return coincideTexto && coincideFamilia;
     });
 }
+
+// ============================================================
+// 🔵 CARGAR BROKERS DESDE LA BD
+// ============================================================
+private void cargarBrokers() {
+    try (Connection conn = DBConnection.getConnection()) {
+        BrokerDAO brokerDAO = new BrokerDAO(conn);
+        List<Broker> brokers = brokerDAO.listarBrokersActivos();
+        
+        listaBrokers = FXCollections.observableArrayList(brokers);
+        comboBrokers.setItems(listaBrokers);
+        
+        logger.info("Se cargaron {} brokers en el ComboBox", brokers.size());
+        
+    } catch (SQLException e) {
+        logger.error("Error al cargar brokers", e);
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Error");
+        alert.setHeaderText("Error al cargar brokers");
+        alert.setContentText("No se pudieron cargar los brokers desde la base de datos: " + e.getMessage());
+        alert.showAndWait();
+    }
+}
+
 
 
 
