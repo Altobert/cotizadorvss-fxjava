@@ -146,6 +146,10 @@ public class Main extends Application {
     Button btnCargar = new Button("📂 Cargar Excel");
     btnCargar.setOnAction(e -> cargarArchivo(stage));
     
+    // 👉 Botón adicional para subir archivos (upload)
+    Button btnSubir = new Button("📤 Cargar Cotización");
+    btnSubir.setOnAction(e -> cargarArchivo(stage));
+    
     //Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
     //btnAnalizar.setDisable(true); // Deshabilitado inicialmente
     //btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
@@ -164,13 +168,15 @@ public class Main extends Application {
 
     // 👉 aplicar estilo corporativo VSS (azul con letras blancas)
     btnCargar.getStyleClass().add("color-primario");
+    btnSubir.getStyleClass().add("color-primario");
     //btnAnalizar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
     btnExportar.getStyleClass().add("color-primario");
 
     //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
     ToolBar barraCotizador = new ToolBar(
-        btnCargar, 
+        btnCargar,
+        btnSubir,
         new Separator(), 
         btnLimpiar,
         new Separator(), 
@@ -2143,6 +2149,7 @@ private void cargarBrokers() {
         alert.showAndWait();
     }
 }
+
 
 
 
