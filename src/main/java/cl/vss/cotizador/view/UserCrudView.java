@@ -123,11 +123,11 @@ public class UserCrudView {
     // Crear usuario
     // ============================
     private void crear() {
-        Alert a = new Alert(Alert.AlertType.INFORMATION);
-        a.setHeaderText("Crear usuario");
-        a.setContentText("Aquí conectaremos el formulario de creación.");
-        a.showAndWait();
-    }
+    UserCreateForm form = new UserCreateForm();
+    form.mostrar();
+    cargarUsuarios();
+}
+
 
     // ============================
     // Editar usuario
