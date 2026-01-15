@@ -24,7 +24,6 @@ JOIN (
 ) pc ON true;
 
 
-
 -- VISTA PRODUCTO / PRECIO /FAMILIA
 
 CREATE OR REPLACE VIEW vista_producto_precio_familia AS
@@ -50,3 +49,34 @@ JOIN (
   LIMIT 1
 ) pc ON true
 ORDER BY f.nombre ASC, p.descripcion_en ASC;
+--*******************************************************************************************
+
+--Script para poblar tabla familia_producto (antes de cargar los productos debido a que es clave foranea de la tabla productos.)
+
+INSERT INTO familia_producto (nombre, descripcion) VALUES
+('Tostaduria', 'Productos de frutos secos, semillas y similares'),
+('Lacteos', 'Productos lácteos y derivados'),
+('Carnes', 'Productos cárnicos y embutidos'),
+('Bebestibles', 'Jugos, aguas, bebidas y líquidos'),
+('Congelados', 'Productos congelados listos para consumo'),
+('Pescados y mariscos', 'Productos del mar, frescos o en conserva'),
+('Frutas y verduras', 'Productos vegetales frescos o procesados'),
+('Indu', 'Productos industriales o de uso general'),
+('Abarrotes', 'Productos de almacén, abarrotes y consumo diario');
+
+
+
+-- Script Insercion Parámetros comerciales iniciales para poblar BD y probar vista 
+
+INSERT INTO parametros_comerciales (
+  tipo_cambio_usado,
+  porcentaje_utilidad,
+  fecha_vigencia,
+  usuario_editor_id
+) VALUES (
+  870.00,       -- Tipo de cambio inicial
+  1.55,         -- Margen de utilidad (55%)
+  CURRENT_DATE, -- Fecha de vigencia desde hoy
+  NULL          -- Usuario editor (puedes usar un ID real si lo tienes)
+);
+

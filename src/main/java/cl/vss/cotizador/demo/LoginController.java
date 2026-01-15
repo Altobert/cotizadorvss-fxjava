@@ -36,17 +36,14 @@ public class LoginController {
             Usuario usuario = usuarioDAO.validarLogin(txtCorreo.getText(), txtPassword.getText());
             if (usuario != null) {
 
-                // Mensaje de bienvenida visible
                 lblMensaje.setText("Bienvenido " + usuario.getNombre());
                 lblMensaje.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
 
-                // Guardar usuario en sesión
                 Sesion.setUsuarioActual(usuario);
 
-                // Esperar un momento para mostrar el mensaje
                 new Thread(() -> {
                     try {
-                        Thread.sleep(800); // 0.8 segundos visibles
+                        Thread.sleep(800);
                     } catch (InterruptedException ignored) {}
 
                     javafx.application.Platform.runLater(() -> {
@@ -66,12 +63,19 @@ public class LoginController {
             }
         });
 
-        // Layout principal (SIN botón de crear cuenta)
+        // Layout principal
         VBox root = new VBox(12, txtCorreo, txtPassword, btnLogin, lblMensaje);
         root.setStyle("-fx-padding: 25; -fx-alignment: center;");
 
-        // Ventana más grande y centrada
         Scene scene = new Scene(root, 480, 320);
+
+        // ENTER en cualquier parte del login → ejecuta el botón
+        scene.setOnKeyPressed(event -> {
+            if (event.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                btnLogin.fire();
+            }
+        });
+
         stage.setTitle("Login - Cotizador VSS");
         stage.setScene(scene);
         stage.setResizable(false);
