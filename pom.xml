@@ -39,6 +39,14 @@
             <version>${javafx.version}</version>
         </dependency>
         
+        <!-- JavaFX Swing (para tests) -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-swing</artifactId>
+            <version>${javafx.version}</version>
+            <scope>test</scope>
+        </dependency>
+        
         <!-- Apache POI - Excel (XLSX) y Word (.docx) -->
         <dependency>
             <groupId>org.apache.poi</groupId>

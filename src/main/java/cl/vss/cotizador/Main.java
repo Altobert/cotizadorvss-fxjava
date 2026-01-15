@@ -3,9 +3,15 @@ package cl.vss.cotizador;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cl.vss.cotizador.demo.LoginController;
+import cl.vss.cotizador.model.Broker;
+import cl.vss.cotizador.model.BrokerFormato;
 import cl.vss.cotizador.model.Familia;
+import cl.vss.cotizador.model.FormatoColumna;
 import cl.vss.cotizador.model.ItemCotizacionExcel;
+import cl.vss.cotizador.model.RowData;
 import cl.vss.cotizador.service.AuditoriaDAO;
+import cl.vss.cotizador.service.BrokerDAO;
+import cl.vss.cotizador.service.FormatoDAO;
 import cl.vss.cotizador.service.AuditoriaRegistro;
 import cl.vss.cotizador.service.CotizacionService;
 import cl.vss.cotizador.service.ParametrosDAO;
@@ -92,6 +98,14 @@ public class Main extends Application {
     // 👉 Controles usados en el filtrado (se inicializan en la UI)
     private TextField txtBuscar;
     private ComboBox<String> comboFamilias;
+    
+    // 👉 ComboBox para brokers en la pestaña Cotización
+    private ComboBox<Broker> comboBrokers;
+    private ObservableList<Broker> listaBrokers;
+    
+    // 👉 Tabla dinámica para cotizaciones con formato de broker
+    private final TableView<RowData> tablaDinamica = new TableView<>();
+    private BrokerFormato formatoActual;
  
     // 👉 Variables para parámetros comerciales en productos
     private double tipoCambioActual = 1.0;
@@ -140,6 +154,10 @@ public class Main extends Application {
     Button btnCargar = new Button("📂 Cargar Excel");
     btnCargar.setOnAction(e -> cargarArchivo(stage));
     
+    // 👉 Botón adicional para subir archivos (upload)
+    Button btnSubir = new Button("📤 Cargar Cotización");
+    btnSubir.setOnAction(e -> cargarArchivo(stage));
+    
     //Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
     //btnAnalizar.setDisable(true); // Deshabilitado inicialmente
     //btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
@@ -150,14 +168,39 @@ public class Main extends Application {
     Button btnExportar = new Button("💾 Exportar Cotización");
     btnExportar.setOnAction(e -> exportarCotizacion(stage));
 
+    // 👉 ComboBox de Brokers
+    comboBrokers = new ComboBox<>();
+    comboBrokers.setPromptText("Seleccionar Broker...");
+    comboBrokers.setPrefWidth(200);
+    cargarBrokers(); // Cargar brokers desde la BD
+    
+    // 👉 Listener para detectar formato al seleccionar broker
+    comboBrokers.valueProperty().addListener((obs, oldBroker, newBroker) -> {
+        if (newBroker != null) {
+            cargarFormatoBroker(newBroker);
+        } else {
+            formatoActual = null;
+        }
+    });
+
     // 👉 aplicar estilo corporativo VSS (azul con letras blancas)
     btnCargar.getStyleClass().add("color-primario");
+    btnSubir.getStyleClass().add("color-primario");
     //btnAnalizar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
     btnExportar.getStyleClass().add("color-primario");
 
     //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
-    ToolBar barraCotizador = new ToolBar(btnCargar, new Separator(), btnLimpiar,new Separator(), btnExportar);
+    ToolBar barraCotizador = new ToolBar(
+        btnCargar,
+        btnSubir,
+        new Separator(), 
+        btnLimpiar,
+        new Separator(), 
+        btnExportar,
+        new Separator(),
+        new Label("Broker:"), comboBrokers
+    );
     rootCotizador.setTop(barraCotizador);
     
     // Crear panel con cabecera y tabla
@@ -166,8 +209,8 @@ public class Main extends Application {
     //VBox.setVgrow(tabla, javafx.scene.layout.Priority.ALWAYS);
     
     //rootCotizador.setCenter(panelConCabecera);
-    rootCotizador.setCenter(tabla);  // 👈 Solo mostrar la tabla sin cabecera
-    configurarTabla();
+    rootCotizador.setCenter(tablaDinamica);  // 👈 Usar tabla dinámica
+    //configurarTabla(); // Ya no se usa tabla estática
 
 
     // Tab Productos
@@ -1104,7 +1147,7 @@ private void cargarProductos() {
     private void analizarEstructuraExcel(Stage stage) {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Seleccionar archivo Excel para analizar");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx", "*.xlsm"));
         File archivo = fileChooser.showOpenDialog(stage);
 
         if (archivo != null) {
@@ -1135,35 +1178,12 @@ private void cargarProductos() {
     private void cargarArchivo(Stage stage) {
     FileChooser fileChooser = new FileChooser();
     fileChooser.setTitle("Seleccionar archivo Excel");
-    fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));
+    fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx", "*.xlsm"));
     File archivo = fileChooser.showOpenDialog(stage);
 
     if (archivo != null) {
-        // Extraer cabecera
-        //cabeceraActual = cotizacionService.extraerCabecera(archivo);
-        //actualizarCamposCabecera();
-        
-        // Leer items
-        List<ItemCotizacionExcel> items = cotizacionService.leerItemsDesdeExcel(archivo);
-
-        // 👉 aplicar utilidad desde BD con manejo de SQLException
-        try (Connection conn = DBConnection.getConnection()) {
-            ParametrosDAO parametrosDAO = new ParametrosDAO(conn);
-            double utilidad = parametrosDAO.getPorcentajeUtilidadActual();
-
-            for (ItemCotizacionExcel item : items) {
-                double precioBase = item.getPrecio();
-                double precioFinal = precioBase * (1 + utilidad / 100);
-                item.setPrecio(precioFinal);
-            }
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-            Alert alert = new Alert(Alert.AlertType.ERROR, "❌ Error al obtener utilidad desde BD: " + ex.getMessage());
-            alert.showAndWait();
-        }
-
-        ObservableList<ItemCotizacionExcel> datos = FXCollections.observableArrayList(items);
-        tabla.setItems(datos);
+        // 👉 Usar el nuevo método con formato dinámico
+        leerExcelConFormato(archivo);
     }
 }
 
@@ -1615,8 +1635,11 @@ private void cargarProductos() {
     }
 
     private void limpiarTabla() {
-        tabla.getItems().clear();
-        // Opcional: mostrar un mensaje de confirmación
+        tablaDinamica.getItems().clear();
+        tablaDinamica.getColumns().clear();
+        formatoActual = null;
+        comboBrokers.getSelectionModel().clearSelection();
+        
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Tabla Limpiada");
         alert.setHeaderText(null);
@@ -1625,37 +1648,12 @@ private void cargarProductos() {
     }
 
            private void exportarCotizacion(Stage stage) {
-        if (tabla.getItems().isEmpty()) {
-            Alert alert = new Alert(Alert.AlertType.WARNING);
-            alert.setTitle("Tabla Vacía");
-            alert.setHeaderText(null);
-            alert.setContentText("No hay datos para exportar. Por favor, carga un archivo Excel primero.");
-            alert.showAndWait();
-            return;
-        }
-
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Exportar Cotización");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx"));
-        fileChooser.setInitialFileName("cotizacion_exportada.xlsx");
-        File archivo = fileChooser.showSaveDialog(stage);
-
-        if (archivo != null) {
-            try {
-                cotizacionService.exportarCotizacion(tabla.getItems(), archivo);
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Exportación Exitosa");
-                alert.setHeaderText(null);
-                alert.setContentText("La cotización ha sido exportada exitosamente a:\n" + archivo.getAbsolutePath());
-                alert.showAndWait();
-            } catch (Exception e) {
-                Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("Error de Exportación");
-                alert.setHeaderText(null);
-                alert.setContentText("Error al exportar la cotización: " + e.getMessage());
-                alert.showAndWait();
-            }
-        }
+        // 👉 Funcionalidad de exportación pendiente para tabla dinámica
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Funcionalidad en desarrollo");
+        alert.setHeaderText(null);
+        alert.setContentText("La funcionalidad de exportación está en desarrollo para la nueva tabla dinámica.");
+        alert.showAndWait();
     }
 
     // 👉 Métodos CRUD de Productos *****************************************************
@@ -2100,6 +2098,233 @@ private void filtrarProductos() {
         return coincideTexto && coincideFamilia;
     });
 }
+
+// ============================================================
+// 🔵 CARGAR BROKERS DESDE LA BD
+// ============================================================
+private void cargarBrokers() {
+    try (Connection conn = DBConnection.getConnection()) {
+        BrokerDAO brokerDAO = new BrokerDAO(conn);
+        List<Broker> brokers = brokerDAO.listarBrokersActivos();
+        
+        listaBrokers = FXCollections.observableArrayList(brokers);
+        comboBrokers.setItems(listaBrokers);
+        
+        logger.info("Se cargaron {} brokers en el ComboBox", brokers.size());
+        
+    } catch (SQLException e) {
+        logger.error("Error al cargar brokers", e);
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Error");
+        alert.setHeaderText("Error al cargar brokers");
+        alert.setContentText("No se pudieron cargar los brokers desde la base de datos: " + e.getMessage());
+        alert.showAndWait();
+    }
+}
+
+// ============================================================
+// 🔵 CARGAR FORMATO DEL BROKER SELECCIONADO
+// ============================================================
+private void cargarFormatoBroker(Broker broker) {
+    try (Connection conn = DBConnection.getConnection()) {
+        FormatoDAO formatoDAO = new FormatoDAO(conn);
+        formatoActual = formatoDAO.obtenerFormatoPorBrokerId(broker.getBrokerId());
+        
+        if (formatoActual != null) {
+            logger.info("Formato cargado para broker {}: {} columnas", 
+                       broker.getBrokerName(), formatoActual.getColumnas().size());
+            
+            // Limpiar tabla dinámica y configurar nuevas columnas
+            configurarTablaDinamica();
+            
+            Alert info = new Alert(Alert.AlertType.INFORMATION);
+            info.setTitle("Formato detectado");
+            info.setHeaderText("Broker: " + broker.getBrokerName());
+            info.setContentText("Formato detectado con " + formatoActual.getColumnas().size() + 
+                              " columnas.\nFila de encabezado: " + formatoActual.getHeaderRow());
+            info.showAndWait();
+        } else {
+            logger.warn("No se encontró formato para broker {}", broker.getBrokerName());
+            
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Formato no encontrado");
+            alert.setHeaderText("Broker: " + broker.getBrokerName());
+            alert.setContentText("No se encontró un formato activo para este broker en la base de datos.");
+            alert.showAndWait();
+        }
+        
+    } catch (SQLException e) {
+        logger.error("Error al cargar formato del broker", e);
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Error");
+        alert.setHeaderText("Error al cargar formato");
+        alert.setContentText("Error al obtener formato del broker: " + e.getMessage());
+        alert.showAndWait();
+    }
+}
+
+// ============================================================
+// 🔵 CONFIGURAR TABLA DINÁMICA SEGÚN FORMATO DEL BROKER
+// ============================================================
+private void configurarTablaDinamica() {
+    // Limpiar columnas existentes
+    tablaDinamica.getColumns().clear();
+    tablaDinamica.getItems().clear();
+    
+    if (formatoActual == null || formatoActual.getColumnas().isEmpty()) {
+        logger.warn("No hay formato activo o no tiene columnas");
+        return;
+    }
+    
+    // Crear columnas dinámicamente según el formato
+    for (FormatoColumna col : formatoActual.getColumnas()) {
+        TableColumn<RowData, String> column = new TableColumn<>(col.getNombreColumnaOriginal());
+        String campoEstandar = col.getCampoEstandar();
+        
+        // Configurar cell value factory
+        column.setCellValueFactory(cellData -> cellData.getValue().getProperty(campoEstandar));
+        
+        // Aplicar estilos si existen
+        if (col.getColorFondo() != null || col.getColorTexto() != null) {
+            column.setCellFactory(tc -> new TableCell<RowData, String>() {
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    
+                    if (empty || item == null) {
+                        setText(null);
+                        setStyle("");
+                    } else {
+                        setText(item);
+                        
+                        // Aplicar estilos del formato
+                        StringBuilder style = new StringBuilder();
+                        if (col.getColorFondo() != null && !col.getColorFondo().isEmpty()) {
+                            style.append("-fx-background-color: ").append(col.getColorFondo()).append(";");
+                        }
+                        if (col.getColorTexto() != null && !col.getColorTexto().isEmpty()) {
+                            style.append("-fx-text-fill: ").append(col.getColorTexto()).append(";");
+                        }
+                        if (col.getEsNegrita() != null && col.getEsNegrita()) {
+                            style.append("-fx-font-weight: bold;");
+                        }
+                        if (col.getEsCursiva() != null && col.getEsCursiva()) {
+                            style.append("-fx-font-style: italic;");
+                        }
+                        setStyle(style.toString());
+                    }
+                }
+            });
+        }
+        
+        tablaDinamica.getColumns().add(column);
+    }
+    
+    logger.info("Tabla dinámica configurada con {} columnas", tablaDinamica.getColumns().size());
+}
+
+// ============================================================
+// 🔵 LEER EXCEL CON FORMATO DEL BROKER
+// ============================================================
+private void leerExcelConFormato(File archivo) {
+    if (formatoActual == null) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle("Formato no seleccionado");
+        alert.setHeaderText("Debe seleccionar un broker primero");
+        alert.setContentText("Por favor, seleccione un broker del combo box antes de cargar el archivo.");
+        alert.showAndWait();
+        return;
+    }
+    
+    try {
+        // Usar Apache POI para leer el Excel
+        org.apache.poi.ss.usermodel.Workbook workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(archivo);
+        org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+        
+        ObservableList<RowData> datos = FXCollections.observableArrayList();
+        
+        // Leer desde la fila siguiente al header
+        int startRow = formatoActual.getHeaderRow() + 1;
+        int lastRow = sheet.getLastRowNum();
+        
+        for (int i = startRow; i <= lastRow; i++) {
+            org.apache.poi.ss.usermodel.Row row = sheet.getRow(i);
+            if (row == null) continue;
+            
+            RowData rowData = new RowData();
+            boolean filaVacia = true;
+            
+            // Leer cada columna según el formato
+            for (FormatoColumna col : formatoActual.getColumnas()) {
+                int colIndex = col.getIndiceColumna();
+                org.apache.poi.ss.usermodel.Cell cell = row.getCell(colIndex);
+                
+                String valor = "";
+                if (cell != null) {
+                    switch (cell.getCellType()) {
+                        case STRING:
+                            valor = cell.getStringCellValue();
+                            break;
+                        case NUMERIC:
+                            if (org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) {
+                                valor = cell.getDateCellValue().toString();
+                            } else {
+                                valor = String.valueOf(cell.getNumericCellValue());
+                            }
+                            break;
+                        case BOOLEAN:
+                            valor = String.valueOf(cell.getBooleanCellValue());
+                            break;
+                        case FORMULA:
+                            try {
+                                valor = String.valueOf(cell.getNumericCellValue());
+                            } catch (Exception e) {
+                                valor = cell.getStringCellValue();
+                            }
+                            break;
+                        default:
+                            valor = "";
+                    }
+                }
+                
+                if (!valor.trim().isEmpty()) {
+                    filaVacia = false;
+                }
+                
+                rowData.set(col.getCampoEstandar(), valor);
+            }
+            
+            // Solo agregar si la fila tiene al menos un dato
+            if (!filaVacia) {
+                datos.add(rowData);
+            }
+        }
+        
+        workbook.close();
+        
+        // Actualizar tabla
+        tablaDinamica.setItems(datos);
+        
+        logger.info("Se cargaron {} filas desde el Excel", datos.size());
+        
+        Alert info = new Alert(Alert.AlertType.INFORMATION);
+        info.setTitle("Archivo cargado");
+        info.setHeaderText("Excel procesado exitosamente");
+        info.setContentText("Se cargaron " + datos.size() + " filas con formato de " + 
+                          formatoActual.getBrokerName());
+        info.showAndWait();
+        
+    } catch (Exception e) {
+        logger.error("Error al leer Excel con formato", e);
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Error");
+        alert.setHeaderText("Error al procesar Excel");
+        alert.setContentText("Error al leer el archivo Excel: " + e.getMessage());
+        alert.showAndWait();
+    }
+}
+
+
 
 
 
