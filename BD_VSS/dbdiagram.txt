@@ -1,109 +1,237 @@
+////////////////////////////////////////////////////////////
+// TABLA: usuario
+////////////////////////////////////////////////////////////
 Table usuario {
-  id BIGINT [pk, increment]
-  nombre VARCHAR(100)
-  correo VARCHAR(100)
-  rol VARCHAR(50)
-  activo BOOLEAN
-  fecha_creacion DATETIME
-  password_hash VARCHAR(255) // Nueva columna para guardar la contraseña encriptada
+  id bigint [pk, note: 'Identificador único']
+  nombre varchar(100) [note: 'Nombre completo del usuario']
+  correo varchar(100) [note: 'Correo electrónico']
+  rol varchar(50) [note: 'Rol del usuario']
+  activo boolean [note: 'Estado activo/inactivo']
+  fecha_creacion timestamp [note: 'Fecha de creación']
+  password_hash varchar(255) [note: 'Contraseña encriptada']
 }
 
+////////////////////////////////////////////////////////////
+// TABLA: tipo_cambio
+////////////////////////////////////////////////////////////
 Table tipo_cambio {
-  id BIGINT [pk, increment]
-  fecha DATE [unique]
-  valor DECIMAL(10,4)
-  fuente VARCHAR(100)
-  usuario_registro_id BIGINT [ref: > usuario.id]
-  fecha_registro DATETIME
+  id bigint [pk]
+  fecha date [unique, note: 'Fecha del tipo de cambio']
+  valor decimal(10,4) [note: 'Valor del dólar']
+  fuente varchar(100) [note: 'Fuente del dato']
+  usuario_registro_id bigint [ref: > usuario.id, note: 'Usuario que registró']
+  fecha_registro timestamp
 }
 
+////////////////////////////////////////////////////////////
+// TABLA: parametros_comerciales
+////////////////////////////////////////////////////////////
 Table parametros_comerciales {
-  id BIGINT [pk, increment]
-  tipo_cambio_usado DECIMAL(10,4) [note: 'Debe ser > 0'] // Restricción CHECK en SQL
-  porcentaje_utilidad DECIMAL(5,2) [note: 'Debe estar entre 0 y 100'] // Restricción CHECK en SQL
-  fecha_vigencia DATE [not null, note: 'Fecha válida obligatoria']
-  usuario_editor_id BIGINT [ref: > usuario.id]
-  fecha_actualizacion DATETIME [note: 'DEFAULT NOW() en SQL']
+  id bigint [pk]
+  tipo_cambio_usado decimal(10,4) [note: 'Tipo de cambio positivo']
+  porcentaje_utilidad decimal(5,2) [note: 'Margen válido']
+  fecha_vigencia date [note: 'Fecha desde la cual aplica']
+  usuario_editor_id bigint [ref: > usuario.id, note: 'Usuario que modificó']
+  fecha_actualizacion timestamp [note: 'Fecha de actualización']
 }
 
-
+////////////////////////////////////////////////////////////
+// TABLA: auditoria_parametros
+////////////////////////////////////////////////////////////
 Table auditoria_parametros {
-  id BIGINT [pk, increment]
-  parametro VARCHAR(100)
-  valor_anterior VARCHAR(100)
-  valor_nuevo VARCHAR(100)
-  usuario_id BIGINT [ref: > usuario.id]
-  fecha DATETIME
+  id bigint [pk]
+  parametro varchar(100) [note: 'Nombre del parámetro']
+  valor_anterior varchar(100)
+  valor_nuevo varchar(100)
+  usuario_id bigint [ref: > usuario.id]
+  fecha timestamp
 }
 
+////////////////////////////////////////////////////////////
+// TABLA: cliente
+////////////////////////////////////////////////////////////
 Table cliente {
-  id BIGINT [pk, increment]
-  nombre_barco VARCHAR(100) [unique]
-  imo_numero VARCHAR(20)
-  empresa_operadora VARCHAR(100)
-  correo_contacto VARCHAR(100)
-  puerto_base VARCHAR(100)
-  pais_origen VARCHAR(50)
-  tipo_cliente VARCHAR(50)
-  capitán VARCHAR(100)
-  cocinero_jefe VARCHAR(100)
-  observaciones TEXT
-  activo BOOLEAN
-  fecha_creacion DATETIME
+  id bigint [pk]
+  nombre_barco varchar(100) [unique, note: 'Nombre del barco']
+  imo_numero varchar(20)
+  empresa_operadora varchar(100)
+  correo_contacto varchar(100)
+  puerto_base varchar(100)
+  pais_origen varchar(50)
+  tipo_cliente varchar(50)
+  capitán varchar(100)
+  cocinero_jefe varchar(100)
+  observaciones text
+  activo boolean
+  fecha_creacion timestamp
 }
 
+////////////////////////////////////////////////////////////
+// TABLA: cotizacion
+////////////////////////////////////////////////////////////
 Table cotizacion {
-  id BIGINT [pk, increment]
-  cliente_id BIGINT [ref: > cliente.id]
-  fecha_solicitud DATE
-  puerto_destino VARCHAR(100)
-  archivo_origen VARCHAR(100)
-  observaciones TEXT
-  usuario_importador_id BIGINT [ref: > usuario.id]
-  fecha_importacion DATETIME
+  id bigint [pk]
+  cliente_id bigint [ref: > cliente.id]
+  fecha_solicitud date
+  puerto_destino varchar(100)
+  archivo_origen varchar(100)
+  observaciones text
+  usuario_importador_id bigint [ref: > usuario.id]
+  fecha_importacion timestamp
 }
 
+////////////////////////////////////////////////////////////
+// TABLA: familia_producto
+////////////////////////////////////////////////////////////
 Table familia_producto {
-  id BIGINT [pk, increment]
-  nombre VARCHAR(100) [unique]
-  descripcion TEXT
+  id bigint [pk]
+  nombre varchar(100) [unique]
+  descripcion text
 }
 
+////////////////////////////////////////////////////////////
+// TABLA: producto
+////////////////////////////////////////////////////////////
 Table producto {
-  id BIGINT [pk, increment]
-  familia_id BIGINT [ref: > familia_producto.id]
-  descripcion_en TEXT
-  descripcion_es TEXT
-  unidad_medida VARCHAR(20)
-  valor_pesos DECIMAL(12,2)
-  fecha_actualizacion DATETIME
-  usuario_editor_id BIGINT [ref: > usuario.id]
+  id bigint [pk]
+  familia_id bigint [ref: > familia_producto.id]
+  descripcion_en text
+  descripcion_es text
+  unidad_medida varchar(20)
+  valor_pesos decimal(12,2)
+  fecha_actualizacion timestamp
+  usuario_editor_id bigint [ref: > usuario.id]
 }
 
+////////////////////////////////////////////////////////////
+// TABLA: item_cotizacion
+////////////////////////////////////////////////////////////
 Table item_cotizacion {
-  id BIGINT [pk, increment]
-  cotizacion_id BIGINT [ref: > cotizacion.id]
-  producto_id BIGINT [ref: - producto.id]
-  descripcion TEXT
-  unidad_medida VARCHAR(20)
-  valor_pesos DECIMAL(12,2)
-  tipo_cambio_usado DECIMAL(10,4)
-  precio_costo_neto DECIMAL(12,2)
-  porcentaje_utilidad DECIMAL(5,2)
-  precio_venta_neto DECIMAL(12,2)
-  cantidad INT
-  total_neto DECIMAL(12,2)
-  comentarios TEXT
+  id bigint [pk]
+  cotizacion_id bigint [ref: > cotizacion.id]
+  producto_id bigint [ref: > producto.id]
+  descripcion text
+  unidad_medida varchar(20)
+  valor_pesos decimal(12,2)
+  tipo_cambio_usado decimal(10,4)
+  precio_costo_neto decimal(12,2)
+  porcentaje_utilidad decimal(5,2)
+  precio_venta_neto decimal(12,2)
+  cantidad int
+  total_neto decimal(12,2)
+  comentarios text
 }
 
+////////////////////////////////////////////////////////////
+// TABLA: log_importacion
+////////////////////////////////////////////////////////////
 Table log_importacion {
-  id BIGINT [pk, increment]
-  cotizacion_id BIGINT [ref: > cotizacion.id]
-  usuario_id BIGINT [ref: > usuario.id]
-  fecha DATETIME
-  total_items INT
-  items_vinculados INT
-  items_no_encontrados INT
-  errores_detectados TEXT
-  resumen TEXT
+  id bigint [pk]
+  cotizacion_id bigint [ref: > cotizacion.id]
+  usuario_id bigint [ref: > usuario.id]
+  fecha timestamp
+  total_items int
+  items_vinculados int
+  items_no_encontrados int
+  errores_detectados text
+  resumen text
+}
+
+////////////////////////////////////////////////////////////
+// TABLA: brokers
+////////////////////////////////////////////////////////////
+Table brokers {
+  broker_id int [pk, note: 'Identificador único']
+  broker_name varchar(255) [note: 'Nombre del broker']
+  descripcion text
+  contacto varchar(255)
+  email varchar(255)
+  activo boolean
+  fecha_creacion timestamp
+  fecha_actualizacion timestamp
+}
+
+////////////////////////////////////////////////////////////
+// TABLA: broker_formatos
+////////////////////////////////////////////////////////////
+Table broker_formatos {
+  formato_id int [pk]
+  broker_id int [ref: > brokers.broker_id]
+  version varchar(50)
+  header_row int
+  descripcion text
+  archivo_ejemplo varchar(500)
+  activo boolean
+  fecha_creacion timestamp
+  fecha_actualizacion timestamp
+}
+
+////////////////////////////////////////////////////////////
+// TABLA: formato_columnas
+////////////////////////////////////////////////////////////
+Table formato_columnas {
+  columna_id int [pk]
+  formato_id int [ref: > broker_formatos.formato_id]
+  campo_estandar varchar(100)
+  nombre_columna_original varchar(255)
+  indice_columna int
+  letra_columna varchar(10)
+  tipo_dato varchar(50)
+  requerido boolean
+  descripcion text
+  fecha_creacion timestamp
+  color_fondo varchar(20)
+  color_texto varchar(20)
+  es_negrita boolean
+  es_cursiva boolean
+  tiene_borde boolean
+}
+
+////////////////////////////////////////////////////////////
+// TABLA: broker_metadata
+////////////////////////////////////////////////////////////
+Table broker_metadata {
+  metadata_id int [pk]
+  formato_id int [ref: > broker_formatos.formato_id]
+  seccion varchar(100)
+  campo_nombre varchar(100)
+  campo_valor text
+  fila_origen int
+  columna_origen int
+  letra_columna varchar(5)
+  fecha_creacion timestamp
+}
+
+////////////////////////////////////////////////////////////
+// TABLA: cotizaciones_archivos
+////////////////////////////////////////////////////////////
+Table cotizaciones_archivos {
+  archivo_id int [pk]
+  broker_id int [ref: > brokers.broker_id]
+  formato_id int [ref: > broker_formatos.formato_id]
+  nombre_archivo varchar(500)
+  ruta_archivo text
+  vessel_name varchar(255)
+  imo_number varchar(50)
+  numero_cotizacion varchar(255)
+  fecha_archivo date
+  fecha_procesado timestamp
+}
+
+////////////////////////////////////////////////////////////
+// TABLA: archivo_colores
+////////////////////////////////////////////////////////////
+Table archivo_colores {
+  color_id int [pk]
+  archivo_id int [ref: > cotizaciones_archivos.archivo_id]
+  campo_estandar varchar(100)
+  nombre_columna_original varchar(255)
+  indice_columna int
+  letra_columna varchar(10)
+  color_fondo varchar(20)
+  color_texto varchar(20)
+  es_negrita boolean
+  es_cursiva boolean
+  tiene_borde boolean
+  fecha_deteccion timestamp
 }
