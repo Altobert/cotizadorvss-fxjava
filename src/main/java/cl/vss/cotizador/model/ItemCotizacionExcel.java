@@ -20,6 +20,9 @@ public class ItemCotizacionExcel {
     
     // Propiedad para indicar si no se encontró precio en la base de datos (para colorear la fila)
     private final BooleanProperty precioNoEncontrado = new SimpleBooleanProperty();
+    
+    // Precio calculado desde vista_producto_precio (precio_venta_neto * cantidad)
+    private final DoubleProperty precioVSSCalculado = new SimpleDoubleProperty();
 
     public ItemCotizacionExcel(String codigo, String descripcion, int cantidad, double precio,
                                String unidad, String categoria,
@@ -39,6 +42,9 @@ public class ItemCotizacionExcel {
         
         // Inicializar precioNoEncontrado como false (se actualizará desde el servicio)
         this.precioNoEncontrado.set(false);
+        
+        // Inicializar precioVSSCalculado como 0.0 (se actualizará desde el servicio)
+        this.precioVSSCalculado.set(0.0);
     }
 
     public ItemCotizacionExcel(String codigo, String descripcion, int cantidad, double precio,
@@ -59,6 +65,7 @@ public class ItemCotizacionExcel {
     public int getDisponibilidad() { return disponibilidad.get(); }
     public double getTotalBruto() { return totalBruto.get(); }
     public boolean isPrecioNoEncontrado() { return precioNoEncontrado.get(); }
+    public double getPrecioVSSCalculado() { return precioVSSCalculado.get(); }
 
     // Total calculado directamente
     public double getTotal() {
@@ -78,6 +85,7 @@ public class ItemCotizacionExcel {
     public void setDisponibilidad(int value) { disponibilidad.set(value); }
     public void setTotalBruto(double value) { totalBruto.set(value); }
     public void setPrecioNoEncontrado(boolean value) { precioNoEncontrado.set(value); }
+    public void setPrecioVSSCalculado(double value) { precioVSSCalculado.set(value); }
 
     // Properties
     public StringProperty codigoProperty() { return codigo; }
@@ -92,4 +100,5 @@ public class ItemCotizacionExcel {
     public IntegerProperty disponibilidadProperty() { return disponibilidad; }
     public DoubleProperty totalBrutoProperty() { return totalBruto; }
     public BooleanProperty precioNoEncontradoProperty() { return precioNoEncontrado; }
+    public DoubleProperty precioVSSCalculadoProperty() { return precioVSSCalculado; }
 }
