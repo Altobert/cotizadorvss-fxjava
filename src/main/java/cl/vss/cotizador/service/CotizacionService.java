@@ -367,6 +367,10 @@ public class CotizacionService {
                 //double precio = obtenerDecimal(fila, columnas.get("precio"));
                 double precio = precioPorDescripcion;
                 double precioCalculado = precioPorDescripcion;
+                
+                // 🔍 Calcular precio VSS: precio_venta_neto * cantidad
+                double precioVSS = precioPorDescripcion * cantidad;
+                logger.info("💰 Precio VSS calculado: " + precioPorDescripcion + " x " + cantidad + " = " + precioVSS);
 
                 String unidad = columnas.containsKey("unidad") ? obtenerTexto(fila, columnas.get("unidad")) : "";
                 String categoria = columnas.containsKey("categoria") ? obtenerTexto(fila, columnas.get("categoria")) : "";
@@ -391,6 +395,9 @@ public class CotizacionService {
                 // Marcar si no se encontró precio en la base de datos (precio = 0.0)
                 // para colorear la fila en amarillo
                 item.setPrecioNoEncontrado(precio == 0.0);
+                
+                // 💰 Establecer el precio VSS calculado
+                item.setPrecioVSSCalculado(precioVSS);
                 
                 items.add(item);
             }

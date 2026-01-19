@@ -333,11 +333,14 @@ rootProductos.setCenter(centroProductos);
     // TabPane principal
 TabPane tabs = new TabPane();
 
-// 👉 Pestaña Cotizador (queda igual)
-tabs.getTabs().add(new Tab("Cotizador", rootCotizador));
+// 👉 Pestaña Cotizador
+Tab tabCotizador = new Tab("Cotizador", rootCotizador);
+tabCotizador.setClosable(false);
+tabs.getTabs().add(tabCotizador);
 
 // 👉 Pestaña Productos (versión corregida con listener)
 Tab tabProductos = new Tab("Productos", rootProductos);
+tabProductos.setClosable(false);
 
 tabProductos.setOnSelectionChanged(event -> {
     if (tabProductos.isSelected()) {
@@ -469,7 +472,9 @@ tabs.getTabs().add(tabProductos);
     rootParametros.setCenter(centroParametros);
 
     // 👉 Pestaña Parámetros Comerciales
-    tabs.getTabs().add(new Tab("Parámetros Comerciales", rootParametros));
+    Tab tabParametros = new Tab("Parámetros Comerciales", rootParametros);
+    tabParametros.setClosable(false);
+    tabs.getTabs().add(tabParametros);
 
     // ----------------------
     // Tab Auditoría Parámetros
@@ -514,6 +519,7 @@ tabs.getTabs().add(tabProductos);
 
    // 👉 Pestaña Auditoría Parámetros con recarga automática
 Tab tabAuditoria = new Tab("Auditoría Parámetros", vistaAuditoria);
+tabAuditoria.setClosable(false);
 
 tabAuditoria.setOnSelectionChanged(e -> {
     if (tabAuditoria.isSelected()) {
@@ -932,6 +938,30 @@ private void cargarProductos() {
             ItemCotizacionExcel item = event.getRowValue();
             item.setTotalBruto(event.getNewValue());
         });
+        
+        // 💰 Nueva columna: Precio VSS Calculado (precio_venta_neto * cantidad)
+        TableColumn<ItemCotizacionExcel, Double> colPrecioVSS = new TableColumn<>("Precio VSS");
+        colPrecioVSS.setCellValueFactory(cellData -> cellData.getValue().precioVSSCalculadoProperty().asObject());
+        colPrecioVSS.setCellFactory(col -> new TableCell<ItemCotizacionExcel, Double>() {
+            @Override
+            protected void updateItem(Double value, boolean empty) {
+                super.updateItem(value, empty);
+                if (empty || value == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(String.format("$%.2f", value));
+                    // Resaltar en verde si hay precio calculado
+                    if (value > 0.0) {
+                        setStyle("-fx-background-color: #c8e6c9; -fx-font-weight: bold;");
+                    } else {
+                        setStyle("-fx-background-color: #ffcccc;");
+                    }
+                }
+            }
+        });
+        colPrecioVSS.setPrefWidth(120);
+        colPrecioVSS.setEditable(false); // No editable, es un cálculo automático
 
         // Columna de Acción con botones
         TableColumn<ItemCotizacionExcel, Void> colAccion = new TableColumn<>("Acción");
@@ -968,7 +998,8 @@ private void cargarProductos() {
 
         tabla.getColumns().addAll(
             colCodigo, colDescripcion, colCantidad, colPrecio, colTotal,
-            colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto, colAccion
+            colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto, 
+            colPrecioVSS, colAccion
         );
         
         // Aplicar estilos CSS personalizados para la selección de filas
@@ -2181,6 +2212,17 @@ private void configurarTablaDinamica() {
         TableColumn<RowData, String> column = new TableColumn<>(col.getNombreColumnaOriginal());
         String campoEstandar = col.getCampoEstandar();
         
+        // 📏 Establecer ancho de columna según el tipo de campo
+        if (campoEstandar.contains("DESCRIPTION") || campoEstandar.contains("COMMENTS")) {
+            column.setPrefWidth(250); // Columnas de texto largo
+        } else if (campoEstandar.contains("PRICE") || campoEstandar.contains("TOTAL")) {
+            column.setPrefWidth(100); // Columnas de precio
+        } else if (campoEstandar.contains("QUANTITY") || campoEstandar.contains("UNIT")) {
+            column.setPrefWidth(80); // Columnas numéricas cortas
+        } else {
+            column.setPrefWidth(120); // Ancho predeterminado
+        }
+        
         // Configurar cell value factory
         column.setCellValueFactory(cellData -> cellData.getValue().getProperty(campoEstandar));
         
@@ -2220,7 +2262,37 @@ private void configurarTablaDinamica() {
         tablaDinamica.getColumns().add(column);
     }
     
-    logger.info("Tabla dinámica configurada con {} columnas", tablaDinamica.getColumns().size());
+    // 💰 Agregar columna "Precio VSS" al final
+    TableColumn<RowData, String> colPrecioVSS = new TableColumn<>("Precio VSS");
+    colPrecioVSS.setCellValueFactory(cellData -> cellData.getValue().getProperty("precio_vss_calculado"));
+    colPrecioVSS.setPrefWidth(120);
+    colPrecioVSS.setCellFactory(tc -> new TableCell<RowData, String>() {
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null || item.isEmpty()) {
+                setText(null);
+                setStyle("");
+            } else {
+                try {
+                    double valor = Double.parseDouble(item);
+                    setText(String.format("$%.2f", valor));
+                    // Verde si hay precio, rojo si es 0
+                    if (valor > 0.0) {
+                        setStyle("-fx-background-color: #c8e6c9; -fx-font-weight: bold;");
+                    } else {
+                        setStyle("-fx-background-color: #ffcccc;");
+                    }
+                } catch (NumberFormatException e) {
+                    setText(item);
+                    setStyle("");
+                }
+            }
+        }
+    });
+    tablaDinamica.getColumns().add(colPrecioVSS);
+    
+    logger.info("Tabla dinámica configurada con {} columnas (+ Precio VSS)", tablaDinamica.getColumns().size());
 }
 
 // ============================================================
@@ -2294,8 +2366,40 @@ private void leerExcelConFormato(File archivo) {
                 rowData.set(col.getCampoEstandar(), valor);
             }
             
-            // Solo agregar si la fila tiene al menos un dato
+            // 💰 Calcular Precio VSS para esta fila
             if (!filaVacia) {
+                String descripcion = rowData.get("ITEM_DESCRIPTION");
+                String cantidadStr = rowData.get("QUANTITY");
+                
+                if (descripcion != null && !descripcion.trim().isEmpty()) {
+                    try {
+                        // Buscar precio en vista_producto_precio
+                        double precioUnitario = cotizacionService.consultarPrecioPorDescripcion(descripcion);
+                        
+                        // Obtener cantidad
+                        int cantidad = 0;
+                        if (cantidadStr != null && !cantidadStr.trim().isEmpty()) {
+                            try {
+                                cantidad = (int) Double.parseDouble(cantidadStr.trim());
+                            } catch (NumberFormatException e) {
+                                logger.warn("⚠️ No se pudo parsear cantidad: {}", cantidadStr);
+                            }
+                        }
+                        
+                        // Calcular precio total
+                        double precioVSS = precioUnitario * cantidad;
+                        rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
+                        
+                        logger.debug("💰 Precio VSS: {} x {} = {}", precioUnitario, cantidad, precioVSS);
+                        
+                    } catch (Exception e) {
+                        logger.warn("⚠️ Error al calcular precio VSS para: {}", descripcion, e);
+                        rowData.set("precio_vss_calculado", "0.0");
+                    }
+                } else {
+                    rowData.set("precio_vss_calculado", "0.0");
+                }
+                
                 datos.add(rowData);
             }
         }
