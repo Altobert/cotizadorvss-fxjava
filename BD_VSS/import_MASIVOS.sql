@@ -307,7 +307,7 @@ CREATE TEMP TABLE temp_lacteos (
     col9 TEXT
 );
 
-\COPY temp_lacteos FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_lacteos FROM '/Users/claudioandressanmartinconcha/Desktop/lacteos.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 INSERT INTO producto (
     familia_id,
@@ -418,7 +418,7 @@ CREATE TEMP TABLE temp_frutas_verduras (
 );
 
 -- 2. Cargar CSV
-\COPY temp_frutas_verduras FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_frutas_verduras FROM '/Users/claudioandressanmartinconcha/Desktop/frutas_y_verduras.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 -- 3. Insertar en la tabla principal usando el ID 7
 INSERT INTO producto (
@@ -473,7 +473,7 @@ CREATE TEMP TABLE temp_pescados_mariscos (
 );
 
 -- 2. Cargar CSV
-\COPY temp_pescados_mariscos FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_pescados_mariscos FROM '/Users/claudioandressanmartinconcha/Desktop/pescaos_y_mariscos.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 -- 3. Insertar en la tabla principal
 INSERT INTO producto (

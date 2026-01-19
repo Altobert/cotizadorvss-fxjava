@@ -505,3 +505,130 @@ WHERE TRIM(descripcion_en) != ''
 -- 4. Eliminar tabla temporal
 DROP TABLE temp_pescados_mariscos;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- SCRIPT PARA CARGA CSV frutas_y_verduras : USUARIO DITTO
+
+-- 1. Crear tabla temporal alineada con el CSV
+DROP TABLE IF EXISTS temp_frutas_verduras;
+
+CREATE TEMP TABLE temp_frutas_verduras (
+    familia_productos TEXT,
+    descripcion TEXT,
+    unidad_de_medida TEXT,
+    costo_neto_pesos TEXT,
+    precio_costo_neto TEXT,
+    valor_dolar TEXT,
+    porcentaje TEXT,
+    precio_venta_neto TEXT
+);
+
+-- 2. Cargar CSV
+\COPY temp_frutas_verduras 
+FROM 'C:/Users/claudioandressanmartinconcha/Desktop/frutas_y_verduras.csv'
+WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+
+-- 3. Insertar en la tabla principal
+INSERT INTO producto (
+    familia_id,
+    descripcion_en,
+    descripcion_es,
+    unidad_medida,
+    valor_pesos,
+    fecha_actualizacion,
+    usuario_editor_id
+)
+SELECT 
+    7,  -- ID de la familia 'Frutas y Verduras'
+    TRIM(SPLIT_PART(descripcion, '-', 1)),
+    TRIM(SPLIT_PART(descripcion, '-', 2)),
+    TRIM(unidad_de_medida),
+    CASE 
+        WHEN TRIM(costo_neto_pesos) = '' OR TRIM(costo_neto_pesos) ILIKE '$ 0' THEN 0
+        ELSE CAST(
+            REPLACE(
+                REPLACE(
+                    REPLACE(
+                        REPLACE(TRIM(costo_neto_pesos), '$', ''), ' ', ''
+                    ), '.', ''
+                ), ',', '.'
+            ) AS DECIMAL(12,2)
+        )
+    END,
+    NOW(),
+    NULL
+FROM temp_frutas_verduras
+WHERE TRIM(descripcion) != '' 
+  AND TRIM(descripcion) != 'DESCRIPCIÓN';
+
+-- 4. Eliminar tabla temporal
+DROP TABLE temp_frutas_verduras;
+
+
+-- SCRIPT PARA CARGA CSV pescados_y_mariscos : USUARIO DITTO
+
+-- 1. Crear tabla temporal alineada con el CSV
+DROP TABLE IF EXISTS temp_pescados_mariscos;
+
+CREATE TEMP TABLE temp_pescados_mariscos (
+    familia_productos TEXT,
+    descripcion TEXT,
+    unidad_de_medida TEXT,
+    costo_neto_pesos TEXT,
+    precio_costo_neto TEXT,
+    valor_dolar TEXT,
+    porcentaje TEXT,
+    precio_venta_neto TEXT
+);
+
+-- 2. Cargar CSV
+\COPY temp_pescados_mariscos 
+FROM 'C:/Users/claudioandressanmartinconcha/Desktop/pescados_y_mariscos.csv'
+WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+
+-- 3. Insertar en la tabla principal
+INSERT INTO producto (
+    familia_id,
+    descripcion_en,
+    descripcion_es,
+    unidad_medida,
+    valor_pesos,
+    fecha_actualizacion,
+    usuario_editor_id
+)
+SELECT 
+    (SELECT id FROM familia_producto WHERE nombre = 'Pescados y mariscos'),
+    TRIM(SPLIT_PART(descripcion, '-', 1)),
+    TRIM(SPLIT_PART(descripcion, '-', 2)),
+    TRIM(unidad_de_medida),
+    CASE 
+        WHEN TRIM(costo_neto_pesos) = '' OR TRIM(costo_neto_pesos) ILIKE '$ 0' THEN 0
+        ELSE CAST(
+            REPLACE(
+                REPLACE(
+                    REPLACE(
+                        REPLACE(TRIM(costo_neto_pesos), '$', ''), ' ', ''
+                    ), '.', ''
+                ), ',', '.'
+            ) AS DECIMAL(12,2)
+        )
+    END,
+    NOW(),
+    NULL
+FROM temp_pescados_mariscos
+WHERE TRIM(descripcion) != '' 
+  AND TRIM(descripcion) != 'DESCRIPCIÓN';
+
+-- 4. Eliminar tabla temporal
+DROP TABLE temp_pescados_mariscos;
