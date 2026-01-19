@@ -151,10 +151,8 @@ public class Main extends Application {
 
     // Tab Cotizador
     BorderPane rootCotizador = new BorderPane();
-    Button btnCargar = new Button("📂 Cargar Excel");
-    btnCargar.setOnAction(e -> cargarArchivo(stage));
     
-    // 👉 Botón adicional para subir archivos (upload)
+    // 👉 Botón para cargar cotizaciones
     Button btnSubir = new Button("📤 Cargar Cotización");
     btnSubir.setOnAction(e -> cargarArchivo(stage));
     
@@ -184,7 +182,6 @@ public class Main extends Application {
     });
 
     // 👉 aplicar estilo corporativo VSS (azul con letras blancas)
-    btnCargar.getStyleClass().add("color-primario");
     btnSubir.getStyleClass().add("color-primario");
     //btnAnalizar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
@@ -192,7 +189,6 @@ public class Main extends Application {
 
     //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
     ToolBar barraCotizador = new ToolBar(
-        btnCargar,
         btnSubir,
         new Separator(), 
         btnLimpiar,
