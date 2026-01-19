@@ -28,6 +28,7 @@ class FormatoDAOTest {
     void setUpDatabase() throws SQLException {
         // Obtener conexión a la base de datos
         connection = DBConnection.getConnection();
+        connection.setAutoCommit(false); // Desactivar autoCommit para manejo manual de transacciones
         formatoDAO = new FormatoDAO(connection);
         
         // Insertar datos de prueba
@@ -40,6 +41,11 @@ class FormatoDAOTest {
         limpiarDatosDePrueba();
         
         if (connection != null && !connection.isClosed()) {
+            try {
+                connection.rollback(); // Revertir cualquier cambio pendiente
+            } catch (SQLException e) {
+                // Ignorar errores al hacer rollback
+            }
             connection.close();
         }
     }
