@@ -1723,14 +1723,14 @@ public class CotizacionService {
               if (tienePrecioVentaNeto) {
                   // La vista vista_producto_precio tiene precio_venta_neto, pero producto solo tiene valor_pesos
                   // Usar los datos de la vista cuando esté disponible
-                  return "SELECT p.descripcion_es, p.descripcion_en, p.unidad_medida, " +
-                         "COALESCE(vpp.precio_venta_neto, 0.0) as precio_venta_neto, " +
-                         "COALESCE(vpp.precio_venta_neto, 0.0) as precio_venta_neto_dolares " +
+                  // 🔵 DISTINCT agregado para evitar duplicados
+                  return "SELECT DISTINCT ON (p.id) p.descripcion_es, p.descripcion_en, p.unidad_medida, " +
+                         "COALESCE(vpp.precio_venta_neto, p.valor_pesos, 0.0) as precio_venta_neto, " +
+                         "COALESCE(vpp.precio_costo_neto, p.valor_pesos / 870.0, 0.0) as precio_venta_neto_dolares " +
                          "FROM producto p " +
-                         "LEFT JOIN vista_producto_precio vpp ON " +
-                         "  (p.descripcion_es = vpp.descripcion_es AND p.descripcion_en = vpp.descripcion_en) " +
+                         "LEFT JOIN vista_producto_precio vpp ON p.id = vpp.id " +
                          "WHERE UPPER(p.descripcion_es) LIKE UPPER(?) OR UPPER(p.descripcion_en) LIKE UPPER(?) " +
-                         "ORDER BY COALESCE(vpp.precio_venta_neto, 0.0) DESC " +
+                         "ORDER BY p.id, COALESCE(vpp.precio_venta_neto, p.valor_pesos, 0.0) DESC " +
                          "LIMIT 20";
               }
           }
@@ -1740,7 +1740,8 @@ public class CotizacionService {
       }
       
       // Fallback: consulta simple sin JOIN
-      return "SELECT descripcion_es, descripcion_en, unidad_medida, valor_pesos as precio_venta_neto, " +
+      // 🔵 DISTINCT agregado para evitar duplicados
+      return "SELECT DISTINCT descripcion_es, descripcion_en, unidad_medida, valor_pesos as precio_venta_neto, " +
              "0.0 as precio_venta_neto_dolares " +
              "FROM producto " +
              "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +
