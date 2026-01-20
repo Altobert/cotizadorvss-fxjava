@@ -2288,6 +2288,17 @@ private void configurarTablaDinamica() {
     });
     tablaDinamica.getColumns().add(colPrecioVSS);
     
+    // 👆 Agregar listener de doble clic para editar producto
+    tablaDinamica.setRowFactory(tv -> {
+        TableRow<RowData> row = new TableRow<>();
+        row.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2 && !row.isEmpty()) {
+                abrirPopupEdicionProducto(row.getItem());
+            }
+        });
+        return row;
+    });
+    
     logger.info("Tabla dinámica configurada con {} columnas (+ Precio VSS)", tablaDinamica.getColumns().size());
 }
 
@@ -2430,6 +2441,258 @@ private void leerExcelConFormato(File archivo) {
 
 
 
+
+// ============================================================
+// 🔵 ABRIR POPUP DE EDICIÓN DE PRODUCTO
+// ============================================================
+private void abrirPopupEdicionProducto(RowData rowData) {
+    if (rowData == null) return;
+    
+    // Crear diálogo
+    Dialog<Void> dialog = new Dialog<>();
+    dialog.setTitle("Editar Producto");
+    
+    // Extraer datos de la fila
+    String descripcion = rowData.get("ITEM_DESCRIPTION");
+    String cantidad = rowData.get("QUANTITY");
+    String precioActual = rowData.get("precio_vss_calculado");
+    String unidad = rowData.get("UOM");
+    
+    dialog.setHeaderText("Producto: " + descripcion);
+    
+    // ============================
+    // PANEL DE INFORMACIÓN ACTUAL
+    // ============================
+    VBox infoPanel = new VBox(10);
+    infoPanel.setStyle("-fx-padding: 10; -fx-background-color: #f0f0f0; -fx-border-color: #0A3D91; -fx-border-width: 2;");
+    
+    Label lblTitulo = new Label("📦 Información Actual");
+    lblTitulo.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #0A3D91;");
+    
+    Label lblDesc = new Label("Descripción: " + descripcion);
+    Label lblCant = new Label("Cantidad: " + cantidad + " " + (unidad != null ? unidad : ""));
+    Label lblPrecio = new Label("Precio VSS Actual: $" + precioActual);
+    lblPrecio.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+    
+    infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
+    
+    // ============================
+    // TABLA DE PRODUCTOS SIMILARES
+    // ============================
+    TableView<cl.vss.cotizador.model.ProductoSimilar> tablaProductos = new TableView<>();
+    
+    // Columnas
+    TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colDescEs = new TableColumn<>("Descripción ES");
+    colDescEs.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getDescripcionEs()));
+    colDescEs.setPrefWidth(200);
+    
+    TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colDescEn = new TableColumn<>("Descripción EN");
+    colDescEn.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getDescripcionEn()));
+    colDescEn.setPrefWidth(200);
+    
+    TableColumn<cl.vss.cotizador.model.ProductoSimilar, String> colUnidad = new TableColumn<>("Unidad");
+    colUnidad.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getUnidadMedida()));
+    colUnidad.setPrefWidth(80);
+    
+    TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecio = new TableColumn<>("Precio Neto CLP");
+    colPrecio.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getPrecioVentaNeto()).asObject());
+    colPrecio.setPrefWidth(120);
+    colPrecio.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
+        @Override
+        protected void updateItem(Double item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                setText(null);
+            } else {
+                setText(String.format("$%,.2f", item));
+            }
+        }
+    });
+    
+    TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecioUSD = new TableColumn<>("Precio Neto USD");
+    colPrecioUSD.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getPrecioVentaNetoDolares()).asObject());
+    colPrecioUSD.setPrefWidth(140);
+    colPrecioUSD.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
+        @Override
+        protected void updateItem(Double item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                setText(null);
+            } else {
+                setText(String.format("US$%,.2f", item));
+            }
+        }
+    });
+    
+    tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecio, colPrecioUSD);
+    tablaProductos.setPrefSize(800, 300);
+    
+    // ============================
+    // BÚSQUEDA DE PRODUCTOS
+    // ============================
+    HBox panelBusqueda = new HBox(10);
+    panelBusqueda.setStyle("-fx-padding: 10; -fx-alignment: center-left;");
+    
+    Label lblBuscar = new Label("🔍 Buscar producto:");
+    lblBuscar.setStyle("-fx-font-weight: bold;");
+    
+    TextField txtBusqueda = new TextField();
+    txtBusqueda.setPromptText("Ingrese términos de búsqueda...");
+    txtBusqueda.setPrefWidth(350);
+    txtBusqueda.setText(descripcion); // Pre-llenar con descripción actual
+    
+    Button btnBuscar = new Button("Buscar");
+    btnBuscar.setStyle("-fx-background-color: #0A3D91; -fx-text-fill: white; -fx-font-weight: bold;");
+    btnBuscar.setPrefWidth(100);
+    
+    panelBusqueda.getChildren().addAll(lblBuscar, txtBusqueda, btnBuscar);
+    
+    // ============================
+    // PANEL DE PRECIO CALCULADO
+    // ============================
+    VBox panelPrecioCalculado = new VBox(10);
+    panelPrecioCalculado.setStyle("-fx-padding: 10; -fx-background-color: #D6E4FF; -fx-border-color: #0A3D91; -fx-border-width: 2;");
+    
+    Label lblTituloPrecio = new Label("💰 Precio Total Calculado");
+    lblTituloPrecio.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #0A3D91;");
+    
+    Label lblPrecioTotal = new Label("Precio unitario × Cantidad = Total");
+    lblPrecioTotal.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #0A3D91;");
+    
+    panelPrecioCalculado.getChildren().addAll(lblTituloPrecio, lblPrecioTotal);
+    
+    // ============================
+    // BOTÓN APLICAR PRECIO
+    // ============================
+    Button btnAplicarPrecio = new Button("✅ Aplicar Precio Seleccionado");
+    btnAplicarPrecio.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14px;");
+    btnAplicarPrecio.setPrefWidth(250);
+    btnAplicarPrecio.setPrefHeight(40);
+    
+    // ============================
+    // LÓGICA DE BÚSQUEDA
+    // ============================
+    btnBuscar.setOnAction(e -> {
+        String termino = txtBusqueda.getText().trim();
+        if (!termino.isEmpty()) {
+            List<cl.vss.cotizador.model.ProductoSimilar> resultados = 
+                cotizacionService.buscarProductosSimilares(termino);
+            
+            ObservableList<cl.vss.cotizador.model.ProductoSimilar> datos = 
+                FXCollections.observableArrayList(resultados);
+            tablaProductos.setItems(datos);
+            
+            if (resultados.isEmpty()) {
+                Label sinResultados = new Label("❌ No se encontraron productos para: " + termino);
+                sinResultados.setStyle("-fx-font-size: 14px; -fx-text-fill: #666666;");
+                tablaProductos.setPlaceholder(sinResultados);
+            }
+        }
+    });
+    
+    // Búsqueda con Enter
+    txtBusqueda.setOnAction(e -> btnBuscar.fire());
+    
+    // Búsqueda inicial
+    btnBuscar.fire();
+    
+    // ============================
+    // LÓGICA DE SELECCIÓN
+    // ============================
+    tablaProductos.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+        if (newSelection != null) {
+            // Calcular precio total
+            double precioUnitario = newSelection.getPrecioVentaNeto();
+            int cant = 0;
+            try {
+                cant = Integer.parseInt(cantidad.trim());
+            } catch (NumberFormatException ex) {
+                cant = 1;
+            }
+            
+            double precioTotal = precioUnitario * cant;
+            
+            lblPrecioTotal.setText(String.format("$%,.2f × %d = $%,.2f", 
+                precioUnitario, cant, precioTotal));
+        }
+    });
+    
+    // ============================
+    // LÓGICA DE APLICAR PRECIO
+    // ============================
+    btnAplicarPrecio.setOnAction(e -> {
+        cl.vss.cotizador.model.ProductoSimilar seleccionado = 
+            tablaProductos.getSelectionModel().getSelectedItem();
+        
+        if (seleccionado != null) {
+            // Calcular precio total
+            double precioUnitario = seleccionado.getPrecioVentaNeto();
+            int cant = 0;
+            try {
+                cant = Integer.parseInt(cantidad.trim());
+            } catch (NumberFormatException ex) {
+                cant = 1;
+            }
+            
+            double precioTotal = precioUnitario * cant;
+            
+            // Actualizar la fila con el nuevo precio
+            rowData.set("precio_vss_calculado", String.valueOf(precioTotal));
+            
+            // Refrescar la tabla
+            tablaDinamica.refresh();
+            
+            // Mostrar confirmación
+            Alert confirmacion = new Alert(Alert.AlertType.INFORMATION);
+            confirmacion.setTitle("Precio Actualizado");
+            confirmacion.setHeaderText("✅ Precio aplicado exitosamente");
+            confirmacion.setContentText(String.format(
+                "Producto: %s\n" +
+                "Precio unitario: $%,.2f\n" +
+                "Cantidad: %d\n" +
+                "Precio total: $%,.2f",
+                seleccionado.getDescripcionEs(),
+                precioUnitario,
+                cant,
+                precioTotal
+            ));
+            confirmacion.showAndWait();
+            
+            logger.info("✅ Precio actualizado: {} → ${}", descripcion, precioTotal);
+            
+            // Cerrar el diálogo
+            dialog.close();
+        } else {
+            Alert advertencia = new Alert(Alert.AlertType.WARNING);
+            advertencia.setTitle("Producto No Seleccionado");
+            advertencia.setHeaderText("Debe seleccionar un producto");
+            advertencia.setContentText("Por favor, seleccione un producto de la tabla antes de aplicar el precio.");
+            advertencia.showAndWait();
+        }
+    });
+    
+    // ============================
+    // LAYOUT PRINCIPAL
+    // ============================
+    VBox contenidoPrincipal = new VBox(15);
+    contenidoPrincipal.getChildren().addAll(
+        infoPanel,
+        panelBusqueda,
+        new Label("🔍 Productos en Base de Datos:"),
+        tablaProductos,
+        panelPrecioCalculado,
+        btnAplicarPrecio
+    );
+    contenidoPrincipal.setStyle("-fx-padding: 10;");
+    
+    // Configurar diálogo
+    dialog.getDialogPane().setContent(contenidoPrincipal);
+    dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+    dialog.getDialogPane().setPrefSize(900, 700);
+    
+    // Mostrar diálogo
+    dialog.showAndWait();
+}
 
     // ⚠️ El main siempre al final
     public static void main(String[] args) {
