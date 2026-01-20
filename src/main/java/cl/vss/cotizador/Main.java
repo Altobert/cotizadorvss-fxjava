@@ -2443,6 +2443,27 @@ private void leerExcelConFormato(File archivo) {
 
 
 // ============================================================
+// 🔵 MÉTODO AUXILIAR: OBTENER VALOR DE CAMPO FLEXIBLE
+// ============================================================
+/**
+ * Busca el valor de un campo intentando múltiples nombres posibles
+ * @param rowData Datos de la fila
+ * @param camposPosibles Nombres de campos a buscar en orden de prioridad
+ * @return El valor del primer campo encontrado, o cadena vacía si ninguno existe
+ */
+private String obtenerValorDeCampo(RowData rowData, String... camposPosibles) {
+    for (String campo : camposPosibles) {
+        if (rowData.hasKey(campo)) {
+            String valor = rowData.get(campo);
+            if (valor != null && !valor.trim().isEmpty()) {
+                return valor;
+            }
+        }
+    }
+    return "";
+}
+
+// ============================================================
 // 🔵 ABRIR POPUP DE EDICIÓN DE PRODUCTO
 // ============================================================
 private void abrirPopupEdicionProducto(RowData rowData) {
@@ -2452,13 +2473,26 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     Dialog<Void> dialog = new Dialog<>();
     dialog.setTitle("Editar Producto");
     
-    // Extraer datos de la fila
-    String descripcion = rowData.get("ITEM_DESCRIPTION");
-    String cantidad = rowData.get("QUANTITY");
-    String precioActual = rowData.get("precio_vss_calculado");
-    String unidad = rowData.get("UOM");
+    // 🔍 Extraer datos de la fila - intentar múltiples campos posibles
+    String descripcion = obtenerValorDeCampo(rowData, 
+        "ITEM_DESCRIPTION", "DESCRIPTION", "ITEM_NAME", "PRODUCT_NAME", 
+        "DESCRIPCION", "NOMBRE", "PRODUCTO");
     
-    dialog.setHeaderText("Producto: " + descripcion);
+    String cantidad = obtenerValorDeCampo(rowData, 
+        "QUANTITY", "QTY", "CANTIDAD", "CANT", "QUANTITY_ORDER");
+    
+    String precioActual = rowData.get("precio_vss_calculado");
+    
+    String unidad = obtenerValorDeCampo(rowData, 
+        "UOM", "UNIT", "UNIDAD", "UNIT_OF_MEASURE");
+    
+    // 🚨 DEBUG: Mostrar todos los campos disponibles en la fila
+    logger.debug("🚨 DEBUG - Campos disponibles en RowData: {}", rowData.getKeys());
+    logger.debug("🚨 DEBUG - Descripción extraída: '{}'", descripcion);
+    logger.debug("🚨 DEBUG - Cantidad extraída: '{}'", cantidad);
+    logger.debug("🚨 DEBUG - Unidad extraída: '{}'", unidad);
+    
+    dialog.setHeaderText("Producto: " + (descripcion != null && !descripcion.isEmpty() ? descripcion : "[Sin descripción]"));
     
     // ============================
     // PANEL DE INFORMACIÓN ACTUAL
@@ -2469,9 +2503,9 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     Label lblTitulo = new Label("📦 Información Actual");
     lblTitulo.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #0A3D91;");
     
-    Label lblDesc = new Label("Descripción: " + descripcion);
-    Label lblCant = new Label("Cantidad: " + cantidad + " " + (unidad != null ? unidad : ""));
-    Label lblPrecio = new Label("Precio VSS Actual: $" + precioActual);
+    Label lblDesc = new Label("Descripción: " + (descripcion != null && !descripcion.isEmpty() ? descripcion : "[No disponible]"));
+    Label lblCant = new Label("Cantidad: " + (cantidad != null && !cantidad.isEmpty() ? cantidad : "0") + " " + (unidad != null && !unidad.isEmpty() ? unidad : ""));
+    Label lblPrecio = new Label("Precio VSS Actual: $" + (precioActual != null && !precioActual.isEmpty() ? precioActual : "0.00"));
     lblPrecio.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
     
     infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
@@ -2539,7 +2573,10 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     TextField txtBusqueda = new TextField();
     txtBusqueda.setPromptText("Ingrese términos de búsqueda...");
     txtBusqueda.setPrefWidth(350);
-    txtBusqueda.setText(descripcion); // Pre-llenar con descripción actual
+    // Pre-llenar con descripción actual si existe
+    if (descripcion != null && !descripcion.isEmpty()) {
+        txtBusqueda.setText(descripcion);
+    }
     
     Button btnBuscar = new Button("Buscar");
     btnBuscar.setStyle("-fx-background-color: #0A3D91; -fx-text-fill: white; -fx-font-weight: bold;");
@@ -2603,11 +2640,15 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         if (newSelection != null) {
             // Calcular precio total
             double precioUnitario = newSelection.getPrecioVentaNeto();
-            int cant = 0;
-            try {
-                cant = Integer.parseInt(cantidad.trim());
-            } catch (NumberFormatException ex) {
-                cant = 1;
+            int cant = 1; // valor por defecto
+            if (cantidad != null && !cantidad.isEmpty()) {
+                try {
+                    cant = (int) Double.parseDouble(cantidad.trim());
+                    if (cant <= 0) cant = 1;
+                } catch (NumberFormatException ex) {
+                    logger.warn("⚠️ No se pudo parsear cantidad: '{}', usando 1", cantidad);
+                    cant = 1;
+                }
             }
             
             double precioTotal = precioUnitario * cant;
@@ -2627,11 +2668,15 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         if (seleccionado != null) {
             // Calcular precio total
             double precioUnitario = seleccionado.getPrecioVentaNeto();
-            int cant = 0;
-            try {
-                cant = Integer.parseInt(cantidad.trim());
-            } catch (NumberFormatException ex) {
-                cant = 1;
+            int cant = 1; // valor por defecto
+            if (cantidad != null && !cantidad.isEmpty()) {
+                try {
+                    cant = (int) Double.parseDouble(cantidad.trim());
+                    if (cant <= 0) cant = 1;
+                } catch (NumberFormatException ex) {
+                    logger.warn("⚠️ No se pudo parsear cantidad: '{}', usando 1", cantidad);
+                    cant = 1;
+                }
             }
             
             double precioTotal = precioUnitario * cant;
