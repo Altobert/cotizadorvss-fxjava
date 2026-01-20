@@ -2,6 +2,18 @@ package cl.vss.cotizador;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormat;
+import org.apache.poi.ss.usermodel.Workbook;
+import javafx.stage.FileChooser;
+
+
+
 import cl.vss.cotizador.demo.LoginController;
 import cl.vss.cotizador.model.Broker;
 import cl.vss.cotizador.model.BrokerFormato;
@@ -34,6 +46,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.image.Image;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
@@ -205,7 +218,7 @@ public class Main extends Application {
     //VBox.setVgrow(tabla, javafx.scene.layout.Priority.ALWAYS);
     
     //rootCotizador.setCenter(panelConCabecera);
-    rootCotizador.setCenter(tablaDinamica);  // 👈 Usar tabla dinámica
+    rootCotizador.setCenter(tablaDinamica);  // Usar tabla dinámica
     //configurarTabla(); // Ya no se usa tabla estática
 
 
@@ -216,6 +229,11 @@ public class Main extends Application {
     Button btnAgregar = new Button("➕ Agregar");
     Button btnEditar  = new Button("✏️ Editar");
     Button btnEliminar = new Button("🗑️ Eliminar");
+
+    // Nuevo botón Exportar (Maestra producto)
+    Button btnExportarExcel = new Button("📤 Exportar Excel");
+    btnExportarExcel.getStyleClass().add("color-primario");
+    btnExportarExcel.setOnAction(e -> exportarExcelTodasLasFamilias());
 
     
     // Aplicar colores corporativos VSS desde estilos.css
@@ -243,11 +261,13 @@ public class Main extends Application {
     // Barra superior completa
     ToolBar barraProductos = new ToolBar(
     btnAgregar, btnEditar, btnEliminar,
+    btnExportarExcel,   // ← AQUÍ LO AGREGAMOS
     new Separator(),
     new Label("Buscar:"), txtBuscar,
     new Separator(),
     new Label("Familia:"), comboFamilias
 );
+
 
 // ===============================
 // BANNER DE PARÁMETROS COMERCIALES
@@ -2097,7 +2117,7 @@ private void actualizarBannerParametros() {
 }
 
 // ============================================================
-// 🔵 FILTRADO AVANZADO DE PRODUCTOS
+// 🔵 FILTRADO AVANZADO DE PRODUCTOS + ORDEN ALFABÉTICO (EN INGLÉS)
 // ============================================================
 private void filtrarProductos() {
     if (filteredProductos == null) return;
@@ -2124,7 +2144,145 @@ private void filtrarProductos() {
 
         return coincideTexto && coincideFamilia;
     });
+
+    // 👉 ORDENAR DESPUÉS DE FILTRAR (POR DESCRIPCIÓN EN INGLÉS)
+    tablaProductos.getSortOrder().clear();
+    colDescEn.setSortType(TableColumn.SortType.ASCENDING);
+    tablaProductos.getSortOrder().add(colDescEn);
+    tablaProductos.sort();
 }
+
+private void exportarExcelTodasLasFamilias() {
+    try {
+        // 👉 FileChooser para guardar el archivo
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Exportar Maestra de Precios");
+        fileChooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("Excel (*.xlsx)", "*.xlsx")
+        );
+        File archivo = fileChooser.showSaveDialog(null);
+        if (archivo == null) return;
+
+        // 👉 Crear libro y hoja
+        XSSFWorkbook workbook = new XSSFWorkbook();
+        XSSFSheet sheet = workbook.createSheet("Maestra Precios");
+
+        // 👉 Estilos
+        CellStyle headerStyle = workbook.createCellStyle();
+        XSSFFont headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerStyle.setFont(headerFont);
+
+        DataFormat format = workbook.createDataFormat();
+
+        CellStyle monedaStyle = workbook.createCellStyle();
+        monedaStyle.setDataFormat(format.getFormat("#,##0.00"));
+
+        CellStyle monedaCLPStyle = workbook.createCellStyle();
+        monedaCLPStyle.setDataFormat(format.getFormat("#,###"));
+
+        // 👉 Encabezados
+        Row header = sheet.createRow(0);
+        String[] columnas = {
+                "Familia (ID)",
+                "Descripción ES",
+                "Descripción EN",
+                "Unidad",
+                "Valor Pesos",
+                "Precio USD",
+                "Precio + Utilidad (USD)",
+                "Precio Final CLP"
+        };
+
+        for (int i = 0; i < columnas.length; i++) {
+            Cell cell = header.createCell(i);
+            cell.setCellValue(columnas[i]);
+            cell.setCellStyle(headerStyle);
+        }
+
+        // 👉 Obtener todos los productos desde tu servicio
+        List<Producto> lista = productoService.listarProductos();
+
+        int fila = 1;
+
+        for (Producto p : lista) {
+
+            double usd = (tipoCambioActual == 0) ? 0 : p.getValorPesos() / tipoCambioActual;
+            double conUtil = usd * utilidadActual;
+            double finalClp = conUtil * tipoCambioActual;
+
+            Row row = sheet.createRow(fila++);
+
+            // 👉 Familia ID (tu clase Producto solo tiene familiaId)
+            row.createCell(0).setCellValue(p.getFamiliaId());
+
+            row.createCell(1).setCellValue(p.getDescripcionEs());
+            row.createCell(2).setCellValue(p.getDescripcionEn());
+            row.createCell(3).setCellValue(p.getUnidadMedida());
+
+            Cell cValor = row.createCell(4);
+            cValor.setCellValue(p.getValorPesos());
+            cValor.setCellStyle(monedaCLPStyle);
+
+            Cell cUsd = row.createCell(5);
+            cUsd.setCellValue(usd);
+            cUsd.setCellStyle(monedaStyle);
+
+            Cell cUtil = row.createCell(6);
+            cUtil.setCellValue(conUtil);
+            cUtil.setCellStyle(monedaStyle);
+
+            Cell cFinal = row.createCell(7);
+            cFinal.setCellValue(finalClp);
+            cFinal.setCellStyle(monedaCLPStyle);
+        }
+
+        // 👉 Autoajustar columnas
+        for (int i = 0; i < columnas.length; i++) {
+            sheet.autoSizeColumn(i);
+        }
+
+        // 👉 Guardar archivo
+        FileOutputStream fos = new FileOutputStream(archivo);
+        workbook.write(fos);
+        fos.close();
+        workbook.close();
+
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setHeaderText("Exportación exitosa");
+        alert.setContentText("La maestra de precios fue exportada correctamente.");
+        alert.showAndWait();
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setHeaderText("Error al exportar");
+        alert.setContentText(e.getMessage());
+        alert.showAndWait();
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ============================================================
 // 🔵 CARGAR BROKERS DESDE LA BD
