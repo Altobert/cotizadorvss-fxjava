@@ -1545,7 +1545,7 @@ public class CotizacionService {
           
           try (PreparedStatement statement = connection.prepareStatement(sql)) {
               // Preparar parámetros con wildcards para búsqueda parcial
-              String descripcionBusqueda = "%" + descripcion.trim() + "%";
+              String descripcionBusqueda =  descripcion.trim() + "%";
               statement.setString(1, descripcionBusqueda);
               statement.setString(2, descripcionBusqueda);
               
@@ -1563,10 +1563,11 @@ public class CotizacionService {
                       //double precio = resultSet.getDouble("valor_pesos");                    
                       double precio = resultSet.getDouble("precio_venta_neto");
                       double precioDolares = resultSet.getDouble("precio_venta_neto_dolares");
+                      double valorPesos = resultSet.getDouble("valor_pesos");
                       
                       logger.info("📦 Producto " + contador + ": ES=" + descEs + ", EN=" + descEn + ", Precio=" + precio + ", PrecioDolares=" + precioDolares);
                       
-                      ProductoSimilar producto = new ProductoSimilar(descEs, descEn, unidad, precio, precioDolares);
+                      ProductoSimilar producto = new ProductoSimilar(descEs, descEn, unidad, precio, precioDolares, valorPesos);
                       productos.add(producto);
                   }
                   
@@ -1725,6 +1726,7 @@ public class CotizacionService {
                   // Usar los datos de la vista cuando esté disponible
                   // 🔵 DISTINCT agregado para evitar duplicados
                   return "SELECT DISTINCT ON (p.id) p.descripcion_es, p.descripcion_en, p.unidad_medida, " +
+                         "p.valor_pesos, " +
                          "COALESCE(vpp.precio_venta_neto, p.valor_pesos, 0.0) as precio_venta_neto, " +
                          "COALESCE(vpp.precio_costo_neto, p.valor_pesos / 870.0, 0.0) as precio_venta_neto_dolares " +
                          "FROM producto p " +
@@ -1741,7 +1743,8 @@ public class CotizacionService {
       
       // Fallback: consulta simple sin JOIN
       // 🔵 DISTINCT agregado para evitar duplicados
-      return "SELECT DISTINCT descripcion_es, descripcion_en, unidad_medida, valor_pesos as precio_venta_neto, " +
+      return "SELECT DISTINCT descripcion_es, descripcion_en, unidad_medida, valor_pesos, " +
+             "valor_pesos as precio_venta_neto, " +
              "0.0 as precio_venta_neto_dolares " +
              "FROM producto " +
              "WHERE UPPER(descripcion_es) LIKE UPPER(?) OR UPPER(descripcion_en) LIKE UPPER(?) " +

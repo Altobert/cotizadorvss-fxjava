@@ -2624,6 +2624,7 @@ private String obtenerValorDeCampo(RowData rowData, String... camposPosibles) {
 // 🔵 ABRIR POPUP DE EDICIÓN DE PRODUCTO
 // ============================================================
 private void abrirPopupEdicionProducto(RowData rowData) {
+    // si no se selecciona ninguna fila, no muestra popup.
     if (rowData == null) return;
     
     // Crear diálogo
@@ -2685,10 +2686,10 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     colUnidad.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue().getUnidadMedida()));
     colUnidad.setPrefWidth(80);
     
-    TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecio = new TableColumn<>("Precio Neto CLP");
-    colPrecio.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getPrecioVentaNeto()).asObject());
-    colPrecio.setPrefWidth(120);
-    colPrecio.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
+    TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecioVentaNeto = new TableColumn<>("Precio Venta Neto");
+    colPrecioVentaNeto.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getPrecioVentaNeto()).asObject());
+    colPrecioVentaNeto.setPrefWidth(120);
+    colPrecioVentaNeto.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
         @Override
         protected void updateItem(Double item, boolean empty) {
             super.updateItem(item, empty);
@@ -2700,7 +2701,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         }
     });
     
-    TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecioUSD = new TableColumn<>("Precio Neto USD");
+    TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colPrecioUSD = new TableColumn<>("Precio Neto");
     colPrecioUSD.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getPrecioVentaNetoDolares()).asObject());
     colPrecioUSD.setPrefWidth(140);
     colPrecioUSD.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
@@ -2714,8 +2715,23 @@ private void abrirPopupEdicionProducto(RowData rowData) {
             }
         }
     });
+
+    TableColumn<cl.vss.cotizador.model.ProductoSimilar, Double> colValorPesos = new TableColumn<>("Valor Pesos");
+    colValorPesos.setCellValueFactory(cellData -> new SimpleDoubleProperty(cellData.getValue().getValorPesos()).asObject());
+    colValorPesos.setPrefWidth(120);
+    colValorPesos.setCellFactory(column -> new TableCell<cl.vss.cotizador.model.ProductoSimilar, Double>() {
+        @Override
+        protected void updateItem(Double item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                setText(null);
+            } else {
+                setText(String.format("$%,.2f", item));
+            }
+        }
+    });
     
-    tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecio, colPrecioUSD);
+    tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecioUSD, colPrecioVentaNeto, colValorPesos);
     tablaProductos.setPrefSize(800, 300);
     
     // ============================

@@ -9,17 +9,19 @@ public class ProductoSimilar {
     private String unidadMedida;
     private double precioVentaNeto;
     private double precioVentaNetoDolares;
+    private double valorPesos;    
 
     public ProductoSimilar() {
         this.precioVentaNetoDolares = 0.0;
     }
 
-    public ProductoSimilar(String descripcionEs, String descripcionEn, String unidadMedida, double precioVentaNeto, double precioVentaNetoDolares) {
+    public ProductoSimilar(String descripcionEs, String descripcionEn, String unidadMedida, double precioVentaNeto, double precioVentaNetoDolares, double valorPesos) {
         this.descripcionEs = descripcionEs;
         this.descripcionEn = descripcionEn;
         this.unidadMedida = unidadMedida;
         this.precioVentaNeto = precioVentaNeto;
         this.precioVentaNetoDolares = precioVentaNetoDolares;
+        this.valorPesos = valorPesos;
     }
 
     // Getters y Setters
@@ -63,6 +65,14 @@ public class ProductoSimilar {
         this.precioVentaNetoDolares = precioVentaNetoDolares;
     }
 
+    public double getValorPesos() {
+        return valorPesos;
+    }
+
+    public void setValorPesos(double valorPesos) {
+        this.valorPesos = valorPesos;
+    }
+
     @Override
     public String toString() {
         return "ProductoSimilar{" +
@@ -71,6 +81,7 @@ public class ProductoSimilar {
                 ", unidadMedida='" + unidadMedida + '\'' +
                 ", precioVentaNeto=" + precioVentaNeto +
                 ", precioVentaNetoDolares=" + precioVentaNetoDolares +
+                ", valorPesos=" + valorPesos +
                 '}';
     }
 }
