@@ -954,7 +954,8 @@ private void cargarProductos() {
             item.setTotalBruto(event.getNewValue());
         });
         
-        // 💰 Nueva columna: Precio VSS Calculado (precio_venta_neto * cantidad)
+        /**
+         * // 💰 Nueva columna: Precio VSS Calculado (precio_venta_neto * cantidad)
         TableColumn<ItemCotizacionExcel, Double> colPrecioVSS = new TableColumn<>("Precio VSS");
         colPrecioVSS.setCellValueFactory(cellData -> cellData.getValue().precioVSSCalculadoProperty().asObject());
         colPrecioVSS.setCellFactory(col -> new TableCell<ItemCotizacionExcel, Double>() {
@@ -977,6 +978,7 @@ private void cargarProductos() {
         });
         colPrecioVSS.setPrefWidth(120);
         colPrecioVSS.setEditable(false); // No editable, es un cálculo automático
+         */
 
         // Columna de Acción con botones
         TableColumn<ItemCotizacionExcel, Void> colAccion = new TableColumn<>("Acción");
@@ -1014,7 +1016,7 @@ private void cargarProductos() {
         tabla.getColumns().addAll(
             colCodigo, colDescripcion, colCantidad, colPrecio, colTotal,
             colDescuento, colTotalNeto, colComentarios, colDisponibilidad, colTotalBruto, 
-            colPrecioVSS, colAccion
+            /*colPrecioVSS,*/ colAccion
         );
         
         // Aplicar estilos CSS personalizados para la selección de filas
@@ -2415,36 +2417,6 @@ private void configurarTablaDinamica() {
         tablaDinamica.getColumns().add(column);
     }
     
-    // 💰 Agregar columna "Precio VSS" al final
-    TableColumn<RowData, String> colPrecioVSS = new TableColumn<>("Precio VSS");
-    colPrecioVSS.setCellValueFactory(cellData -> cellData.getValue().getProperty("precio_vss_calculado"));
-    colPrecioVSS.setPrefWidth(120);
-    colPrecioVSS.setCellFactory(tc -> new TableCell<RowData, String>() {
-        @Override
-        protected void updateItem(String item, boolean empty) {
-            super.updateItem(item, empty);
-            if (empty || item == null || item.isEmpty()) {
-                setText(null);
-                setStyle("");
-            } else {
-                try {
-                    double valor = Double.parseDouble(item);
-                    setText(String.format("$%.2f", valor));
-                    // Verde si hay precio, rojo si es 0
-                    if (valor > 0.0) {
-                        setStyle("-fx-background-color: #c8e6c9; -fx-font-weight: bold;");
-                    } else {
-                        setStyle("-fx-background-color: #ffcccc;");
-                    }
-                } catch (NumberFormatException e) {
-                    setText(item);
-                    setStyle("");
-                }
-            }
-        }
-    });
-    tablaDinamica.getColumns().add(colPrecioVSS);
-    
     // 👆 Agregar listener de doble clic para editar producto
     tablaDinamica.setRowFactory(tv -> {
         TableRow<RowData> row = new TableRow<>();
@@ -2456,7 +2428,7 @@ private void configurarTablaDinamica() {
         return row;
     });
     
-    logger.info("Tabla dinámica configurada con {} columnas (+ Precio VSS)", tablaDinamica.getColumns().size());
+    logger.info("Tabla dinámica configurada con {} columnas", tablaDinamica.getColumns().size());
 }
 
 // ============================================================
@@ -2530,40 +2502,20 @@ private void leerExcelConFormato(File archivo) {
                 rowData.set(col.getCampoEstandar(), valor);
             }
             
-            // 💰 Calcular Precio VSS para esta fila
-            if (!filaVacia) {
-                String descripcion = rowData.get("ITEM_DESCRIPTION");
-                String cantidadStr = rowData.get("QUANTITY");
-                
-                if (descripcion != null && !descripcion.trim().isEmpty()) {
-                    try {
-                        // Buscar precio en vista_producto_precio
-                        double precioUnitario = cotizacionService.consultarPrecioPorDescripcion(descripcion);
-                        
-                        // Obtener cantidad
-                        int cantidad = 0;
-                        if (cantidadStr != null && !cantidadStr.trim().isEmpty()) {
-                            try {
-                                cantidad = (int) Double.parseDouble(cantidadStr.trim());
-                            } catch (NumberFormatException e) {
-                                logger.warn("⚠️ No se pudo parsear cantidad: {}", cantidadStr);
-                            }
-                        }
-                        
-                        // Calcular precio total
-                        double precioVSS = precioUnitario * cantidad;
-                        rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
-                        
-                        logger.debug("💰 Precio VSS: {} x {} = {}", precioUnitario, cantidad, precioVSS);
-                        
-                    } catch (Exception e) {
-                        logger.warn("⚠️ Error al calcular precio VSS para: {}", descripcion, e);
-                        rowData.set("precio_vss_calculado", "0.0");
+            // 💰 Inicializar columna PRECIO_VSS con 0.0 si existe en el formato
+            for (FormatoColumna col : formatoActual.getColumnas()) {
+                if ("PRECIO_VSS".equals(col.getCampoEstandar())) {
+                    // Si la columna no tiene valor o está vacía, inicializar con 0.0
+                    String valorActual = rowData.get("PRECIO_VSS");
+                    if (valorActual == null || valorActual.trim().isEmpty()) {
+                        rowData.set("PRECIO_VSS", "0.0");
                     }
-                } else {
-                    rowData.set("precio_vss_calculado", "0.0");
+                    break;
                 }
-                
+            }
+            
+            // Agregar la fila solo si no está vacía
+            if (!filaVacia) {
                 datos.add(rowData);
             }
         }
