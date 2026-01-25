@@ -16,12 +16,14 @@ import javafx.stage.FileChooser;
 import cl.vss.cotizador.demo.LoginController;
 import cl.vss.cotizador.model.Broker;
 import cl.vss.cotizador.model.BrokerFormato;
+import cl.vss.cotizador.model.BrokerMetadata;
 import cl.vss.cotizador.model.Familia;
 import cl.vss.cotizador.model.FormatoColumna;
 import cl.vss.cotizador.model.ItemCotizacionExcel;
 import cl.vss.cotizador.model.RowData;
 import cl.vss.cotizador.service.AuditoriaDAO;
 import cl.vss.cotizador.service.BrokerDAO;
+import cl.vss.cotizador.service.BrokerMetadataDAO;
 import cl.vss.cotizador.service.FormatoDAO;
 import cl.vss.cotizador.service.AuditoriaRegistro;
 import cl.vss.cotizador.service.CotizacionService;
@@ -118,6 +120,9 @@ public class Main extends Application {
     // 👉 Tabla dinámica para cotizaciones con formato de broker
     private final TableView<RowData> tablaDinamica = new TableView<>();
     private BrokerFormato formatoActual;
+    
+    // 👉 Panel de metadata del broker
+    private VBox panelMetadata;
  
     // 👉 Variables para parámetros comerciales en productos
     private double tipoCambioActual = 1.0;
@@ -211,14 +216,14 @@ public class Main extends Application {
     );
     rootCotizador.setTop(barraCotizador);
     
-    // Crear panel con cabecera y tabla
-    //VBox panelConCabecera = new VBox(5);
-    //panelConCabecera.getChildren().addAll(crearPanelCabecera(), tabla);
-    //VBox.setVgrow(tabla, javafx.scene.layout.Priority.ALWAYS);
+    // Crear panel con metadata y tabla
+    VBox panelConMetadata = new VBox(10);
+    panelMetadata = crearPanelMetadata(); // Inicializar panel de metadata vacío
+    panelConMetadata.getChildren().addAll(panelMetadata, tablaDinamica);
+    VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
+    panelConMetadata.setStyle("-fx-padding: 10;");
     
-    //rootCotizador.setCenter(panelConCabecera);
-    rootCotizador.setCenter(tablaDinamica);  // Usar tabla dinámica
-    //configurarTabla(); // Ya no se usa tabla estática
+    rootCotizador.setCenter(panelConMetadata);
 
 
     // Tab Productos
@@ -2323,6 +2328,9 @@ private void cargarFormatoBroker(Broker broker) {
             // Limpiar tabla dinámica y configurar nuevas columnas
             configurarTablaDinamica();
             
+            // 📋 Cargar metadata del broker
+            cargarMetadataBroker(formatoActual.getFormatoId());
+            
             Alert info = new Alert(Alert.AlertType.INFORMATION);
             info.setTitle("Formato detectado");
             info.setHeaderText("Broker: " + broker.getBrokerName());
@@ -2331,6 +2339,9 @@ private void cargarFormatoBroker(Broker broker) {
             info.showAndWait();
         } else {
             logger.warn("No se encontró formato para broker {}", broker.getBrokerName());
+            
+            // Limpiar panel de metadata
+            actualizarPanelMetadata(null);
             
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Formato no encontrado");
@@ -2862,6 +2873,132 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     
     // Mostrar diálogo
     dialog.showAndWait();
+}
+
+// ============================================================
+// 🔵 CREAR PANEL DE METADATA VACÍO
+// ============================================================
+private VBox crearPanelMetadata() {
+    VBox panel = new VBox(10);
+    panel.setStyle("-fx-padding: 15; -fx-background-color: #f5f7fa; -fx-border-color: #0A3D91; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
+    
+    Label lblTitulo = new Label("📋 Metadata del Broker");
+    lblTitulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #0A3D91;");
+    
+    Label lblSinDatos = new Label("Seleccione un broker para ver su metadata");
+    lblSinDatos.setStyle("-fx-font-size: 12px; -fx-text-fill: #666666; -fx-font-style: italic;");
+    
+    panel.getChildren().addAll(lblTitulo, lblSinDatos);
+    panel.setManaged(false); // Ocultar inicialmente
+    panel.setVisible(false);
+    
+    return panel;
+}
+
+// ============================================================
+// 🔵 CARGAR METADATA DEL BROKER
+// ============================================================
+private void cargarMetadataBroker(int formatoId) {
+    try (Connection conn = DBConnection.getConnection()) {
+        BrokerMetadataDAO metadataDAO = new BrokerMetadataDAO(conn);
+        Map<String, List<BrokerMetadata>> metadataPorSeccion = metadataDAO.obtenerMetadataPorSeccion(formatoId);
+        
+        actualizarPanelMetadata(metadataPorSeccion);
+        
+        logger.info("Metadata cargada para formato ID {}: {} secciones", formatoId, metadataPorSeccion.size());
+        
+    } catch (SQLException e) {
+        logger.error("Error al cargar metadata del formato ID {}", formatoId, e);
+        actualizarPanelMetadata(null);
+    }
+}
+
+// ============================================================
+// 🔵 ACTUALIZAR PANEL DE METADATA CON DATOS
+// ============================================================
+private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataPorSeccion) {
+    panelMetadata.getChildren().clear();
+    
+    // Título principal
+    Label lblTitulo = new Label("📋 Metadata del Broker");
+    lblTitulo.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #0A3D91;");
+    panelMetadata.getChildren().add(lblTitulo);
+    
+    if (metadataPorSeccion == null || metadataPorSeccion.isEmpty()) {
+        Label lblSinDatos = new Label("No hay metadata disponible para este broker");
+        lblSinDatos.setStyle("-fx-font-size: 12px; -fx-text-fill: #666666; -fx-font-style: italic;");
+        panelMetadata.getChildren().add(lblSinDatos);
+        panelMetadata.setManaged(false);
+        panelMetadata.setVisible(false);
+        return;
+    }
+    
+    // Mostrar el panel
+    panelMetadata.setManaged(true);
+    panelMetadata.setVisible(true);
+    
+    // Crear un HBox para organizar las secciones en columnas
+    HBox contenedorSecciones = new HBox(20);
+    contenedorSecciones.setStyle("-fx-padding: 10 0 0 0;");
+    
+    // Crear columnas para diferentes secciones
+    VBox columna1 = new VBox(10);
+    VBox columna2 = new VBox(10);
+    VBox columna3 = new VBox(10);
+    
+    int contadorSeccion = 0;
+    
+    // Ordenar secciones alfabéticamente
+    List<String> seccionesOrdenadas = new java.util.ArrayList<>(metadataPorSeccion.keySet());
+    java.util.Collections.sort(seccionesOrdenadas);
+    
+    for (String seccion : seccionesOrdenadas) {
+        List<BrokerMetadata> items = metadataPorSeccion.get(seccion);
+        
+        // Crear panel para cada sección
+        VBox panelSeccion = new VBox(5);
+        panelSeccion.setStyle("-fx-padding: 10; -fx-background-color: white; -fx-border-color: #d0d0d0; -fx-border-width: 1; -fx-border-radius: 3; -fx-background-radius: 3;");
+        
+        // Título de la sección
+        Label lblSeccion = new Label("🔹 " + seccion);
+        lblSeccion.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #0A3D91;");
+        panelSeccion.getChildren().add(lblSeccion);
+        
+        // Agregar cada campo de la sección
+        for (BrokerMetadata metadata : items) {
+            HBox fila = new HBox(5);
+            fila.setStyle("-fx-padding: 2 0 2 0;");
+            
+            Label lblCampo = new Label(metadata.getCampoNombre() + ":");
+            lblCampo.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #333333; -fx-min-width: 150;");
+            
+            Label lblValor = new Label(metadata.getCampoValor() != null ? metadata.getCampoValor() : "");
+            lblValor.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+            lblValor.setWrapText(true);
+            lblValor.setMaxWidth(300);
+            
+            fila.getChildren().addAll(lblCampo, lblValor);
+            panelSeccion.getChildren().add(fila);
+        }
+        
+        // Distribuir secciones en 3 columnas
+        if (contadorSeccion % 3 == 0) {
+            columna1.getChildren().add(panelSeccion);
+        } else if (contadorSeccion % 3 == 1) {
+            columna2.getChildren().add(panelSeccion);
+        } else {
+            columna3.getChildren().add(panelSeccion);
+        }
+        
+        contadorSeccion++;
+    }
+    
+    // Agregar columnas al contenedor solo si tienen contenido
+    if (!columna1.getChildren().isEmpty()) contenedorSecciones.getChildren().add(columna1);
+    if (!columna2.getChildren().isEmpty()) contenedorSecciones.getChildren().add(columna2);
+    if (!columna3.getChildren().isEmpty()) contenedorSecciones.getChildren().add(columna3);
+    
+    panelMetadata.getChildren().add(contenedorSecciones);
 }
 
     // ⚠️ El main siempre al final
