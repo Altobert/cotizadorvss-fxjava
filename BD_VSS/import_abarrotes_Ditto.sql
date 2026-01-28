@@ -179,8 +179,6 @@ WHERE TRIM(descripcion_en) != ''
 
 -- SCRIPT PARA CARGA CSV congelados : USUARIO DITTO
 
-
-
 DROP TABLE IF EXISTS temp_congelados;
 
 CREATE TEMP TABLE temp_congelados (
@@ -232,7 +230,6 @@ WHERE TRIM(descripcion_en) != ''
 
 --************************************************************************************
 
--- SCRIPT PARA CARGA CSV indu : USUARIO DITTO
 DROP TABLE IF EXISTS temp_indu;
 
 CREATE TEMP TABLE temp_indu (
@@ -282,7 +279,6 @@ WHERE TRIM(descripcion_en) != ''
   AND familia_path ILIKE '%INDU%';
 
 DROP TABLE temp_indu;
-
 --************************************************************************************
 
 -- SCRIPT PARA CARGA CSV lacteos : USUARIO DITTO
