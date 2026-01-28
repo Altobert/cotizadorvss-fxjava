@@ -1,8 +1,4 @@
---
--- PostgreSQL database dump
---
 
-\restrict HnfqlStKn8i6X8WVAekbugQdArXEKHsoZjTtd0qShQNEdomBiVYdujCLkVgVG1S
 
 -- Dumped from database version 15.1
 -- Dumped by pg_dump version 15.15 (Homebrew)

@@ -2392,38 +2392,45 @@ private void configurarTablaDinamica() {
         // Configurar cell value factory
         column.setCellValueFactory(cellData -> cellData.getValue().getProperty(campoEstandar));
         
-        // Aplicar estilos si existen
-        if (col.getColorFondo() != null || col.getColorTexto() != null) {
-            column.setCellFactory(tc -> new TableCell<RowData, String>() {
-                @Override
-                protected void updateItem(String item, boolean empty) {
-                    super.updateItem(item, empty);
+        // 📐 Configurar cellFactory para centrar texto y aplicar estilos
+        column.setCellFactory(tc -> new TableCell<RowData, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
                     
-                    if (empty || item == null) {
-                        setText(null);
-                        setStyle("");
-                    } else {
-                        setText(item);
-                        
-                        // Aplicar estilos del formato
-                        StringBuilder style = new StringBuilder();
-                        if (col.getColorFondo() != null && !col.getColorFondo().isEmpty()) {
-                            style.append("-fx-background-color: ").append(col.getColorFondo()).append(";");
-                        }
-                        if (col.getColorTexto() != null && !col.getColorTexto().isEmpty()) {
-                            style.append("-fx-text-fill: ").append(col.getColorTexto()).append(";");
-                        }
-                        if (col.getEsNegrita() != null && col.getEsNegrita()) {
-                            style.append("-fx-font-weight: bold;");
-                        }
-                        if (col.getEsCursiva() != null && col.getEsCursiva()) {
-                            style.append("-fx-font-style: italic;");
-                        }
-                        setStyle(style.toString());
+                    // Aplicar estilos del formato + centrado
+                    StringBuilder style = new StringBuilder();
+                    
+                    // 🎯 Centrar texto en todas las celdas
+                    style.append("-fx-alignment: CENTER; ");
+                    
+                    // Aplicar estilos personalizados
+                    if (col.getColorFondo() != null && !col.getColorFondo().isEmpty()) {
+                        style.append("-fx-background-color: ").append(col.getColorFondo()).append(";");
                     }
+                    // Aplicar color de texto
+                    if (col.getColorTexto() != null && !col.getColorTexto().isEmpty()) {
+                        style.append("-fx-text-fill: ").append(col.getColorTexto()).append(";");
+                    }
+                    // Aplicar negrita y cursiva
+                    if (col.getEsNegrita() != null && col.getEsNegrita()) {
+                        style.append("-fx-font-weight: bold;");
+                    }
+                    // Aplicar cursiva
+                    if (col.getEsCursiva() != null && col.getEsCursiva()) {
+                        style.append("-fx-font-style: italic;");
+                    }
+                    // Aplicar subrayado
+                    setStyle(style.toString());
                 }
-            });
-        }
+            }
+        });
         
         tablaDinamica.getColumns().add(column);
     }
