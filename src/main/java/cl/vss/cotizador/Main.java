@@ -2980,8 +2980,8 @@ private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataP
             Label lblCampo = new Label(metadata.getCampoNombre() + ":");
             lblCampo.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #333333; -fx-min-width: 150;");
             
-            // 📝 Si es RFQ Information, hacer editable
-            if ("RFQ Information".equals(seccion)) {
+            // 📝 Si es RFQ Information o Request Information, hacer editable
+            if ("RFQ Information".equals(seccion) || "Request Information".equals(seccion)) {
                 TextField txtValor = new TextField(metadata.getCampoValor() != null ? metadata.getCampoValor() : "");
                 txtValor.setStyle("-fx-font-size: 11px;");
                 txtValor.setPrefWidth(300);
@@ -3008,8 +3008,8 @@ private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataP
             panelSeccion.getChildren().add(fila);
         }
         
-        // 💾 Si es RFQ Information, agregar botón de guardar
-        if ("RFQ Information".equals(seccion)) {
+        // 💾 Si es RFQ Information o Request Information, agregar botón de guardar
+        if ("RFQ Information".equals(seccion) || "Request Information".equals(seccion)) {
             Button btnGuardar = new Button("💾 Guardar Cambios");
             btnGuardar.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold; -fx-margin-top: 10;");
             btnGuardar.setPrefWidth(150);
