@@ -52,6 +52,7 @@ import java.io.InputStream;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
@@ -2979,13 +2980,43 @@ private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataP
             Label lblCampo = new Label(metadata.getCampoNombre() + ":");
             lblCampo.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #333333; -fx-min-width: 150;");
             
-            Label lblValor = new Label(metadata.getCampoValor() != null ? metadata.getCampoValor() : "");
-            lblValor.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
-            lblValor.setWrapText(true);
-            lblValor.setMaxWidth(300);
+            // 📝 Si es RFQ Information o Request Information, hacer editable
+            if ("RFQ Information".equals(seccion) || "Request Information".equals(seccion)) {
+                TextField txtValor = new TextField(metadata.getCampoValor() != null ? metadata.getCampoValor() : "");
+                txtValor.setStyle("-fx-font-size: 11px;");
+                txtValor.setPrefWidth(300);
+                
+                // Guardar referencia al metadata para actualizar
+                txtValor.setUserData(metadata);
+                
+                // Listener para actualizar el valor en el objeto metadata
+                txtValor.textProperty().addListener((obs, oldVal, newVal) -> {
+                    metadata.setCampoValor(newVal);
+                });
+                
+                fila.getChildren().addAll(lblCampo, txtValor);
+            } else {
+                // Campos no editables (solo lectura)
+                Label lblValor = new Label(metadata.getCampoValor() != null ? metadata.getCampoValor() : "");
+                lblValor.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+                lblValor.setWrapText(true);
+                lblValor.setMaxWidth(300);
+                
+                fila.getChildren().addAll(lblCampo, lblValor);
+            }
             
-            fila.getChildren().addAll(lblCampo, lblValor);
             panelSeccion.getChildren().add(fila);
+        }
+        
+        // 💾 Si es RFQ Information o Request Information, agregar botón de guardar
+        if ("RFQ Information".equals(seccion) || "Request Information".equals(seccion)) {
+            Button btnGuardar = new Button("💾 Guardar Cambios");
+            btnGuardar.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold; -fx-margin-top: 10;");
+            btnGuardar.setPrefWidth(150);
+            
+            btnGuardar.setOnAction(e -> guardarMetadataRFQ(items));
+            
+            panelSeccion.getChildren().add(btnGuardar);
         }
         
         // Distribuir secciones en 3 columnas
@@ -3006,6 +3037,49 @@ private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataP
     if (!columna3.getChildren().isEmpty()) contenedorSecciones.getChildren().add(columna3);
     
     panelMetadata.getChildren().add(contenedorSecciones);
+}
+
+// ============================================================
+// 🔵 GUARDAR METADATA DE RFQ
+// ============================================================
+private void guardarMetadataRFQ(List<BrokerMetadata> items) {
+    try (Connection conn = DBConnection.getConnection()) {
+        BrokerMetadataDAO metadataDAO = new BrokerMetadataDAO(conn);
+        
+        int actualizados = 0;
+        
+        for (BrokerMetadata metadata : items) {
+            // Actualizar cada campo en la base de datos
+            String sql = "UPDATE broker_metadata SET campo_valor = ? WHERE metadata_id = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, metadata.getCampoValor());
+                stmt.setInt(2, metadata.getMetadataId());
+                
+                int rowsAffected = stmt.executeUpdate();
+                if (rowsAffected > 0) {
+                    actualizados++;
+                }
+            }
+        }
+        
+        logger.info("Se actualizaron {} campos de RFQ Information", actualizados);
+        
+        // Mostrar confirmación
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Cambios Guardados");
+        alert.setHeaderText("Metadata RFQ actualizada");
+        alert.setContentText("Se actualizaron " + actualizados + " campos correctamente.");
+        alert.showAndWait();
+        
+    } catch (SQLException e) {
+        logger.error("Error al guardar metadata RFQ", e);
+        
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Error");
+        alert.setHeaderText("Error al guardar cambios");
+        alert.setContentText("No se pudieron guardar los cambios: " + e.getMessage());
+        alert.showAndWait();
+    }
 }
 
     // ⚠️ El main siempre al final
