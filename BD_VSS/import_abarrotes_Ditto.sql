@@ -2,8 +2,10 @@
 -- SCRIPT PARA CARGA CSV ABARROTES CON CAMPOS CORREGIDOS : USUARIO DITTO
 
 
+-- 1. Eliminar tabla temporal si existe
 DROP TABLE IF EXISTS temp_abarrotes;
 
+-- 2. Crear tabla temporal con EXACTAMENTE 8 columnas (las del CSV)
 CREATE TEMP TABLE temp_abarrotes (
     familia_path TEXT,
     descripcion_en TEXT,
@@ -12,19 +14,20 @@ CREATE TEMP TABLE temp_abarrotes (
     precio_costo_neto TEXT,
     tipo_cambio TEXT,
     porcentaje TEXT,
-    precio_venta_neto TEXT,
-    col9 TEXT,
-    col10 TEXT,
-    col11 TEXT,
-    col12 TEXT,
-    col13 TEXT
+    precio_venta_neto TEXT
 );
 
+-- 3. Cargar el CSV (funcionará porque coincide con la estructura)
+COPY temp_abarrotes
+FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv'
+WITH (
+    FORMAT csv,
+    DELIMITER ';',
+    HEADER true,
+    ENCODING 'UTF-8'
+);
 
---FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv' 
-\COPY temp_abarrotes FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv'  WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
-
--- Insertar productos con limpieza de formato y derivación de descripcion_es
+-- 4. Insertar productos en la tabla principal
 INSERT INTO producto (
     familia_id,
     descripcion_en,
@@ -35,7 +38,7 @@ INSERT INTO producto (
     usuario_editor_id
 )
 SELECT 
-    (SELECT id FROM familia_producto WHERE nombre = 'Abarrotes'),
+    (SELECT id FROM familia_producto WHERE nombre ILIKE 'Abarrotes'),
     TRIM(SPLIT_PART(descripcion_en, '-', 1)),
     TRIM(SPLIT_PART(descripcion_en, '-', 2)),
     TRIM(unidad_medida),
@@ -59,8 +62,9 @@ WHERE TRIM(descripcion_en) != ''
   AND TRIM(familia_path) != ''
   AND familia_path ILIKE '%ABARROTES%';
 
--- Eliminar tabla temporal
+-- 5. Eliminar tabla temporal
 DROP TABLE temp_abarrotes;
+
 
 -- **********************************************************************************
 -- SCRIPT PARA CARGA CSV bebestibles : USUARIO DITTO
@@ -179,8 +183,6 @@ WHERE TRIM(descripcion_en) != ''
 
 -- SCRIPT PARA CARGA CSV congelados : USUARIO DITTO
 
-
-
 DROP TABLE IF EXISTS temp_congelados;
 
 CREATE TEMP TABLE temp_congelados (
@@ -232,7 +234,6 @@ WHERE TRIM(descripcion_en) != ''
 
 --************************************************************************************
 
--- SCRIPT PARA CARGA CSV indu : USUARIO DITTO
 DROP TABLE IF EXISTS temp_indu;
 
 CREATE TEMP TABLE temp_indu (
@@ -282,7 +283,6 @@ WHERE TRIM(descripcion_en) != ''
   AND familia_path ILIKE '%INDU%';
 
 DROP TABLE temp_indu;
-
 --************************************************************************************
 
 -- SCRIPT PARA CARGA CSV lacteos : USUARIO DITTO
