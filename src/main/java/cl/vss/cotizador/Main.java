@@ -613,8 +613,14 @@ if (Sesion.getUsuarioActual() != null &&
     menuAdmin.getItems().addAll(crearUsuario, gestionarUsuarios);
 }
 
+// Menú Ayuda
+Menu menuAyuda = new Menu("Ayuda");
+MenuItem acercaDe = new MenuItem("Acerca de...");
+acercaDe.setOnAction(e -> cl.vss.cotizador.util.Version.mostrarDialogoVersion(stage));
+menuAyuda.getItems().add(acercaDe);
+
 // Agregar menús a la barra
-menuBar.getMenus().addAll(menuArchivo, menuAdmin);
+menuBar.getMenus().addAll(menuArchivo, menuAdmin, menuAyuda);
 
 // Insertar menú arriba del layout
 root.setTop(menuBar);

@@ -196,7 +196,7 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                            <finalName>cotizador-vss</finalName>
+                            <finalName>cotizador-vss-${project.version}</finalName>
                         </configuration>
                     </execution>
                 </executions>
