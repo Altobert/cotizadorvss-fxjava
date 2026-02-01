@@ -2,6 +2,8 @@ package cl.vss.cotizador.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.FileInputStream;
+import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -10,6 +12,7 @@ import java.util.Properties;
 public class DBConnection {
     private static final Properties properties = new Properties();
     private static final String PROPERTIES_FILE = "/db.properties";
+    private static final String EXTERNAL_CONFIG_FILE = "cotizador-config.properties";
     
     // Variables de configuración cargadas desde properties
     private static String URL;
@@ -26,23 +29,40 @@ public class DBConnection {
     }
     
     /**
-     * Carga las propiedades desde el archivo db.properties
+     * Carga las propiedades desde un archivo externo si existe,
+     * de lo contrario usa el archivo interno del JAR
      */
     private static void loadProperties() {
-        try (InputStream input = DBConnection.class.getResourceAsStream(PROPERTIES_FILE)) {
-            if (input == null) {
-                System.err.println("❌ No se pudo encontrar el archivo " + PROPERTIES_FILE);
-                // Valores por defecto como fallback
-                setDefaultProperties();
-                return;
+        boolean loaded = false;
+        
+        // 1. Intentar cargar desde archivo externo (mismo directorio que el JAR)
+        File externalFile = new File(EXTERNAL_CONFIG_FILE);
+        if (externalFile.exists()) {
+            try (FileInputStream fis = new FileInputStream(externalFile)) {
+                properties.load(fis);
+                System.out.println("✅ Configuración cargada desde archivo externo: " + EXTERNAL_CONFIG_FILE);
+                loaded = true;
+            } catch (IOException e) {
+                System.err.println("⚠️ Error al cargar archivo externo: " + e.getMessage());
             }
-            
-            properties.load(input);
-            System.out.println("✅ Propiedades de base de datos cargadas exitosamente");
-            
-        } catch (IOException e) {
-            System.err.println("❌ Error al cargar propiedades: " + e.getMessage());
-            setDefaultProperties();
+        }
+        
+        // 2. Si no hay archivo externo, usar el archivo interno del JAR
+        if (!loaded) {
+            try (InputStream input = DBConnection.class.getResourceAsStream(PROPERTIES_FILE)) {
+                if (input == null) {
+                    System.err.println("❌ No se pudo encontrar el archivo " + PROPERTIES_FILE);
+                    setDefaultProperties();
+                    return;
+                }
+                
+                properties.load(input);
+                System.out.println("✅ Configuración cargada desde JAR (archivo interno)");
+                
+            } catch (IOException e) {
+                System.err.println("❌ Error al cargar propiedades: " + e.getMessage());
+                setDefaultProperties();
+            }
         }
     }
     

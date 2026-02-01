@@ -9,21 +9,80 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Properties;
 
 /**
  * Clase para gestionar la información de versión de la aplicación.
  * Muestra un diálogo con la versión actual, estado (SNAPSHOT/Release),
  * desarrolladores y fecha.
+ * Lee la configuración desde archivo externo si existe.
  */
 public class Version {
     
-    // Información de versión
-    private static final String VERSION = "1.0";
-    private static final boolean IS_SNAPSHOT = true; // Cambiar a false para versión de producción
-    private static final String[] DEVELOPERS = {"CSM", "ASM"};
-    private static final LocalDate RELEASE_DATE = LocalDate.now();
+    private static final String EXTERNAL_CONFIG_FILE = "cotizador-config.properties";
+    private static final Properties config = new Properties();
+    
+    // Valores por defecto
+    private static String VERSION = "1.0";
+    private static boolean IS_SNAPSHOT = true;
+    private static String[] DEVELOPERS = {"CSM", "ASM"};
+    private static LocalDate RELEASE_DATE = LocalDate.now();
+    
+    // Bloque estático para cargar configuración
+    static {
+        loadConfiguration();
+    }
+    
+    /**
+     * Carga la configuración desde archivo externo si existe
+     */
+    private static void loadConfiguration() {
+        boolean loaded = false;
+        
+        // Intentar cargar desde archivo externo
+        File externalFile = new File(EXTERNAL_CONFIG_FILE);
+        if (externalFile.exists()) {
+            try (FileInputStream fis = new FileInputStream(externalFile)) {
+                config.load(fis);
+                loaded = true;
+            } catch (IOException e) {
+                System.err.println("⚠️ No se pudo cargar configuración de versión desde archivo externo");
+            }
+        }
+        
+        // Si no hay archivo externo, intentar cargar desde JAR
+        if (!loaded) {
+            try (InputStream input = Version.class.getResourceAsStream("/db.properties")) {
+                if (input != null) {
+                    config.load(input);
+                }
+            } catch (IOException e) {
+                // Usar valores por defecto
+            }
+        }
+        
+        // Leer valores desde configuración o usar por defecto
+        VERSION = config.getProperty("app.version", "1.0");
+        IS_SNAPSHOT = Boolean.parseBoolean(config.getProperty("app.snapshot", "true"));
+        
+        String devs = config.getProperty("app.developers", "CSM,ASM");
+        DEVELOPERS = devs.split(",");
+        
+        String dateStr = config.getProperty("app.release.date", "");
+        if (!dateStr.isEmpty()) {
+            try {
+                RELEASE_DATE = LocalDate.parse(dateStr);
+            } catch (Exception e) {
+                RELEASE_DATE = LocalDate.now();
+            }
+        }
+    }
     
     /**
      * Obtiene la versión completa del sistema
