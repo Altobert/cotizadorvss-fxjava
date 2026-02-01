@@ -626,7 +626,7 @@ menuBar.getMenus().addAll(menuArchivo, menuAdmin, menuAyuda);
 root.setTop(menuBar);
 
 // 👉 AHORA SÍ crear la escena usando root (NO tabs)
-Scene scene = new Scene(root, 1400, 1000);
+Scene scene = new Scene(root, 1200, 800);
 stage.setTitle("Cotizador VSS");
 
 
