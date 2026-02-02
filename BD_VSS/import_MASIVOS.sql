@@ -28,7 +28,7 @@ CREATE TEMP TABLE temp_abarrotes (
 );
 
 
-\COPY temp_abarrotes FROM '/Users/albertosanmartin/proyectos/vss/cotizadorvss-fxjava/BD_VSS/Excel_productos_csv/Abarrotes.csv' WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+\COPY temp_abarrotes FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv'  WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
 
 -- Insertar productos con limpieza de formato y derivación de descripcion_es
 INSERT INTO producto (

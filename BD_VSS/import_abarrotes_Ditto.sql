@@ -3,9 +3,15 @@
 
 
 -- 1. Eliminar tabla temporal si existe
+DELETE FROM producto
+WHERE familia_id = (
+    SELECT id FROM familia_producto WHERE nombre = 'Abarrotes'
+)
+AND fecha_actualizacion >= NOW() - INTERVAL '10 minutes';
+
+-- Crear tabla temporal con 11 columnas
 DROP TABLE IF EXISTS temp_abarrotes;
 
--- 2. Crear tabla temporal con EXACTAMENTE 8 columnas (las del CSV)
 CREATE TEMP TABLE temp_abarrotes (
     familia_path TEXT,
     descripcion_en TEXT,
@@ -14,20 +20,18 @@ CREATE TEMP TABLE temp_abarrotes (
     precio_costo_neto TEXT,
     tipo_cambio TEXT,
     porcentaje TEXT,
-    precio_venta_neto TEXT
+    precio_venta_neto TEXT,
+    col9 TEXT,
+    col10 TEXT,
+    col11 TEXT,
+    col12 TEXT,
+    col13 TEXT
 );
 
--- 3. Cargar el CSV (funcionará porque coincide con la estructura)
-COPY temp_abarrotes
-FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv'
-WITH (
-    FORMAT csv,
-    DELIMITER ';',
-    HEADER true,
-    ENCODING 'UTF-8'
-);
 
--- 4. Insertar productos en la tabla principal
+\COPY temp_abarrotes FROM '/Users/claudioandressanmartinconcha/Desktop/abarrotes.csv'  WITH (FORMAT csv, DELIMITER ';', HEADER true, ENCODING 'UTF-8');
+
+-- Insertar productos con limpieza de formato y derivación de descripcion_es
 INSERT INTO producto (
     familia_id,
     descripcion_en,
@@ -38,7 +42,7 @@ INSERT INTO producto (
     usuario_editor_id
 )
 SELECT 
-    (SELECT id FROM familia_producto WHERE nombre ILIKE 'Abarrotes'),
+    (SELECT id FROM familia_producto WHERE nombre = 'Abarrotes'),
     TRIM(SPLIT_PART(descripcion_en, '-', 1)),
     TRIM(SPLIT_PART(descripcion_en, '-', 2)),
     TRIM(unidad_medida),
@@ -62,7 +66,7 @@ WHERE TRIM(descripcion_en) != ''
   AND TRIM(familia_path) != ''
   AND familia_path ILIKE '%ABARROTES%';
 
--- 5. Eliminar tabla temporal
+-- Eliminar tabla temporal
 DROP TABLE temp_abarrotes;
 
 
