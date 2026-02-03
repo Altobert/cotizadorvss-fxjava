@@ -38,6 +38,8 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -623,7 +625,26 @@ if (Sesion.getUsuarioActual() != null &&
 menuBar.getMenus().addAll(menuArchivo, menuAdmin);
 
 // Insertar menú arriba del layout
-root.setTop(menuBar);
+
+//root.setTop(menuBar);
+
+// 👉 Crear label con el nombre del usuario
+Label lblUsuario = new Label("👤 " + Sesion.getUsuarioActual().getNombre());
+lblUsuario.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+
+// 👉 Contenedor alineado a la derecha
+HBox barraUsuario = new HBox(lblUsuario);
+barraUsuario.setAlignment(Pos.CENTER_RIGHT);
+barraUsuario.setPadding(new Insets(5));
+
+// 👉 Combinar menú + usuario en un VBox
+VBox topLayout = new VBox(menuBar, barraUsuario);
+
+// 👉 Insertar en el top del layout principal
+root.setTop(topLayout);
+
+
+
 
 // 👉 AHORA SÍ crear la escena usando root (NO tabs)
 Scene scene = new Scene(root, 1400, 1000);
