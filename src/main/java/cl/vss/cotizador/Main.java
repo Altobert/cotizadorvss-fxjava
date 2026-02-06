@@ -2188,7 +2188,6 @@ private void filtrarProductos() {
 
 private void exportarExcelTodasLasFamilias() {
     try {
-        // 👉 FileChooser para guardar el archivo
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Exportar Maestra de Precios");
         fileChooser.getExtensionFilters().add(
@@ -2197,7 +2196,6 @@ private void exportarExcelTodasLasFamilias() {
         File archivo = fileChooser.showSaveDialog(null);
         if (archivo == null) return;
 
-        // 👉 Crear libro y hoja
         XSSFWorkbook workbook = new XSSFWorkbook();
         XSSFSheet sheet = workbook.createSheet("Maestra Precios");
 
@@ -2205,7 +2203,6 @@ private void exportarExcelTodasLasFamilias() {
         // 🎨 1. ESTILOS CORPORATIVOS
         // ============================================================
 
-        // Encabezado corporativo
         CellStyle headerStyle = workbook.createCellStyle();
         headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
         headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
@@ -2215,14 +2212,12 @@ private void exportarExcelTodasLasFamilias() {
         headerFont.setColor(IndexedColors.WHITE.getIndex());
         headerStyle.setFont(headerFont);
 
-        // Bordes generales
         CellStyle bordered = workbook.createCellStyle();
         bordered.setBorderBottom(BorderStyle.THIN);
         bordered.setBorderTop(BorderStyle.THIN);
         bordered.setBorderLeft(BorderStyle.THIN);
         bordered.setBorderRight(BorderStyle.THIN);
 
-        // Formatos numéricos
         DataFormat format = workbook.createDataFormat();
 
         CellStyle monedaUSD = workbook.createCellStyle();
@@ -2233,24 +2228,30 @@ private void exportarExcelTodasLasFamilias() {
         monedaCLP.cloneStyleFrom(bordered);
         monedaCLP.setDataFormat(format.getFormat("#,###"));
 
+        // 👉 Estilo verde claro para “Precio + Utilidad (USD)”
+        CellStyle utilidadStyle = workbook.createCellStyle();
+        utilidadStyle.cloneStyleFrom(monedaUSD);
+        utilidadStyle.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+        utilidadStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
         // ============================================================
         // 🎨 2. COLORES POR FAMILIA
         // ============================================================
 
         Map<Integer, Short> coloresFamilia = Map.of(
-                1, IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex(),   // Tostaduría
-                2, IndexedColors.LIGHT_GREEN.getIndex(),             // Lácteos
-                3, IndexedColors.LIGHT_YELLOW.getIndex(),            // Carnes
-                4, IndexedColors.LIGHT_ORANGE.getIndex(),            // Bebestibles
-                5, IndexedColors.LIGHT_TURQUOISE.getIndex(),         // Congelados
-                6, IndexedColors.LIGHT_BLUE.getIndex(),              // Pescados y mariscos
-                7, IndexedColors.LIGHT_GREEN.getIndex(),             // Frutas y verduras
-                8, IndexedColors.GREY_25_PERCENT.getIndex(),         // Indu
-                9, IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex()    // Abarrotes
+                1, IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex(),
+                2, IndexedColors.LIGHT_GREEN.getIndex(),
+                3, IndexedColors.LIGHT_YELLOW.getIndex(),
+                4, IndexedColors.LIGHT_ORANGE.getIndex(),
+                5, IndexedColors.LIGHT_TURQUOISE.getIndex(),
+                6, IndexedColors.LIGHT_BLUE.getIndex(),
+                7, IndexedColors.LIGHT_GREEN.getIndex(),
+                8, IndexedColors.GREY_25_PERCENT.getIndex(),
+                9, IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex()
         );
 
         // ============================================================
-        // 🎨 3. NOMBRES DE FAMILIA (TUS NOMBRES REALES)
+        // 🎨 3. NOMBRES DE FAMILIA
         // ============================================================
 
         Map<Integer, String> nombresFamilia = new HashMap<>();
@@ -2280,16 +2281,15 @@ private void exportarExcelTodasLasFamilias() {
 
         titleCell.setCellStyle(titleStyle);
 
-        // Combinar celdas del título
+        // 👉 NUEVO ORDEN DE COLUMNAS
         String[] columnas = {
                 "Familia",
-                "Descripción ES",
                 "Descripción EN",
+                "Descripción ES",
                 "Unidad",
                 "Valor Pesos",
                 "Precio USD",
-                "Precio + Utilidad (USD)",
-                "Precio Final CLP"
+                "Precio + Utilidad (USD)"
         };
 
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, columnas.length - 1));
@@ -2306,25 +2306,34 @@ private void exportarExcelTodasLasFamilias() {
             cell.setCellStyle(headerStyle);
         }
 
-        // Congelar encabezado
         sheet.createFreezePane(0, 2);
 
         // ============================================================
-        // 🎨 6. OBTENER PRODUCTOS Y GENERAR FILAS
+        // 🎨 6. OBTENER PRODUCTOS + ORDENAR SIN ROMPER NADA
         // ============================================================
 
         List<Producto> lista = productoService.listarProductos();
+
+        // 👉 Ordenar sin Comparator.comparing (que te dio problemas)
+        lista.sort((a, b) -> {
+            int cmp = Integer.compare(a.getFamiliaId(), b.getFamiliaId());
+            if (cmp != 0) return cmp;
+            return a.getDescripcionEn().compareToIgnoreCase(b.getDescripcionEn());
+        });
+
         int fila = 2;
+
+        // ============================================================
+        // 🎨 7. GENERAR FILAS
+        // ============================================================
 
         for (Producto p : lista) {
 
             double usd = (tipoCambioActual == 0) ? 0 : p.getValorPesos() / tipoCambioActual;
             double conUtil = usd * utilidadActual;
-            double finalClp = conUtil * tipoCambioActual;
 
             Row row = sheet.createRow(fila++);
 
-            // Color según familia
             Short color = coloresFamilia.getOrDefault(
                     p.getFamiliaId(),
                     IndexedColors.WHITE.getIndex()
@@ -2335,20 +2344,21 @@ private void exportarExcelTodasLasFamilias() {
             rowStyle.setFillForegroundColor(color);
             rowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-            // 👉 Familia (NOMBRE, no ID)
             String nombreFamilia = nombresFamilia.getOrDefault(p.getFamiliaId(), "Sin nombre");
 
+            // 👉 Familia
             Cell c0 = row.createCell(0);
             c0.setCellValue(nombreFamilia);
             c0.setCellStyle(rowStyle);
 
-            // 👉 Descripciones
+            // 👉 Descripción EN
             Cell c1 = row.createCell(1);
-            c1.setCellValue(p.getDescripcionEs());
+            c1.setCellValue(p.getDescripcionEn());
             c1.setCellStyle(rowStyle);
 
+            // 👉 Descripción ES
             Cell c2 = row.createCell(2);
-            c2.setCellValue(p.getDescripcionEn());
+            c2.setCellValue(p.getDescripcionEs());
             c2.setCellStyle(rowStyle);
 
             // 👉 Unidad
@@ -2361,24 +2371,19 @@ private void exportarExcelTodasLasFamilias() {
             c4.setCellValue(p.getValorPesos());
             c4.setCellStyle(monedaCLP);
 
-            // 👉 USD
+            // 👉 Precio USD
             Cell c5 = row.createCell(5);
             c5.setCellValue(usd);
             c5.setCellStyle(monedaUSD);
 
-            // 👉 USD + utilidad
+            // 👉 Precio + Utilidad (USD) — VERDE CLARO
             Cell c6 = row.createCell(6);
             c6.setCellValue(conUtil);
-            c6.setCellStyle(monedaUSD);
-
-            // 👉 Precio final CLP
-            Cell c7 = row.createCell(7);
-            c7.setCellValue(finalClp);
-            c7.setCellStyle(monedaCLP);
+            c6.setCellStyle(utilidadStyle);
         }
 
         // ============================================================
-        // 🎨 7. AUTOAJUSTE DE COLUMNAS
+        // 🎨 8. AUTOAJUSTE (mantengo porque tu versión funciona)
         // ============================================================
 
         for (int i = 0; i < columnas.length; i++) {
@@ -2386,7 +2391,7 @@ private void exportarExcelTodasLasFamilias() {
         }
 
         // ============================================================
-        // 🎨 8. GUARDAR ARCHIVO
+        // 🎨 9. GUARDAR ARCHIVO
         // ============================================================
 
         FileOutputStream fos = new FileOutputStream(archivo);
@@ -2407,13 +2412,6 @@ private void exportarExcelTodasLasFamilias() {
         alert.showAndWait();
     }
 }
-
-
-
-
-
-
-
 
 
 
