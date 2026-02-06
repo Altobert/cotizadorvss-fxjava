@@ -1930,12 +1930,20 @@ private void cargarProductos() {
                 }
             }
             
-            // Ajustar ancho de columnas
+            // Ajustar ancho de columnas con límite máximo
+            final int MAX_COLUMN_WIDTH = 255 * 256; // Límite de Apache POI (255 caracteres)
             for (int i = 0; i < tablaDinamica.getColumns().size(); i++) {
-                sheet.autoSizeColumn(i);
-                // Añadir un poco más de espacio
-                int currentWidth = sheet.getColumnWidth(i);
-                sheet.setColumnWidth(i, currentWidth + 1000);
+                try {
+                    sheet.autoSizeColumn(i);
+                    // Añadir un poco más de espacio pero sin exceder el límite
+                    int currentWidth = sheet.getColumnWidth(i);
+                    int newWidth = Math.min(currentWidth + 1000, MAX_COLUMN_WIDTH);
+                    sheet.setColumnWidth(i, newWidth);
+                } catch (IllegalArgumentException e) {
+                    // Si hay error, establecer un ancho razonable por defecto
+                    logger.warn("⚠️ No se pudo ajustar el ancho de la columna {}, usando ancho por defecto", i);
+                    sheet.setColumnWidth(i, 8000); // ~30 caracteres
+                }
             }
             
             // Guardar archivo
@@ -2985,10 +2993,33 @@ private void leerExcelConFormato(File archivo) {
                     
                     // Calcular precio VSS (precio_venta_neto × cantidad)
                     double precioVentaNeto = producto.getPrecioVentaNeto();
+                    double precioVentaNetoDolares = producto.getPrecioVentaNetoDolares();
                     double precioVSS = precioVentaNeto * cantidad;
                     
-                    // Guardar en rowData
+                    // Guardar precio total en rowData
                     rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
+                    
+                    // 💰 Guardar precio unitario en USD en la columna UNIT_PRICE o PRICE
+                    // Intentar múltiples nombres de columna posibles
+                    boolean precioUnitarioGuardado = false;
+                    String[] posiblesCamposUnitPrice = {
+                        "UNIT_PRICE", "UNIT_PRICE_USD", "PRICE", "PRICE_USD", 
+                        "PRECIO_UNITARIO", "PRECIO_UNIT", "UNIT PRICE (USD)"
+                    };
+                    
+                    for (String campoUnitPrice : posiblesCamposUnitPrice) {
+                        if (rowData.hasKey(campoUnitPrice)) {
+                            rowData.set(campoUnitPrice, String.format("%.2f", precioVentaNetoDolares));
+                            precioUnitarioGuardado = true;
+                            logger.debug("💰 Precio unitario USD guardado en campo: {} = ${}", 
+                                campoUnitPrice, String.format("%.2f", precioVentaNetoDolares));
+                            break;
+                        }
+                    }
+                    
+                    if (!precioUnitarioGuardado) {
+                        logger.debug("⚠️ No se encontró columna para precio unitario USD en el formato");
+                    }
                     
                     logger.debug("Producto encontrado automáticamente: {} - Precio VSS: ${}", 
                         descripcion, String.format("%,.2f", precioVSS));
@@ -3168,16 +3199,17 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
     
     // ============================
-    // PANEL VENDOR REMARKS (Solo para BSM CATERING)
+    // PANEL VENDOR REMARKS (Para BSM CATERING y CMA CGM)
     // ============================
     VBox panelVendorRemarks = null;
     TextField txtVendorRemarks = null;
     
-    // Verificar si es BSM CATERING
-    boolean esBSMCatering = formatoActual != null && formatoActual.getBrokerName() != null && 
-                            formatoActual.getBrokerName().toUpperCase().contains("BSM");
+    // Verificar si es BSM CATERING o CMA CGM
+    boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBrokerName() != null && 
+                            (formatoActual.getBrokerName().toUpperCase().contains("BSM") ||
+                             formatoActual.getBrokerName().toUpperCase().contains("CMA"));
     
-    if (esBSMCatering) {
+    if (permitirVendorRemarks) {
         panelVendorRemarks = new VBox(8);
         panelVendorRemarks.setStyle("-fx-padding: 10; -fx-background-color: #FFF9E6; -fx-border-color: #FFA500; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
         
