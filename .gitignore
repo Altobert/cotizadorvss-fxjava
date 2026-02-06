@@ -140,6 +140,11 @@ config/local/
 # Excepción: mantener archivos de ejemplo y desarrollo
 !db-dev.properties
 
+# Archivo de configuración externa con credenciales
+cotizador-config.properties
+# Mantener solo el archivo de ejemplo
+!cotizador-config.properties.example
+
 # ====== ARCHIVOS DE CONSTRUCCIÓN ======
 # Archivos de distribución
 dist/

@@ -1,0 +1,74 @@
+# =====================================================
+# Archivo de Configuración Externo - Cotizador VSS
+# =====================================================
+# Este archivo debe colocarse en el mismo directorio que el JAR ejecutable
+# Nombre del archivo: cotizador-config.properties
+#
+# La aplicación buscará PRIMERO este archivo externo.
+# Si no existe, usará la configuración interna del JAR.
+# =====================================================
+
+# ==========================================
+# CONFIGURACIÓN DE BASE DE DATOS
+# ==========================================
+
+# URL de conexión completa
+db.url=jdbc:postgresql://192.168.2.103:5432/sistema_cotizacion_2025
+
+# Parámetros individuales
+db.host=192.168.2.103
+db.port=5432
+db.database=sistema_cotizacion_2025
+
+# Credenciales
+db.username=postgres
+db.password=Vss2026
+
+# Driver y configuración adicional
+db.driver=org.postgresql.Driver
+db.schema=public
+
+# Timeouts (en milisegundos)
+db.connection.timeout=30000
+db.socket.timeout=60000
+
+# SSL
+db.ssl.enabled=false
+
+# ==========================================
+# CONFIGURACIÓN DE POOL DE CONEXIONES
+# ==========================================
+
+db.pool.enabled=true
+db.pool.min.size=5
+db.pool.max.size=20
+db.pool.max.wait=10000
+
+# ==========================================
+# CONFIGURACIÓN DE LA APLICACIÓN
+# ==========================================
+
+# Versión de la aplicación
+app.version=1.0
+
+# true = Versión SNAPSHOT (desarrollo), false = Release (producción)
+app.snapshot=true
+
+# Desarrolladores (separados por coma)
+app.developers=CSM,ASM
+
+# Fecha de release (formato: YYYY-MM-DD)
+app.release.date=2026-02-01
+
+# Entorno (development, production)
+app.environment=production
+
+# Modo debug (true/false)
+app.debug=false
+
+# ==========================================
+# CONFIGURACIÓN DE LOGGING
+# ==========================================
+
+db.log.enabled=false
+db.log.level=ERROR
