@@ -130,8 +130,14 @@ public class Main extends Application {
     private final TableView<RowData> tablaDinamica = new TableView<>();
     private BrokerFormato formatoActual;
     
+    // Constructor o inicialización
+    {
+        tablaDinamica.setEditable(true); // Hacer la tabla editable
+    }
+    
     // 👉 Panel de metadata del broker
     private VBox panelMetadata;
+    private Map<String, List<BrokerMetadata>> metadataActual;
  
     // 👉 Variables para parámetros comerciales en productos
     private double tipoCambioActual = 1.0;
@@ -225,10 +231,17 @@ public class Main extends Application {
     );
     rootCotizador.setTop(barraCotizador);
     
-    // Crear panel con metadata y tabla
-    VBox panelConMetadata = new VBox(10);
+    // Crear panel con metadata dentro de un ScrollPane con altura limitada
     panelMetadata = crearPanelMetadata(); // Inicializar panel de metadata vacío
-    panelConMetadata.getChildren().addAll(panelMetadata, tablaDinamica);
+    ScrollPane scrollMetadata = new ScrollPane(panelMetadata);
+    scrollMetadata.setFitToWidth(true);
+    scrollMetadata.setMaxHeight(300); // Altura máxima del panel de metadata
+    scrollMetadata.setMinHeight(200); // Altura mínima
+    scrollMetadata.setStyle("-fx-background-color: transparent;");
+    
+    // Panel principal con metadata arriba y tabla abajo
+    VBox panelConMetadata = new VBox(10);
+    panelConMetadata.getChildren().addAll(scrollMetadata, tablaDinamica);
     VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
     panelConMetadata.setStyle("-fx-padding: 10;");
     
@@ -1735,12 +1748,221 @@ private void cargarProductos() {
     }
 
            private void exportarCotizacion(Stage stage) {
-        // 👉 Funcionalidad de exportación pendiente para tabla dinámica
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Funcionalidad en desarrollo");
-        alert.setHeaderText(null);
-        alert.setContentText("La funcionalidad de exportación está en desarrollo para la nueva tabla dinámica.");
-        alert.showAndWait();
+        // Validar que hay datos para exportar
+        if (tablaDinamica.getItems().isEmpty()) {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Sin datos");
+            alert.setHeaderText("No hay datos para exportar");
+            alert.setContentText("Primero debes cargar un archivo Excel con cotizaciones.");
+            alert.showAndWait();
+            return;
+        }
+        
+        // Validar que hay un broker seleccionado
+        if (formatoActual == null) {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Sin broker seleccionado");
+            alert.setHeaderText("Debes seleccionar un broker");
+            alert.setContentText("Por favor, selecciona un broker antes de exportar.");
+            alert.showAndWait();
+            return;
+        }
+        
+        // FileChooser para seleccionar ubicación
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Exportar Cotización");
+        fileChooser.setInitialFileName("Cotizacion_" + formatoActual.getBrokerName() + "_" + 
+            LocalDate.now().toString() + ".xlsx");
+        fileChooser.getExtensionFilters().add(
+            new FileChooser.ExtensionFilter("Excel Files", "*.xlsx")
+        );
+        
+        File archivo = fileChooser.showSaveDialog(stage);
+        if (archivo == null) {
+            return; // Usuario canceló
+        }
+        
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            XSSFSheet sheet = workbook.createSheet("Cotización");
+            
+            // ============================
+            // SECCIÓN 1: METADATA DEL BROKER
+            // ============================
+            int rowNum = 0;
+            
+            // Crear estilos
+            CellStyle estiloCabecera = workbook.createCellStyle();
+            XSSFFont fontCabecera = workbook.createFont();
+            fontCabecera.setBold(true);
+            fontCabecera.setFontHeightInPoints((short) 14);
+            fontCabecera.setColor(IndexedColors.WHITE.getIndex());
+            estiloCabecera.setFont(fontCabecera);
+            estiloCabecera.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+            estiloCabecera.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            estiloCabecera.setBorderBottom(BorderStyle.THIN);
+            estiloCabecera.setBorderTop(BorderStyle.THIN);
+            estiloCabecera.setBorderLeft(BorderStyle.THIN);
+            estiloCabecera.setBorderRight(BorderStyle.THIN);
+            
+            CellStyle estiloSeccion = workbook.createCellStyle();
+            XSSFFont fontSeccion = workbook.createFont();
+            fontSeccion.setBold(true);
+            fontSeccion.setFontHeightInPoints((short) 12);
+            fontSeccion.setColor(IndexedColors.DARK_BLUE.getIndex());
+            estiloSeccion.setFont(fontSeccion);
+            estiloSeccion.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            estiloSeccion.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            
+            CellStyle estiloCampo = workbook.createCellStyle();
+            XSSFFont fontCampo = workbook.createFont();
+            fontCampo.setBold(true);
+            estiloCampo.setFont(fontCampo);
+            
+            // Título principal
+            Row rowTitulo = sheet.createRow(rowNum++);
+            Cell cellTitulo = rowTitulo.createCell(0);
+            cellTitulo.setCellValue("COTIZACIÓN - " + formatoActual.getBrokerName());
+            cellTitulo.setCellStyle(estiloCabecera);
+            sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 5));
+            rowNum++;
+            
+            // Fecha de exportación
+            Row rowFecha = sheet.createRow(rowNum++);
+            Cell cellFechaLabel = rowFecha.createCell(0);
+            cellFechaLabel.setCellValue("Fecha de Exportación:");
+            cellFechaLabel.setCellStyle(estiloCampo);
+            Cell cellFechaValor = rowFecha.createCell(1);
+            cellFechaValor.setCellValue(LocalDateTime.now().toString());
+            rowNum++;
+            
+            // Metadata del broker
+            if (metadataActual != null && !metadataActual.isEmpty()) {
+                Row rowMetadataTitle = sheet.createRow(rowNum++);
+                Cell cellMetadataTitle = rowMetadataTitle.createCell(0);
+                cellMetadataTitle.setCellValue("📋 INFORMACIÓN DEL BROKER");
+                cellMetadataTitle.setCellStyle(estiloCabecera);
+                sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 5));
+                rowNum++;
+                
+                // Ordenar secciones
+                List<String> seccionesOrdenadas = new java.util.ArrayList<>(metadataActual.keySet());
+                java.util.Collections.sort(seccionesOrdenadas);
+                
+                for (String seccion : seccionesOrdenadas) {
+                    List<BrokerMetadata> items = metadataActual.get(seccion);
+                    
+                    // Título de sección
+                    Row rowSeccion = sheet.createRow(rowNum++);
+                    Cell cellSeccion = rowSeccion.createCell(0);
+                    cellSeccion.setCellValue("🔹 " + seccion);
+                    cellSeccion.setCellStyle(estiloSeccion);
+                    sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 5));
+                    
+                    // Campos de la sección
+                    for (BrokerMetadata metadata : items) {
+                        Row rowCampo = sheet.createRow(rowNum++);
+                        Cell cellCampoNombre = rowCampo.createCell(0);
+                        cellCampoNombre.setCellValue(metadata.getCampoNombre() + ":");
+                        cellCampoNombre.setCellStyle(estiloCampo);
+                        
+                        Cell cellCampoValor = rowCampo.createCell(1);
+                        cellCampoValor.setCellValue(metadata.getCampoValor() != null ? metadata.getCampoValor() : "");
+                    }
+                    
+                    rowNum++; // Espacio entre secciones
+                }
+            }
+            
+            rowNum++; // Espacio antes de la tabla de datos
+            
+            // ============================
+            // SECCIÓN 2: TABLA DE PRODUCTOS
+            // ============================
+            Row rowTablaTitle = sheet.createRow(rowNum++);
+            Cell cellTablaTitle = rowTablaTitle.createCell(0);
+            cellTablaTitle.setCellValue("📦 PRODUCTOS COTIZADOS");
+            cellTablaTitle.setCellStyle(estiloCabecera);
+            sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 
+                Math.max(5, tablaDinamica.getColumns().size() - 1)));
+            rowNum++;
+            
+            // Encabezados de columnas
+            Row headerRow = sheet.createRow(rowNum++);
+            int colNum = 0;
+            for (TableColumn<RowData, ?> column : tablaDinamica.getColumns()) {
+                Cell cell = headerRow.createCell(colNum++);
+                cell.setCellValue(column.getText());
+                cell.setCellStyle(estiloCabecera);
+            }
+            
+            // Datos
+            for (RowData rowData : tablaDinamica.getItems()) {
+                Row row = sheet.createRow(rowNum++);
+                colNum = 0;
+                
+                for (TableColumn<RowData, ?> column : tablaDinamica.getColumns()) {
+                    Cell cell = row.createCell(colNum++);
+                    
+                    // Obtener el valor de la celda
+                    Object cellValue = column.getCellData(rowData);
+                    if (cellValue != null) {
+                        String valor = cellValue.toString();
+                        
+                        // Intentar parsear como número para mantener formato
+                        try {
+                            double numValue = Double.parseDouble(valor.replace("$", "").replace(",", ""));
+                            cell.setCellValue(numValue);
+                            
+                            // Aplicar formato numérico si es precio
+                            if (column.getText().toLowerCase().contains("precio") || 
+                                column.getText().toLowerCase().contains("price") ||
+                                column.getText().toLowerCase().contains("total")) {
+                                CellStyle estiloNumero = workbook.createCellStyle();
+                                DataFormat format = workbook.createDataFormat();
+                                estiloNumero.setDataFormat(format.getFormat("$#,##0.00"));
+                                cell.setCellStyle(estiloNumero);
+                            }
+                        } catch (NumberFormatException e) {
+                            // Si no es número, insertar como texto
+                            cell.setCellValue(valor);
+                        }
+                    }
+                }
+            }
+            
+            // Ajustar ancho de columnas
+            for (int i = 0; i < tablaDinamica.getColumns().size(); i++) {
+                sheet.autoSizeColumn(i);
+                // Añadir un poco más de espacio
+                int currentWidth = sheet.getColumnWidth(i);
+                sheet.setColumnWidth(i, currentWidth + 1000);
+            }
+            
+            // Guardar archivo
+            try (FileOutputStream outputStream = new FileOutputStream(archivo)) {
+                workbook.write(outputStream);
+            }
+            
+            logger.info("✅ Cotización exportada exitosamente: {}", archivo.getAbsolutePath());
+            
+            // Mensaje de confirmación
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Exportación Exitosa");
+            alert.setHeaderText("Cotización exportada correctamente");
+            alert.setContentText("Archivo guardado en:\n" + archivo.getAbsolutePath() + 
+                "\n\nBroker: " + formatoActual.getBrokerName() +
+                "\nProductos: " + tablaDinamica.getItems().size() +
+                (metadataActual != null ? "\nMetadata: " + metadataActual.size() + " secciones" : ""));
+            alert.showAndWait();
+            
+        } catch (Exception e) {
+            logger.error("❌ Error al exportar cotización", e);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Error al exportar cotización");
+            alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
+            alert.showAndWait();
+        }
     }
 
     // 👉 Métodos CRUD de Productos *****************************************************
@@ -2547,43 +2769,43 @@ private void configurarTablaDinamica() {
         
         // 📐 Configurar cellFactory para centrar texto y aplicar estilos
         column.setCellFactory(tc -> new TableCell<RowData, String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                
-                if (empty || item == null) {
-                    setText(null);
-                    setStyle("");
-                } else {
-                    setText(item);
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
                     
-                    // Aplicar estilos del formato + centrado
-                    StringBuilder style = new StringBuilder();
-                    
-                    // 🎯 Centrar texto en todas las celdas
-                    style.append("-fx-alignment: CENTER; ");
-                    
-                    // Aplicar estilos personalizados
-                    if (col.getColorFondo() != null && !col.getColorFondo().isEmpty()) {
-                        style.append("-fx-background-color: ").append(col.getColorFondo()).append(";");
+                    if (empty || item == null) {
+                        setText(null);
+                        setStyle("");
+                    } else {
+                        setText(item);
+                        
+                        // Aplicar estilos del formato + centrado
+                        StringBuilder style = new StringBuilder();
+                        
+                        // 🎯 Centrar texto en todas las celdas
+                        style.append("-fx-alignment: CENTER; ");
+                        
+                        // Aplicar estilos personalizados
+                        if (col.getColorFondo() != null && !col.getColorFondo().isEmpty()) {
+                            style.append("-fx-background-color: ").append(col.getColorFondo()).append(";");
+                        }
+                        // Aplicar color de texto
+                        if (col.getColorTexto() != null && !col.getColorTexto().isEmpty()) {
+                            style.append("-fx-text-fill: ").append(col.getColorTexto()).append(";");
+                        }
+                        // Aplicar negrita y cursiva
+                        if (col.getEsNegrita() != null && col.getEsNegrita()) {
+                            style.append("-fx-font-weight: bold;");
+                        }
+                        // Aplicar cursiva
+                        if (col.getEsCursiva() != null && col.getEsCursiva()) {
+                            style.append("-fx-font-style: italic;");
+                        }
+                        // Aplicar subrayado
+                        setStyle(style.toString());
                     }
-                    // Aplicar color de texto
-                    if (col.getColorTexto() != null && !col.getColorTexto().isEmpty()) {
-                        style.append("-fx-text-fill: ").append(col.getColorTexto()).append(";");
-                    }
-                    // Aplicar negrita y cursiva
-                    if (col.getEsNegrita() != null && col.getEsNegrita()) {
-                        style.append("-fx-font-weight: bold;");
-                    }
-                    // Aplicar cursiva
-                    if (col.getEsCursiva() != null && col.getEsCursiva()) {
-                        style.append("-fx-font-style: italic;");
-                    }
-                    // Aplicar subrayado
-                    setStyle(style.toString());
                 }
-            }
-        });
+            });
         
         tablaDinamica.getColumns().add(column);
     }
@@ -2680,6 +2902,7 @@ private void leerExcelConFormato(File archivo) {
             
             RowData rowData = new RowData();
             boolean filaVacia = true;
+            int camposConDatos = 0;
             
             // Leer cada columna según el formato
             for (FormatoColumna col : formatoActual.getColumnas()) {
@@ -2714,8 +2937,10 @@ private void leerExcelConFormato(File archivo) {
                     }
                 }
                 
-                if (!valor.trim().isEmpty()) {
+                // Verificar si el valor tiene contenido real
+                if (valor != null && !valor.trim().isEmpty() && !valor.equals("0.0")) {
                     filaVacia = false;
+                    camposConDatos++;
                 }
                 
                 rowData.set(col.getCampoEstandar(), valor);
@@ -2776,13 +3001,45 @@ private void leerExcelConFormato(File archivo) {
                 rowData.set("precio_vss_calculado", "0.0");
             }
             
-            // Agregar la fila solo si no está vacía
-            if (!filaVacia) {
+            // 🚫 Filtrar filas que son títulos/encabezados adicionales
+            boolean esFilaTitulo = false;
+            
+            // Verificar en múltiples campos posibles
+            String descripcionFila = obtenerValorDeCampo(rowData, "ITEM_DESCRIPTION", "DESCRIPTION", 
+                "ITEM_NAME", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
+            String productCode = obtenerValorDeCampo(rowData, "PRODUCT_CODE", "ITEM_CODE", "CODE", "CODIGO");
+            
+            // Revisar todos los campos relevantes
+            String[] camposARevisar = {descripcionFila, productCode};
+            
+            for (String campo : camposARevisar) {
+                if (campo != null && !campo.trim().isEmpty()) {
+                    String valorUpper = campo.trim().toUpperCase();
+                    // Filtrar títulos comunes que aparecen como filas
+                    if (valorUpper.equals("PROVISIONS") || valorUpper.equals("PROVISION") ||
+                        valorUpper.equals("ITEMS") || valorUpper.equals("PRODUCTS") ||
+                        valorUpper.equals("DESCRIPCION") || valorUpper.equals("DESCRIPTION") ||
+                        valorUpper.equals("ITEM DESCRIPTION") || valorUpper.equals("PRODUCT LIST") ||
+                        valorUpper.equals("PRODUCT CODE") || valorUpper.equals("ITEM CODE") ||
+                        valorUpper.startsWith("----") || valorUpper.startsWith("====")) {
+                        esFilaTitulo = true;
+                        logger.debug("Fila filtrada (título/encabezado): {} = '{}'", 
+                            campo.equals(descripcionFila) ? "DESCRIPTION" : "PRODUCT_CODE", campo);
+                        break;
+                    }
+                }
+            }
+            
+            // Agregar la fila solo si no está vacía y no es un título
+            if (!filaVacia && !esFilaTitulo) {
                 datos.add(rowData);
             }
         }
         
         workbook.close();
+        
+        int totalFilasLeidas = lastRow - startRow + 1;
+        int filasVacias = totalFilasLeidas - datos.size();
         
         // Contar productos con precio calculado
         int productosConPrecio = 0;
@@ -2803,14 +3060,17 @@ private void leerExcelConFormato(File archivo) {
         // Actualizar tabla
         tablaDinamica.setItems(datos);
         
-        logger.info("Se cargaron {} filas desde el Excel", datos.size());
+        logger.info("Se cargaron {} filas con datos desde el Excel", datos.size());
+        logger.info("Se filtraron {} filas vacías", filasVacias);
         logger.info("Se calcularon precios automáticamente para {} productos", productosConPrecio);
         
         Alert info = new Alert(Alert.AlertType.INFORMATION);
         info.setTitle("Archivo cargado");
         info.setHeaderText("Excel procesado exitosamente");
+        String mensajeFilasVacias = filasVacias > 0 ? "\n🗑️ Filas vacías filtradas: " + filasVacias : "";
         info.setContentText("Se cargaron " + datos.size() + " filas con formato de " + 
                           formatoActual.getBrokerName() + 
+                          mensajeFilasVacias +
                           "\n\n✅ Precios VSS calculados automáticamente: " + productosConPrecio + 
                           " de " + datos.size() + " productos");
         info.showAndWait();
@@ -2877,11 +3137,17 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     String unidad = obtenerValorDeCampo(rowData, 
         "UOM", "UNIT", "UNIDAD", "UNIT_OF_MEASURE");
     
+    // Extraer Vendor Remarks si existe
+    String vendorRemarks = obtenerValorDeCampo(rowData,
+        "VENDOR_REMARKS", "VENDOR_REMARK", "VENDOR_NOTES", "VENDOR_NOTE", 
+        "VENDOR_COMMENTS", "VENDOR_COMMENT", "REMARKS", "NOTES", "COMMENTS");
+    
     // 🚨 DEBUG: Mostrar todos los campos disponibles en la fila
     logger.debug("🚨 DEBUG - Campos disponibles en RowData: {}", rowData.getKeys());
     logger.debug("🚨 DEBUG - Descripción extraída: '{}'", descripcion);
     logger.debug("🚨 DEBUG - Cantidad extraída: '{}'", cantidad);
     logger.debug("🚨 DEBUG - Unidad extraída: '{}'", unidad);
+    logger.debug("🚨 DEBUG - Vendor Remarks extraído: '{}'", vendorRemarks);
     
     dialog.setHeaderText("Producto: " + (descripcion != null && !descripcion.isEmpty() ? descripcion : "[Sin descripción]"));
     
@@ -2900,6 +3166,36 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     lblPrecio.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
     
     infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
+    
+    // ============================
+    // PANEL VENDOR REMARKS (Solo para BSM CATERING)
+    // ============================
+    VBox panelVendorRemarks = null;
+    TextField txtVendorRemarks = null;
+    
+    // Verificar si es BSM CATERING
+    boolean esBSMCatering = formatoActual != null && formatoActual.getBrokerName() != null && 
+                            formatoActual.getBrokerName().toUpperCase().contains("BSM");
+    
+    if (esBSMCatering) {
+        panelVendorRemarks = new VBox(8);
+        panelVendorRemarks.setStyle("-fx-padding: 10; -fx-background-color: #FFF9E6; -fx-border-color: #FFA500; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
+        
+        Label lblRemarksTitle = new Label("📝 Vendor Remarks");
+        lblRemarksTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #CC6600;");
+        
+        txtVendorRemarks = new TextField();
+        txtVendorRemarks.setPromptText("Ingrese notas o comentarios para el vendor...");
+        txtVendorRemarks.setPrefWidth(800);
+        if (vendorRemarks != null && !vendorRemarks.isEmpty()) {
+            txtVendorRemarks.setText(vendorRemarks);
+        }
+        
+        Label lblRemarksHelp = new Label("💡 Estas notas se guardarán en la columna Vendor Remarks");
+        lblRemarksHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666; -fx-font-style: italic;");
+        
+        panelVendorRemarks.getChildren().addAll(lblRemarksTitle, txtVendorRemarks, lblRemarksHelp);
+    }
     
     // ============================
     // TABLA DE PRODUCTOS SIMILARES
@@ -3126,8 +3422,14 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // LAYOUT PRINCIPAL
     // ============================
     VBox contenidoPrincipal = new VBox(15);
+    contenidoPrincipal.getChildren().add(infoPanel);
+    
+    // Agregar panel de Vendor Remarks si es BSM CATERING
+    if (panelVendorRemarks != null) {
+        contenidoPrincipal.getChildren().add(panelVendorRemarks);
+    }
+    
     contenidoPrincipal.getChildren().addAll(
-        infoPanel,
         panelBusqueda,
         new Label("🔍 Productos en Base de Datos:"),
         tablaProductos,
@@ -3139,7 +3441,34 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // Configurar diálogo
     dialog.getDialogPane().setContent(contenidoPrincipal);
     dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-    dialog.getDialogPane().setPrefSize(900, 700);
+    dialog.getDialogPane().setPrefSize(900, 750);
+    
+    // Guardar Vendor Remarks al cerrar el diálogo
+    final TextField txtVendorRemarksFinal = txtVendorRemarks;
+    dialog.setOnCloseRequest(event -> {
+        if (txtVendorRemarksFinal != null) {
+            String nuevoValorRemarks = txtVendorRemarksFinal.getText();
+            
+            // Buscar el campo correcto para guardar
+            String campoVendorRemarks = null;
+            for (String key : rowData.getKeys()) {
+                String keyUpper = key.toUpperCase();
+                if ((keyUpper.contains("VENDOR") && 
+                    (keyUpper.contains("REMARK") || keyUpper.contains("NOTE") || keyUpper.contains("COMMENT")))) {
+                    campoVendorRemarks = key;
+                    break;
+                }
+            }
+            
+            if (campoVendorRemarks != null) {
+                rowData.set(campoVendorRemarks, nuevoValorRemarks);
+                tablaDinamica.refresh();
+                logger.info("✅ Vendor Remarks actualizado: {} = '{}'", campoVendorRemarks, nuevoValorRemarks);
+            } else {
+                logger.warn("⚠️ No se encontró el campo Vendor Remarks en la fila");
+            }
+        }
+    });
     
     // Mostrar diálogo
     dialog.showAndWait();
@@ -3173,12 +3502,16 @@ private void cargarMetadataBroker(int formatoId) {
         BrokerMetadataDAO metadataDAO = new BrokerMetadataDAO(conn);
         Map<String, List<BrokerMetadata>> metadataPorSeccion = metadataDAO.obtenerMetadataPorSeccion(formatoId);
         
+        // Guardar metadata en variable de instancia
+        this.metadataActual = metadataPorSeccion;
+        
         actualizarPanelMetadata(metadataPorSeccion);
         
         logger.info("Metadata cargada para formato ID {}: {} secciones", formatoId, metadataPorSeccion.size());
         
     } catch (SQLException e) {
         logger.error("Error al cargar metadata del formato ID {}", formatoId, e);
+        this.metadataActual = null;
         actualizarPanelMetadata(null);
     }
 }

@@ -1545,7 +1545,7 @@ public class CotizacionService {
           
           try (PreparedStatement statement = connection.prepareStatement(sql)) {
               // Preparar parámetros con wildcards para búsqueda parcial
-              String descripcionBusqueda =  descripcion.trim() + "%";
+              String descripcionBusqueda =  "%" + descripcion.trim() + "%";
               statement.setString(1, descripcionBusqueda);
               statement.setString(2, descripcionBusqueda);
               
