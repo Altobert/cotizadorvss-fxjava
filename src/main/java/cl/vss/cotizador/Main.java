@@ -14,7 +14,9 @@ import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormat;
 import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
 
 import javafx.stage.FileChooser;
 
@@ -1770,13 +1772,24 @@ private void cargarProductos() {
             return;
         }
         
+        // Verificar si hay plantilla disponible para este broker
+        String rutaPlantilla = formatoActual.getRutaPlantilla();
+        boolean usarPlantilla = rutaPlantilla != null && !rutaPlantilla.isEmpty();
+        
+        logger.info("📤 Exportando cotización - Broker: {}, Plantilla: {}", 
+            formatoActual.getBrokerName(), 
+            usarPlantilla ? rutaPlantilla : "NO (usando formato dinámico)");
+        
         // FileChooser para seleccionar ubicación
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Exportar Cotización");
+        
+        // Si hay plantilla, usar extensión .xlsm para preservar macros
+        String extension = usarPlantilla ? ".xlsm" : ".xlsx";
         fileChooser.setInitialFileName("Cotizacion_" + formatoActual.getBrokerName() + "_" + 
-            LocalDate.now().toString() + ".xlsx");
+            LocalDate.now().toString() + extension);
         fileChooser.getExtensionFilters().add(
-            new FileChooser.ExtensionFilter("Excel Files", "*.xlsx")
+            new FileChooser.ExtensionFilter("Excel Files", "*" + extension)
         );
         
         File archivo = fileChooser.showSaveDialog(stage);
@@ -1784,6 +1797,13 @@ private void cargarProductos() {
             return; // Usuario canceló
         }
         
+        // Si hay plantilla, usar el método de exportación con plantilla
+        if (usarPlantilla) {
+            exportarConPlantilla(archivo, rutaPlantilla);
+            return;
+        }
+        
+        // Flujo original sin plantilla
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             XSSFSheet sheet = workbook.createSheet("Cotización");
             
@@ -1838,6 +1858,15 @@ private void cargarProductos() {
             logger.info("📊 Creando encabezados en fila {} con {} columnas", 
                 formatoActual.getHeaderRow(), formatoActual.getColumnas().size());
             
+            // Determinar índice de columna PRECIO_VSS (siguiente a la última columna del formato)
+            int maxColIndex = 0;
+            for (FormatoColumna columna : formatoActual.getColumnas()) {
+                if (columna.getIndiceColumna() > maxColIndex) {
+                    maxColIndex = columna.getIndiceColumna();
+                }
+            }
+            int precioVssColIndex = maxColIndex + 1;
+            
             // Crear cache de estilos para las columnas (mejor rendimiento)
             Map<Integer, CellStyle> estilosColumnas = new HashMap<>();
             
@@ -1861,6 +1890,12 @@ private void cargarProductos() {
                     columna.getEsNegrita(),
                     columna.getColorFondo());
             }
+            
+            // 💰 Agregar encabezado "Precio VSS" en la última columna
+            Cell precioVssHeaderCell = headerRow.createCell(precioVssColIndex);
+            precioVssHeaderCell.setCellValue("Precio VSS");
+            logger.info("💰 Columna 'Precio VSS' agregada en índice {} (columna {})", 
+                precioVssColIndex, (char)('A' + precioVssColIndex));
             
             // ============================
             // PASO 3: INSERTAR DATOS DE LA TABLA EN LAS POSICIONES CORRECTAS
@@ -1909,13 +1944,22 @@ private void cargarProductos() {
                     // Buscar el valor en rowData
                     String valor = rowData.get(campoEstandar);
                     
+                    // 💰 Caso especial: PRECIO_VSS usa el valor calculado
+                    if ("PRECIO_VSS".equals(campoEstandar)) {
+                        valor = rowData.get("precio_vss_calculado");
+                        if (valor == null || valor.isEmpty()) {
+                            valor = "0.0";
+                        }
+                    }
+                    
                     if (valor != null && !valor.isEmpty()) {
                         Cell cell = row.createCell(colIndex);
                         String valorStr = valor;
                         
                         // Intentar parsear como número según el tipo de dato
                         if ("DECIMAL".equalsIgnoreCase(columna.getTipoDato()) || 
-                            "INTEGER".equalsIgnoreCase(columna.getTipoDato())) {
+                            "INTEGER".equalsIgnoreCase(columna.getTipoDato()) ||
+                            "PRECIO_VSS".equals(campoEstandar)) {
                             try {
                                 double numValue = Double.parseDouble(valorStr.replace("$", "").replace(",", ""));
                                 cell.setCellValue(numValue);
@@ -1939,6 +1983,21 @@ private void cargarProductos() {
                             }
                         }
                     }
+                }
+                
+                // 💰 Agregar valor de Precio VSS (calculado en frontend)
+                String precioVssValor = rowData.get("precio_vss_calculado");
+                if (precioVssValor == null || precioVssValor.isEmpty()) {
+                    precioVssValor = "0.0";
+                }
+                Cell precioVssCell = row.createCell(precioVssColIndex);
+                try {
+                    double precioVss = Double.parseDouble(
+                        precioVssValor.replace("$", "").replace(",", "")
+                    );
+                    precioVssCell.setCellValue(precioVss);
+                } catch (NumberFormatException e) {
+                    precioVssCell.setCellValue(precioVssValor);
                 }
             }
             
@@ -1975,6 +2034,7 @@ private void cargarProductos() {
                 "\n✓ Formato ID: " + formatoActual.getFormatoId() +
                 "\n✓ Columnas: " + formatoActual.getColumnas().size() +
                 "\n✓ Productos: " + tablaDinamica.getItems().size() +
+                "\n✓ Precio VSS: Incluido (columna " + (char)('A' + precioVssColIndex) + ")" +
                 (metadataActual != null ? "\n✓ Metadata: " + contarMetadataTotal() + " campos" : ""));
             alert.showAndWait();
             
@@ -1983,6 +2043,258 @@ private void cargarProductos() {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Error");
             alert.setHeaderText("Error al exportar cotización");
+            alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
+            alert.showAndWait();
+        }
+    }
+    
+    /**
+     * Exporta la cotización usando una plantilla existente.
+     * Preserva el formato original, logo, macros y estilos.
+     * Solo modifica las filas de datos a partir de header_row + 1.
+     * 
+     * @param archivoDestino Archivo donde guardar la exportación
+     * @param rutaPlantilla Ruta del recurso de la plantilla
+     */
+    private void exportarConPlantilla(File archivoDestino, String rutaPlantilla) {
+        logger.info("📄 Exportando con plantilla: {}", rutaPlantilla);
+        
+        try (InputStream plantillaStream = getClass().getResourceAsStream(rutaPlantilla)) {
+            if (plantillaStream == null) {
+                throw new RuntimeException("No se encontró la plantilla: " + rutaPlantilla);
+            }
+            
+            // Abrir la plantilla (soporta .xlsm con macros)
+            try (XSSFWorkbook workbook = new XSSFWorkbook(plantillaStream)) {
+                XSSFSheet sheet = workbook.getSheetAt(0);
+                
+                // Fila donde empiezan los datos (después del header)
+                int headerRowIndex = formatoActual.getHeaderRow() - 1; // 0-indexed
+                int dataStartRow = headerRowIndex + 1;
+                
+                logger.info("📦 Insertando {} productos a partir de la fila {} (preservando formato original)", 
+                    tablaDinamica.getItems().size(), dataStartRow + 1);
+                
+                // Limpiar filas de datos existentes en la plantilla (si las hay)
+                int lastRowNum = sheet.getLastRowNum();
+                for (int i = lastRowNum; i >= dataStartRow; i--) {
+                    Row row = sheet.getRow(i);
+                    if (row != null) {
+                        sheet.removeRow(row);
+                    }
+                }
+                
+                // 📝 Escribir nombres de columnas (encabezados) en la fila de header
+                Row headerRow = sheet.getRow(headerRowIndex);
+                if (headerRow == null) {
+                    headerRow = sheet.createRow(headerRowIndex);
+                }
+                
+                logger.info("📊 Escribiendo encabezados en fila {}", headerRowIndex + 1);
+                
+                // Determinar índice de columna PRECIO_VSS (siguiente a la última columna del formato)
+                int maxColIndex = 0;
+                for (FormatoColumna columna : formatoActual.getColumnas()) {
+                    if (columna.getIndiceColumna() > maxColIndex) {
+                        maxColIndex = columna.getIndiceColumna();
+                    }
+                }
+                int precioVssColIndex = maxColIndex + 1;
+                
+                logger.info("🔍 DEBUG: maxColIndex={}, precioVssColIndex={}, columna={}", 
+                    maxColIndex, precioVssColIndex, (char)('A' + precioVssColIndex));
+                logger.info("🔍 DEBUG: Total columnas del formato: {}", formatoActual.getColumnas().size());
+                
+                // 🎨 Crear estilo para encabezados (basado en el formato del broker)
+                XSSFCellStyle estiloHeader = workbook.createCellStyle();
+                XSSFFont fontHeader = workbook.createFont();
+                fontHeader.setBold(true);
+                fontHeader.setFontHeightInPoints((short) 11);
+                
+                // Usar colores del formato si están definidos (tomar de la primera columna con estilo)
+                String colorFondoHeader = "#9DBEC3"; // Color por defecto BSM
+                String colorTextoHeader = "#1F497D"; // Color por defecto BSM
+                for (FormatoColumna col : formatoActual.getColumnas()) {
+                    if (col.getColorFondo() != null && !col.getColorFondo().isEmpty()) {
+                        colorFondoHeader = col.getColorFondo();
+                        break;
+                    }
+                }
+                for (FormatoColumna col : formatoActual.getColumnas()) {
+                    if (col.getColorTexto() != null && !col.getColorTexto().isEmpty()) {
+                        colorTextoHeader = col.getColorTexto();
+                        break;
+                    }
+                }
+                
+                // Aplicar color de fondo
+                if (colorFondoHeader.startsWith("#")) {
+                    String hex = colorFondoHeader.substring(1);
+                    byte[] rgb = new byte[] {
+                        (byte) Integer.parseInt(hex.substring(0, 2), 16),
+                        (byte) Integer.parseInt(hex.substring(2, 4), 16),
+                        (byte) Integer.parseInt(hex.substring(4, 6), 16)
+                    };
+                    XSSFColor bgColor = new XSSFColor(rgb, null);
+                    estiloHeader.setFillForegroundColor(bgColor);
+                    estiloHeader.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                }
+                
+                // Aplicar color de texto
+                if (colorTextoHeader.startsWith("#")) {
+                    String hex = colorTextoHeader.substring(1);
+                    byte[] rgb = new byte[] {
+                        (byte) Integer.parseInt(hex.substring(0, 2), 16),
+                        (byte) Integer.parseInt(hex.substring(2, 4), 16),
+                        (byte) Integer.parseInt(hex.substring(4, 6), 16)
+                    };
+                    XSSFColor textColor = new XSSFColor(rgb, null);
+                    fontHeader.setColor(textColor);
+                }
+                
+                estiloHeader.setFont(fontHeader);
+                
+                // Aplicar bordes
+                estiloHeader.setBorderBottom(BorderStyle.THIN);
+                estiloHeader.setBorderTop(BorderStyle.THIN);
+                estiloHeader.setBorderLeft(BorderStyle.THIN);
+                estiloHeader.setBorderRight(BorderStyle.THIN);
+                
+                // Alineación
+                estiloHeader.setAlignment(HorizontalAlignment.CENTER);
+                estiloHeader.setVerticalAlignment(VerticalAlignment.CENTER);
+                
+                logger.info("🎨 Estilo de cabecera creado - Fondo: {}, Texto: {}", colorFondoHeader, colorTextoHeader);
+                
+                // Escribir encabezados de las columnas del formato CON ESTILO
+                for (FormatoColumna columna : formatoActual.getColumnas()) {
+                    int colIndex = columna.getIndiceColumna();
+                    Cell headerCell = headerRow.getCell(colIndex);
+                    if (headerCell == null) {
+                        headerCell = headerRow.createCell(colIndex);
+                    }
+                    headerCell.setCellValue(columna.getNombreColumnaOriginal());
+                    headerCell.setCellStyle(estiloHeader);
+                }
+                
+                // 💰 Agregar encabezado "Precio VSS" en la última columna CON ESTILO
+                Cell precioVssHeaderCell = headerRow.createCell(precioVssColIndex);
+                precioVssHeaderCell.setCellValue("Precio VSS");
+                precioVssHeaderCell.setCellStyle(estiloHeader);
+                logger.info("💰 ENCABEZADO 'Precio VSS' escrito en celda [{},{}] = columna {} con formato", 
+                    headerRowIndex, precioVssColIndex, (char)('A' + precioVssColIndex));
+                
+                // Insertar datos de tablaDinámica
+                int currentRowNum = dataStartRow;
+                int filasConPrecioVss = 0;
+                for (RowData rowData : tablaDinamica.getItems()) {
+                    Row row = sheet.createRow(currentRowNum++);
+                    
+                    // Mapear cada columna según el formato
+                    for (FormatoColumna columna : formatoActual.getColumnas()) {
+                        int colIndex = columna.getIndiceColumna();
+                        String campoEstandar = columna.getCampoEstandar();
+                        
+                        // Obtener valor del RowData
+                        String valor = rowData.get(campoEstandar);
+                        
+                        if (valor != null && !valor.isEmpty()) {
+                            Cell cell = row.createCell(colIndex);
+                            
+                            // Intentar parsear como número según tipo de dato
+                            if ("DECIMAL".equalsIgnoreCase(columna.getTipoDato()) || 
+                                "INTEGER".equalsIgnoreCase(columna.getTipoDato())) {
+                                try {
+                                    double numValue = Double.parseDouble(
+                                        valor.replace("$", "").replace(",", "")
+                                    );
+                                    cell.setCellValue(numValue);
+                                } catch (NumberFormatException e) {
+                                    cell.setCellValue(valor);
+                                }
+                            } else {
+                                cell.setCellValue(valor);
+                            }
+                        }
+                    }
+                    
+                    // 💰 Agregar valor de Precio VSS (calculado en frontend)
+                    String precioVssValor = rowData.get("precio_vss_calculado");
+                    if (precioVssValor == null || precioVssValor.isEmpty()) {
+                        precioVssValor = "0.0";
+                    }
+                    Cell precioVssCell = row.createCell(precioVssColIndex);
+                    try {
+                        double precioVss = Double.parseDouble(
+                            precioVssValor.replace("$", "").replace(",", "")
+                        );
+                        precioVssCell.setCellValue(precioVss);
+                        if (precioVss > 0) filasConPrecioVss++;
+                    } catch (NumberFormatException e) {
+                        precioVssCell.setCellValue(precioVssValor);
+                    }
+                    
+                    // Log de la primera fila para verificar
+                    if (currentRowNum == dataStartRow + 1) {
+                        logger.info("🔍 DEBUG primera fila: precio_vss_calculado='{}', escrito en columna {}", 
+                            precioVssValor, precioVssColIndex);
+                    }
+                }
+                
+                logger.info("💰 Total filas con Precio VSS > 0: {} de {}", 
+                    filasConPrecioVss, tablaDinamica.getItems().size());
+                
+                // 📏 Ajustar ancho de la columna Precio VSS para que sea visible
+                sheet.setColumnWidth(precioVssColIndex, 4000); // ~14 caracteres
+                
+                // 👁️ Asegurar que la columna NO esté oculta
+                sheet.setColumnHidden(precioVssColIndex, false);
+                
+                logger.info("📏 Ancho de columna {} (Precio VSS) ajustado a 4000, visible=true", (char)('A' + precioVssColIndex));
+                
+                // 🔍 Verificación final: leer lo que se escribió en la primera fila de datos
+                Row primeraFilaDatos = sheet.getRow(dataStartRow);
+                if (primeraFilaDatos != null) {
+                    Cell celdaVerificacion = primeraFilaDatos.getCell(precioVssColIndex);
+                    if (celdaVerificacion != null) {
+                        logger.info("✅ VERIFICACIÓN FINAL: Celda [{},{}] contiene: {}", 
+                            dataStartRow, precioVssColIndex, 
+                            celdaVerificacion.getCellType().toString() + " = " + 
+                            (celdaVerificacion.getCellType().toString().equals("NUMERIC") ? 
+                                celdaVerificacion.getNumericCellValue() : celdaVerificacion.toString()));
+                    } else {
+                        logger.error("❌ VERIFICACIÓN FINAL: La celda [{},{}] es NULL!", dataStartRow, precioVssColIndex);
+                    }
+                }
+                
+                // Guardar archivo con el nuevo contenido
+                try (FileOutputStream outputStream = new FileOutputStream(archivoDestino)) {
+                    workbook.write(outputStream);
+                    logger.info("💾 Archivo guardado exitosamente en: {}", archivoDestino.getAbsolutePath());
+                }
+                
+                logger.info("✅ Cotización exportada con plantilla exitosamente: {}", 
+                    archivoDestino.getAbsolutePath());
+                
+                // Mensaje de confirmación
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Exportación Exitosa");
+                alert.setHeaderText("Cotización exportada con formato " + formatoActual.getBrokerName());
+                alert.setContentText("Archivo guardado en:\n" + archivoDestino.getAbsolutePath() + 
+                    "\n\n✓ Broker: " + formatoActual.getBrokerName() +
+                    "\n✓ Plantilla: SÍ (formato original preservado)" +
+                    "\n✓ Logo: Preservado" +
+                    "\n✓ Macros: Preservadas" +
+                    "\n✓ Productos: " + tablaDinamica.getItems().size() +
+                    "\n✓ Precio VSS: Incluido (columna " + (char)('A' + precioVssColIndex) + ")");
+                alert.showAndWait();
+            }
+            
+        } catch (Exception e) {
+            logger.error("❌ Error al exportar con plantilla", e);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Error al exportar con plantilla");
             alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
             alert.showAndWait();
         }

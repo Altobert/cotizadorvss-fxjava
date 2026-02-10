@@ -5,6 +5,7 @@ import cl.vss.cotizador.model.FormatoColumna;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.InputStream;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,7 +56,12 @@ public class FormatoDAO {
                     List<FormatoColumna> columnas = obtenerColumnasPorFormatoId(formato.getFormatoId());
                     formato.setColumnas(columnas);
                     
-                    logger.info("Formato cargado para broker ID {}: {} columnas", brokerId, columnas.size());
+                    // Detectar plantilla por convención: /templates/brokers/{BROKER_NAME}_template.xlsm
+                    String rutaPlantilla = detectarPlantilla(formato.getBrokerName());
+                    formato.setRutaPlantilla(rutaPlantilla);
+                    
+                    logger.info("Formato cargado para broker ID {}: {} columnas, plantilla: {}", 
+                        brokerId, columnas.size(), rutaPlantilla != null ? "SÍ" : "NO");
                 }
             }
             
@@ -145,6 +151,10 @@ public class FormatoDAO {
                 List<FormatoColumna> columnas = obtenerColumnasPorFormatoId(formato.getFormatoId());
                 formato.setColumnas(columnas);
                 
+                // Detectar plantilla por convención
+                String rutaPlantilla = detectarPlantilla(formato.getBrokerName());
+                formato.setRutaPlantilla(rutaPlantilla);
+                
                 formatos.add(formato);
             }
             
@@ -155,5 +165,36 @@ public class FormatoDAO {
         }
         
         return formatos;
+    }
+    
+    /**
+     * Detecta si existe una plantilla para el broker dado.
+     * Busca en /templates/brokers/{BROKER_NAME_NORMALIZADO}_template.xlsm
+     * @param brokerName Nombre del broker
+     * @return Ruta de la plantilla si existe, null si no existe
+     */
+    private String detectarPlantilla(String brokerName) {
+        if (brokerName == null || brokerName.isEmpty()) {
+            return null;
+        }
+        
+        // Normalizar nombre: "BSM CATERING" -> "BSM_CATERING"
+        String nombreNormalizado = brokerName.toUpperCase()
+            .replace(" ", "_")
+            .replace("-", "_");
+        
+        String rutaPlantilla = "/templates/brokers/" + nombreNormalizado + "_template.xlsm";
+        
+        // Verificar si el recurso existe
+        try (InputStream is = getClass().getResourceAsStream(rutaPlantilla)) {
+            if (is != null) {
+                logger.info("Plantilla encontrada para {}: {}", brokerName, rutaPlantilla);
+                return rutaPlantilla;
+            }
+        } catch (Exception e) {
+            logger.debug("No se encontró plantilla para {}", brokerName);
+        }
+        
+        return null;
     }
 }
