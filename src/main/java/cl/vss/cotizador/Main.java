@@ -8,6 +8,8 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormat;
@@ -1785,164 +1787,174 @@ private void cargarProductos() {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             XSSFSheet sheet = workbook.createSheet("Cotización");
             
+            logger.info("🚀 Exportando cotización con formato específico de {}", formatoActual.getBrokerName());
+            
             // ============================
-            // SECCIÓN 1: METADATA DEL BROKER
+            // PASO 1: COLOCAR METADATA EN POSICIONES EXACTAS
             // ============================
-            int rowNum = 0;
-            
-            // Crear estilos
-            CellStyle estiloCabecera = workbook.createCellStyle();
-            XSSFFont fontCabecera = workbook.createFont();
-            fontCabecera.setBold(true);
-            fontCabecera.setFontHeightInPoints((short) 14);
-            fontCabecera.setColor(IndexedColors.WHITE.getIndex());
-            estiloCabecera.setFont(fontCabecera);
-            estiloCabecera.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
-            estiloCabecera.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            estiloCabecera.setBorderBottom(BorderStyle.THIN);
-            estiloCabecera.setBorderTop(BorderStyle.THIN);
-            estiloCabecera.setBorderLeft(BorderStyle.THIN);
-            estiloCabecera.setBorderRight(BorderStyle.THIN);
-            
-            CellStyle estiloSeccion = workbook.createCellStyle();
-            XSSFFont fontSeccion = workbook.createFont();
-            fontSeccion.setBold(true);
-            fontSeccion.setFontHeightInPoints((short) 12);
-            fontSeccion.setColor(IndexedColors.DARK_BLUE.getIndex());
-            estiloSeccion.setFont(fontSeccion);
-            estiloSeccion.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
-            estiloSeccion.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            
-            CellStyle estiloCampo = workbook.createCellStyle();
-            XSSFFont fontCampo = workbook.createFont();
-            fontCampo.setBold(true);
-            estiloCampo.setFont(fontCampo);
-            
-            // Título principal
-            Row rowTitulo = sheet.createRow(rowNum++);
-            Cell cellTitulo = rowTitulo.createCell(0);
-            cellTitulo.setCellValue("COTIZACIÓN - " + formatoActual.getBrokerName());
-            cellTitulo.setCellStyle(estiloCabecera);
-            sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 5));
-            rowNum++;
-            
-            // Fecha de exportación
-            Row rowFecha = sheet.createRow(rowNum++);
-            Cell cellFechaLabel = rowFecha.createCell(0);
-            cellFechaLabel.setCellValue("Fecha de Exportación:");
-            cellFechaLabel.setCellStyle(estiloCampo);
-            Cell cellFechaValor = rowFecha.createCell(1);
-            cellFechaValor.setCellValue(LocalDateTime.now().toString());
-            rowNum++;
-            
-            // Metadata del broker
             if (metadataActual != null && !metadataActual.isEmpty()) {
-                Row rowMetadataTitle = sheet.createRow(rowNum++);
-                Cell cellMetadataTitle = rowMetadataTitle.createCell(0);
-                cellMetadataTitle.setCellValue("📋 INFORMACIÓN DEL BROKER");
-                cellMetadataTitle.setCellStyle(estiloCabecera);
-                sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 5));
-                rowNum++;
+                logger.info("📋 Colocando {} secciones de metadata en posiciones específicas", metadataActual.size());
                 
-                // Ordenar secciones
-                List<String> seccionesOrdenadas = new java.util.ArrayList<>(metadataActual.keySet());
-                java.util.Collections.sort(seccionesOrdenadas);
-                
-                for (String seccion : seccionesOrdenadas) {
-                    List<BrokerMetadata> items = metadataActual.get(seccion);
-                    
-                    // Título de sección
-                    Row rowSeccion = sheet.createRow(rowNum++);
-                    Cell cellSeccion = rowSeccion.createCell(0);
-                    cellSeccion.setCellValue("🔹 " + seccion);
-                    cellSeccion.setCellStyle(estiloSeccion);
-                    sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 5));
-                    
-                    // Campos de la sección
-                    for (BrokerMetadata metadata : items) {
-                        Row rowCampo = sheet.createRow(rowNum++);
-                        Cell cellCampoNombre = rowCampo.createCell(0);
-                        cellCampoNombre.setCellValue(metadata.getCampoNombre() + ":");
-                        cellCampoNombre.setCellStyle(estiloCampo);
+                for (Map.Entry<String, List<BrokerMetadata>> entry : metadataActual.entrySet()) {
+                    for (BrokerMetadata metadata : entry.getValue()) {
+                        int filaExcel = metadata.getFilaOrigen() - 1; // Excel es 1-indexed, POI es 0-indexed
+                        int colExcel = metadata.getColumnaOrigen();
                         
-                        Cell cellCampoValor = rowCampo.createCell(1);
-                        cellCampoValor.setCellValue(metadata.getCampoValor() != null ? metadata.getCampoValor() : "");
+                        // Crear fila si no existe
+                        Row row = sheet.getRow(filaExcel);
+                        if (row == null) {
+                            row = sheet.createRow(filaExcel);
+                        }
+                        
+                        // Crear celda y asignar valor en formato "nombreCampo=valor"
+                        Cell cell = row.createCell(colExcel);
+                        String campoNombre = metadata.getCampoNombre();
+                        String valor = metadata.getCampoValor();
+                        
+                        if (valor != null && !valor.isEmpty()) {
+                            String valorFormateado = campoNombre + "=" + valor;
+                            cell.setCellValue(valorFormateado);
+                        }
+                        
+                        logger.debug("  └─ {} [{}]: '{}' → Fila {} Col {}", 
+                            metadata.getSeccion(), 
+                            metadata.getCampoNombre(), 
+                            valor, 
+                            filaExcel + 1, 
+                            metadata.getLetraColumna());
                     }
-                    
-                    rowNum++; // Espacio entre secciones
                 }
             }
             
-            rowNum++; // Espacio antes de la tabla de datos
-            
             // ============================
-            // SECCIÓN 2: TABLA DE PRODUCTOS
+            // PASO 2: CREAR ENCABEZADOS EN header_row CON FORMATO ESPECÍFICO
             // ============================
-            Row rowTablaTitle = sheet.createRow(rowNum++);
-            Cell cellTablaTitle = rowTablaTitle.createCell(0);
-            cellTablaTitle.setCellValue("📦 PRODUCTOS COTIZADOS");
-            cellTablaTitle.setCellStyle(estiloCabecera);
-            sheet.addMergedRegion(new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 
-                Math.max(5, tablaDinamica.getColumns().size() - 1)));
-            rowNum++;
-            
-            // Encabezados de columnas
-            Row headerRow = sheet.createRow(rowNum++);
-            int colNum = 0;
-            for (TableColumn<RowData, ?> column : tablaDinamica.getColumns()) {
-                Cell cell = headerRow.createCell(colNum++);
-                cell.setCellValue(column.getText());
-                cell.setCellStyle(estiloCabecera);
+            int headerRowIndex = formatoActual.getHeaderRow() - 1; // Convertir a 0-indexed
+            Row headerRow = sheet.getRow(headerRowIndex);
+            if (headerRow == null) {
+                headerRow = sheet.createRow(headerRowIndex);
             }
             
-            // Datos
-            for (RowData rowData : tablaDinamica.getItems()) {
-                Row row = sheet.createRow(rowNum++);
-                colNum = 0;
+            logger.info("📊 Creando encabezados en fila {} con {} columnas", 
+                formatoActual.getHeaderRow(), formatoActual.getColumnas().size());
+            
+            // Crear cache de estilos para las columnas (mejor rendimiento)
+            Map<Integer, CellStyle> estilosColumnas = new HashMap<>();
+            
+            for (FormatoColumna columna : formatoActual.getColumnas()) {
+                int colIndex = columna.getIndiceColumna();
                 
-                for (TableColumn<RowData, ?> column : tablaDinamica.getColumns()) {
-                    Cell cell = row.createCell(colNum++);
+                // Crear celda de encabezado
+                Cell headerCell = headerRow.createCell(colIndex);
+                headerCell.setCellValue(columna.getNombreColumnaOriginal());
+                
+                // Crear estilo para esta columna
+                CellStyle estiloColumna = crearEstiloColumna(workbook, columna);
+                
+                headerCell.setCellStyle(estiloColumna);
+                estilosColumnas.put(colIndex, estiloColumna);
+                
+                logger.debug("  └─ Col {} [{}]: '{}' - Negrita:{} Color:{}", 
+                    columna.getLetraColumna(), 
+                    columna.getCampoEstandar(),
+                    columna.getNombreColumnaOriginal(),
+                    columna.getEsNegrita(),
+                    columna.getColorFondo());
+            }
+            
+            // ============================
+            // PASO 3: INSERTAR DATOS DE LA TABLA EN LAS POSICIONES CORRECTAS
+            // ============================
+            int dataStartRow = headerRowIndex + 1;
+            logger.info("📦 Insertando {} productos a partir de la fila {}", 
+                tablaDinamica.getItems().size(), dataStartRow + 1);
+            
+            // Crear cache de estilos para datos (reutilizables para evitar límite de POI)
+            Map<Integer, CellStyle> estilosDatos = new HashMap<>();
+            Map<Integer, CellStyle> estilosDatosDecimal = new HashMap<>();
+            DataFormat formatoNumerico = workbook.createDataFormat();
+            
+            for (FormatoColumna columna : formatoActual.getColumnas()) {
+                int colIndex = columna.getIndiceColumna();
+                
+                // Estilo básico para datos (solo bordes)
+                CellStyle estiloDatos = workbook.createCellStyle();
+                if (estilosColumnas.containsKey(colIndex)) {
+                    CellStyle estiloOriginal = estilosColumnas.get(colIndex);
+                    estiloDatos.setBorderBottom(estiloOriginal.getBorderBottom());
+                    estiloDatos.setBorderTop(estiloOriginal.getBorderTop());
+                    estiloDatos.setBorderLeft(estiloOriginal.getBorderLeft());
+                    estiloDatos.setBorderRight(estiloOriginal.getBorderRight());
+                }
+                estilosDatos.put(colIndex, estiloDatos);
+                
+                // Estilo para decimales (bordes + formato numérico)
+                if ("DECIMAL".equalsIgnoreCase(columna.getTipoDato())) {
+                    CellStyle estiloDecimal = workbook.createCellStyle();
+                    estiloDecimal.cloneStyleFrom(estiloDatos);
+                    estiloDecimal.setDataFormat(formatoNumerico.getFormat("#,##0.00"));
+                    estilosDatosDecimal.put(colIndex, estiloDecimal);
+                }
+            }
+            
+            int currentRow = dataStartRow;
+            for (RowData rowData : tablaDinamica.getItems()) {
+                Row row = sheet.createRow(currentRow++);
+                
+                // Mapear cada columna de la tabla a su posición en el formato
+                for (FormatoColumna columna : formatoActual.getColumnas()) {
+                    int colIndex = columna.getIndiceColumna();
+                    String campoEstandar = columna.getCampoEstandar();
                     
-                    // Obtener el valor de la celda
-                    Object cellValue = column.getCellData(rowData);
-                    if (cellValue != null) {
-                        String valor = cellValue.toString();
+                    // Buscar el valor en rowData
+                    String valor = rowData.get(campoEstandar);
+                    
+                    if (valor != null && !valor.isEmpty()) {
+                        Cell cell = row.createCell(colIndex);
+                        String valorStr = valor;
                         
-                        // Intentar parsear como número para mantener formato
-                        try {
-                            double numValue = Double.parseDouble(valor.replace("$", "").replace(",", ""));
-                            cell.setCellValue(numValue);
-                            
-                            // Aplicar formato numérico si es precio
-                            if (column.getText().toLowerCase().contains("precio") || 
-                                column.getText().toLowerCase().contains("price") ||
-                                column.getText().toLowerCase().contains("total")) {
-                                CellStyle estiloNumero = workbook.createCellStyle();
-                                DataFormat format = workbook.createDataFormat();
-                                estiloNumero.setDataFormat(format.getFormat("$#,##0.00"));
-                                cell.setCellStyle(estiloNumero);
+                        // Intentar parsear como número según el tipo de dato
+                        if ("DECIMAL".equalsIgnoreCase(columna.getTipoDato()) || 
+                            "INTEGER".equalsIgnoreCase(columna.getTipoDato())) {
+                            try {
+                                double numValue = Double.parseDouble(valorStr.replace("$", "").replace(",", ""));
+                                cell.setCellValue(numValue);
+                                
+                                // Aplicar estilo decimal o datos según corresponda
+                                if (estilosDatosDecimal.containsKey(colIndex)) {
+                                    cell.setCellStyle(estilosDatosDecimal.get(colIndex));
+                                } else if (estilosDatos.containsKey(colIndex)) {
+                                    cell.setCellStyle(estilosDatos.get(colIndex));
+                                }
+                            } catch (NumberFormatException e) {
+                                cell.setCellValue(valorStr);
+                                if (estilosDatos.containsKey(colIndex)) {
+                                    cell.setCellStyle(estilosDatos.get(colIndex));
+                                }
                             }
-                        } catch (NumberFormatException e) {
-                            // Si no es número, insertar como texto
-                            cell.setCellValue(valor);
+                        } else {
+                            cell.setCellValue(valorStr);
+                            if (estilosDatos.containsKey(colIndex)) {
+                                cell.setCellStyle(estilosDatos.get(colIndex));
+                            }
                         }
                     }
                 }
             }
             
-            // Ajustar ancho de columnas con límite máximo
-            final int MAX_COLUMN_WIDTH = 255 * 256; // Límite de Apache POI (255 caracteres)
-            for (int i = 0; i < tablaDinamica.getColumns().size(); i++) {
+            // ============================
+            // PASO 4: AJUSTAR ANCHOS DE COLUMNA
+            // ============================
+            final int MAX_COLUMN_WIDTH = 255 * 256;
+            for (FormatoColumna columna : formatoActual.getColumnas()) {
                 try {
-                    sheet.autoSizeColumn(i);
-                    // Añadir un poco más de espacio pero sin exceder el límite
-                    int currentWidth = sheet.getColumnWidth(i);
+                    sheet.autoSizeColumn(columna.getIndiceColumna());
+                    int currentWidth = sheet.getColumnWidth(columna.getIndiceColumna());
                     int newWidth = Math.min(currentWidth + 1000, MAX_COLUMN_WIDTH);
-                    sheet.setColumnWidth(i, newWidth);
+                    sheet.setColumnWidth(columna.getIndiceColumna(), newWidth);
                 } catch (IllegalArgumentException e) {
-                    // Si hay error, establecer un ancho razonable por defecto
-                    logger.warn("⚠️ No se pudo ajustar el ancho de la columna {}, usando ancho por defecto", i);
-                    sheet.setColumnWidth(i, 8000); // ~30 caracteres
+                    logger.warn("⚠️ No se pudo ajustar ancho de columna {}", columna.getLetraColumna());
+                    sheet.setColumnWidth(columna.getIndiceColumna(), 8000);
                 }
             }
             
@@ -1951,16 +1963,19 @@ private void cargarProductos() {
                 workbook.write(outputStream);
             }
             
-            logger.info("✅ Cotización exportada exitosamente: {}", archivo.getAbsolutePath());
+            logger.info("✅ Cotización exportada exitosamente con formato de {}: {}", 
+                formatoActual.getBrokerName(), archivo.getAbsolutePath());
             
             // Mensaje de confirmación
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Exportación Exitosa");
-            alert.setHeaderText("Cotización exportada correctamente");
+            alert.setHeaderText("Cotización exportada en formato " + formatoActual.getBrokerName());
             alert.setContentText("Archivo guardado en:\n" + archivo.getAbsolutePath() + 
-                "\n\nBroker: " + formatoActual.getBrokerName() +
-                "\nProductos: " + tablaDinamica.getItems().size() +
-                (metadataActual != null ? "\nMetadata: " + metadataActual.size() + " secciones" : ""));
+                "\n\n✓ Broker: " + formatoActual.getBrokerName() +
+                "\n✓ Formato ID: " + formatoActual.getFormatoId() +
+                "\n✓ Columnas: " + formatoActual.getColumnas().size() +
+                "\n✓ Productos: " + tablaDinamica.getItems().size() +
+                (metadataActual != null ? "\n✓ Metadata: " + contarMetadataTotal() + " campos" : ""));
             alert.showAndWait();
             
         } catch (Exception e) {
@@ -1971,6 +1986,300 @@ private void cargarProductos() {
             alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
             alert.showAndWait();
         }
+    }
+    
+    /**
+     * Crea un estilo de celda para una columna específica del formato
+     */
+    private CellStyle crearEstiloColumna(XSSFWorkbook workbook, FormatoColumna columna) {
+        XSSFCellStyle estilo = workbook.createCellStyle();
+        XSSFFont font = workbook.createFont();
+        
+        // Aplicar formato de texto
+        if (columna.getEsNegrita() != null && columna.getEsNegrita()) {
+            font.setBold(true);
+        }
+        if (columna.getEsCursiva() != null && columna.getEsCursiva()) {
+            font.setItalic(true);
+        }
+        
+        // Aplicar color de texto (soporta hex, nombres, índices)
+        if (columna.getColorTexto() != null && !columna.getColorTexto().isEmpty()) {
+            aplicarColorTexto(font, columna.getColorTexto());
+        }
+        
+        estilo.setFont(font);
+        
+        // Aplicar color de fondo (soporta hex, nombres, índices)
+        if (columna.getColorFondo() != null && !columna.getColorFondo().isEmpty()) {
+            aplicarColorFondo(estilo, columna.getColorFondo());
+        }
+        
+        // Aplicar bordes
+        if (columna.getTieneBorde() != null && columna.getTieneBorde()) {
+            estilo.setBorderBottom(BorderStyle.THIN);
+            estilo.setBorderTop(BorderStyle.THIN);
+            estilo.setBorderLeft(BorderStyle.THIN);
+            estilo.setBorderRight(BorderStyle.THIN);
+        }
+        
+        return estilo;
+    }
+    
+    /**
+     * Aplica color de texto a una fuente (soporta hex, nombres, índices)
+     */
+    private void aplicarColorTexto(XSSFFont font, String color) {
+        try {
+            if (color.startsWith("#")) {
+                // Color RGB hexadecimal
+                XSSFColor xssfColor = convertirHexAXSSFColor(color);
+                font.setColor(xssfColor);
+            } else {
+                // Color por nombre o índice
+                short colorIndex = convertirColorAIndex(color);
+                font.setColor(colorIndex);
+            }
+        } catch (Exception e) {
+            logger.warn("⚠️ No se pudo aplicar color de texto: {}", color);
+        }
+    }
+    
+    /**
+     * Aplica color de fondo a un estilo (soporta hex, nombres, índices)
+     */
+    private void aplicarColorFondo(XSSFCellStyle estilo, String color) {
+        try {
+            if (color.startsWith("#")) {
+                // Color RGB hexadecimal
+                XSSFColor xssfColor = convertirHexAXSSFColor(color);
+                estilo.setFillForegroundColor(xssfColor);
+                estilo.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            } else {
+                // Color por nombre o índice
+                short colorIndex = convertirColorAIndex(color);
+                estilo.setFillForegroundColor(colorIndex);
+                estilo.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            }
+        } catch (Exception e) {
+            logger.warn("⚠️ No se pudo aplicar color de fondo: {}", color);
+        }
+    }
+    
+    /**
+     * Convierte un código hexadecimal a XSSFColor (colores RGB personalizados)
+     */
+    private XSSFColor convertirHexAXSSFColor(String hex) {
+        // Remover el # si está presente
+        String hexClean = hex.startsWith("#") ? hex.substring(1) : hex;
+        
+        // Convertir a RGB
+        int rgb = Integer.parseInt(hexClean, 16);
+        byte r = (byte) ((rgb >> 16) & 0xFF);
+        byte g = (byte) ((rgb >> 8) & 0xFF);
+        byte b = (byte) (rgb & 0xFF);
+        
+        return new XSSFColor(new byte[]{r, g, b}, null);
+    }
+    
+    /**
+     * Convierte un color en formato texto a IndexedColors
+     * Soporta: nombres en español/inglés, códigos hex (#FFFFFF), IndexedColors
+     */
+    private short convertirColorAIndex(String colorNombre) {
+        if (colorNombre == null || colorNombre.isEmpty()) {
+            return IndexedColors.AUTOMATIC.getIndex();
+        }
+        
+        // Normalizar el nombre
+        String color = colorNombre.toUpperCase().trim();
+        
+        // Si es un código hex, convertirlo al color más cercano
+        if (color.startsWith("#")) {
+            return convertirHexAColorIndex(color);
+        }
+        
+        // Si es un número, retornarlo directamente
+        if (color.matches("\\d+")) {
+            try {
+                return Short.parseShort(color);
+            } catch (NumberFormatException e) {
+                logger.warn("⚠️ Número de color inválido: {}", colorNombre);
+            }
+        }
+        
+        try {
+            // Intentar encontrar el color por nombre de IndexedColors
+            IndexedColors indexedColor = IndexedColors.valueOf(color.replace(" ", "_"));
+            return indexedColor.getIndex();
+        } catch (IllegalArgumentException e) {
+            // Mapeo manual extendido para colores comunes
+            switch (color) {
+                // Azules
+                case "AZUL":
+                case "BLUE":
+                    return IndexedColors.BLUE.getIndex();
+                case "AZUL_CLARO":
+                case "LIGHT_BLUE":
+                case "CELESTE":
+                    return IndexedColors.LIGHT_BLUE.getIndex();
+                case "AZUL_OSCURO":
+                case "DARK_BLUE":
+                    return IndexedColors.DARK_BLUE.getIndex();
+                case "AZUL_CIELO":
+                case "SKY_BLUE":
+                    return IndexedColors.SKY_BLUE.getIndex();
+                
+                // Rojos
+                case "ROJO":
+                case "RED":
+                    return IndexedColors.RED.getIndex();
+                case "ROJO_OSCURO":
+                case "DARK_RED":
+                    return IndexedColors.DARK_RED.getIndex();
+                case "ROSA":
+                case "PINK":
+                case "ROSE":
+                    return IndexedColors.ROSE.getIndex();
+                
+                // Verdes
+                case "VERDE":
+                case "GREEN":
+                    return IndexedColors.GREEN.getIndex();
+                case "VERDE_CLARO":
+                case "LIGHT_GREEN":
+                    return IndexedColors.LIGHT_GREEN.getIndex();
+                case "VERDE_OSCURO":
+                case "DARK_GREEN":
+                    return IndexedColors.DARK_GREEN.getIndex();
+                
+                // Amarillos/Naranjas
+                case "AMARILLO":
+                case "YELLOW":
+                    return IndexedColors.YELLOW.getIndex();
+                case "NARANJA":
+                case "ORANGE":
+                    return IndexedColors.LIGHT_ORANGE.getIndex();
+                case "ORO":
+                case "GOLD":
+                    return IndexedColors.GOLD.getIndex();
+                
+                // Grises
+                case "GRIS":
+                case "GRAY":
+                case "GREY":
+                    return IndexedColors.GREY_25_PERCENT.getIndex();
+                case "GRIS_25":
+                case "GREY_25_PERCENT":
+                    return IndexedColors.GREY_25_PERCENT.getIndex();
+                case "GRIS_40":
+                case "GREY_40_PERCENT":
+                    return IndexedColors.GREY_40_PERCENT.getIndex();
+                case "GRIS_50":
+                case "GREY_50_PERCENT":
+                    return IndexedColors.GREY_50_PERCENT.getIndex();
+                case "GRIS_80":
+                case "GREY_80_PERCENT":
+                    return IndexedColors.GREY_80_PERCENT.getIndex();
+                
+                // Básicos
+                case "BLANCO":
+                case "WHITE":
+                    return IndexedColors.WHITE.getIndex();
+                case "NEGRO":
+                case "BLACK":
+                    return IndexedColors.BLACK.getIndex();
+                
+                // Otros
+                case "VIOLETA":
+                case "VIOLET":
+                case "PURPLE":
+                case "MORADO":
+                    return IndexedColors.VIOLET.getIndex();
+                case "TURQUESA":
+                case "TURQUOISE":
+                case "AQUA":
+                    return IndexedColors.TURQUOISE.getIndex();
+                case "LAVANDA":
+                case "LAVENDER":
+                    return IndexedColors.LAVENDER.getIndex();
+                case "CORAL":
+                    return IndexedColors.CORAL.getIndex();
+                case "TAN":
+                case "BEIGE":
+                    return IndexedColors.TAN.getIndex();
+                case "MARRON":
+                case "BROWN":
+                    return IndexedColors.BROWN.getIndex();
+                    
+                default:
+                    logger.warn("⚠️ Color no reconocido: '{}', usando AUTOMATIC", colorNombre);
+                    return IndexedColors.AUTOMATIC.getIndex();
+            }
+        }
+    }
+    
+    /**
+     * Convierte un color hexadecimal (#RRGGBB) al IndexedColor más cercano
+     */
+    private short convertirHexAColorIndex(String hex) {
+        try {
+            // Remover el # si está presente
+            String hexClean = hex.startsWith("#") ? hex.substring(1) : hex;
+            
+            // Convertir a RGB
+            int rgb = Integer.parseInt(hexClean, 16);
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+            
+            logger.debug("Convirtiendo color hex {} -> RGB({}, {}, {})", hex, r, g, b);
+            
+            // Mapeo aproximado de colores comunes
+            // Blancos/Grises/Negros
+            if (r > 240 && g > 240 && b > 240) return IndexedColors.WHITE.getIndex();
+            if (r < 20 && g < 20 && b < 20) return IndexedColors.BLACK.getIndex();
+            if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20) {
+                int avg = (r + g + b) / 3;
+                if (avg > 200) return IndexedColors.GREY_25_PERCENT.getIndex();
+                if (avg > 150) return IndexedColors.GREY_40_PERCENT.getIndex();
+                if (avg > 100) return IndexedColors.GREY_50_PERCENT.getIndex();
+                return IndexedColors.GREY_80_PERCENT.getIndex();
+            }
+            
+            // Colores dominantes
+            if (r > g && r > b) {
+                if (r > 200) return IndexedColors.RED.getIndex();
+                return IndexedColors.DARK_RED.getIndex();
+            } else if (g > r && g > b) {
+                if (g > 200) return IndexedColors.GREEN.getIndex();
+                return IndexedColors.DARK_GREEN.getIndex();
+            } else if (b > r && b > g) {
+                if (b > 200) return IndexedColors.BLUE.getIndex();
+                return IndexedColors.DARK_BLUE.getIndex();
+            } else if (r > 200 && g > 200 && b < 100) {
+                return IndexedColors.YELLOW.getIndex();
+            }
+            
+            // Si no coincide con nada, usar automático
+            return IndexedColors.AUTOMATIC.getIndex();
+            
+        } catch (Exception e) {
+            logger.warn("⚠️ Error al convertir color hex: {}", hex, e);
+            return IndexedColors.AUTOMATIC.getIndex();
+        }
+    }
+    
+    /**
+     * Cuenta el total de campos de metadata
+     */
+    private int contarMetadataTotal() {
+        if (metadataActual == null || metadataActual.isEmpty()) {
+            return 0;
+        }
+        return metadataActual.values().stream()
+            .mapToInt(List::size)
+            .sum();
     }
 
     // 👉 Métodos CRUD de Productos *****************************************************
