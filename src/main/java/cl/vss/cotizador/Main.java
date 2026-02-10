@@ -1892,10 +1892,11 @@ private void cargarProductos() {
             }
             
             // 💰 Agregar encabezado "Precio VSS" en la última columna
-            Cell precioVssHeaderCell = headerRow.createCell(precioVssColIndex);
-            precioVssHeaderCell.setCellValue("Precio VSS");
-            logger.info("💰 Columna 'Precio VSS' agregada en índice {} (columna {})", 
-                precioVssColIndex, (char)('A' + precioVssColIndex));
+            // COMENTADO: El usuario solicitó no incluir esta columna en la exportación
+            // Cell precioVssHeaderCell = headerRow.createCell(precioVssColIndex);
+            // precioVssHeaderCell.setCellValue("Precio VSS");
+            // logger.info("💰 Columna 'Precio VSS' agregada en índice {} (columna {})", 
+            //     precioVssColIndex, (char)('A' + precioVssColIndex));
             
             // ============================
             // PASO 3: INSERTAR DATOS DE LA TABLA EN LAS POSICIONES CORRECTAS
@@ -1986,19 +1987,20 @@ private void cargarProductos() {
                 }
                 
                 // 💰 Agregar valor de Precio VSS (calculado en frontend)
-                String precioVssValor = rowData.get("precio_vss_calculado");
-                if (precioVssValor == null || precioVssValor.isEmpty()) {
-                    precioVssValor = "0.0";
-                }
-                Cell precioVssCell = row.createCell(precioVssColIndex);
-                try {
-                    double precioVss = Double.parseDouble(
-                        precioVssValor.replace("$", "").replace(",", "")
-                    );
-                    precioVssCell.setCellValue(precioVss);
-                } catch (NumberFormatException e) {
-                    precioVssCell.setCellValue(precioVssValor);
-                }
+                // COMENTADO: El usuario solicitó no incluir esta columna en la exportación
+                // String precioVssValor = rowData.get("precio_vss_calculado");
+                // if (precioVssValor == null || precioVssValor.isEmpty()) {
+                //     precioVssValor = "0.0";
+                // }
+                // Cell precioVssCell = row.createCell(precioVssColIndex);
+                // try {
+                //     double precioVss = Double.parseDouble(
+                //         precioVssValor.replace("$", "").replace(",", "")
+                //     );
+                //     precioVssCell.setCellValue(precioVss);
+                // } catch (NumberFormatException e) {
+                //     precioVssCell.setCellValue(precioVssValor);
+                // }
             }
             
             // ============================
@@ -2034,7 +2036,6 @@ private void cargarProductos() {
                 "\n✓ Formato ID: " + formatoActual.getFormatoId() +
                 "\n✓ Columnas: " + formatoActual.getColumnas().size() +
                 "\n✓ Productos: " + tablaDinamica.getItems().size() +
-                "\n✓ Precio VSS: Incluido (columna " + (char)('A' + precioVssColIndex) + ")" +
                 (metadataActual != null ? "\n✓ Metadata: " + contarMetadataTotal() + " campos" : ""));
             alert.showAndWait();
             
@@ -2178,11 +2179,12 @@ private void cargarProductos() {
                 }
                 
                 // 💰 Agregar encabezado "Precio VSS" en la última columna CON ESTILO
-                Cell precioVssHeaderCell = headerRow.createCell(precioVssColIndex);
-                precioVssHeaderCell.setCellValue("Precio VSS");
-                precioVssHeaderCell.setCellStyle(estiloHeader);
-                logger.info("💰 ENCABEZADO 'Precio VSS' escrito en celda [{},{}] = columna {} con formato", 
-                    headerRowIndex, precioVssColIndex, (char)('A' + precioVssColIndex));
+                // COMENTADO: El usuario solicitó no incluir esta columna en la exportación
+                // Cell precioVssHeaderCell = headerRow.createCell(precioVssColIndex);
+                // precioVssHeaderCell.setCellValue("Precio VSS");
+                // precioVssHeaderCell.setCellStyle(estiloHeader);
+                // logger.info("💰 ENCABEZADO 'Precio VSS' escrito en celda [{},{}] = columna {} con formato", 
+                //     headerRowIndex, precioVssColIndex, (char)('A' + precioVssColIndex));
                 
                 // Insertar datos de tablaDinámica
                 int currentRowNum = dataStartRow;
@@ -2219,53 +2221,54 @@ private void cargarProductos() {
                     }
                     
                     // 💰 Agregar valor de Precio VSS (calculado en frontend)
-                    String precioVssValor = rowData.get("precio_vss_calculado");
-                    if (precioVssValor == null || precioVssValor.isEmpty()) {
-                        precioVssValor = "0.0";
-                    }
-                    Cell precioVssCell = row.createCell(precioVssColIndex);
-                    try {
-                        double precioVss = Double.parseDouble(
-                            precioVssValor.replace("$", "").replace(",", "")
-                        );
-                        precioVssCell.setCellValue(precioVss);
-                        if (precioVss > 0) filasConPrecioVss++;
-                    } catch (NumberFormatException e) {
-                        precioVssCell.setCellValue(precioVssValor);
-                    }
-                    
-                    // Log de la primera fila para verificar
-                    if (currentRowNum == dataStartRow + 1) {
-                        logger.info("🔍 DEBUG primera fila: precio_vss_calculado='{}', escrito en columna {}", 
-                            precioVssValor, precioVssColIndex);
-                    }
+                    // COMENTADO: El usuario solicitó no incluir esta columna en la exportación
+                    // String precioVssValor = rowData.get("precio_vss_calculado");
+                    // if (precioVssValor == null || precioVssValor.isEmpty()) {
+                    //     precioVssValor = "0.0";
+                    // }
+                    // Cell precioVssCell = row.createCell(precioVssColIndex);
+                    // try {
+                    //     double precioVss = Double.parseDouble(
+                    //         precioVssValor.replace("$", "").replace(",", "")
+                    //     );
+                    //     precioVssCell.setCellValue(precioVss);
+                    //     if (precioVss > 0) filasConPrecioVss++;
+                    // } catch (NumberFormatException e) {
+                    //     precioVssCell.setCellValue(precioVssValor);
+                    // }
+                    // 
+                    // // Log de la primera fila para verificar
+                    // if (currentRowNum == dataStartRow + 1) {
+                    //     logger.info("🔍 DEBUG primera fila: precio_vss_calculado='{}', escrito en columna {}", 
+                    //         precioVssValor, precioVssColIndex);
+                    // }
                 }
                 
-                logger.info("💰 Total filas con Precio VSS > 0: {} de {}", 
-                    filasConPrecioVss, tablaDinamica.getItems().size());
-                
-                // 📏 Ajustar ancho de la columna Precio VSS para que sea visible
-                sheet.setColumnWidth(precioVssColIndex, 4000); // ~14 caracteres
-                
-                // 👁️ Asegurar que la columna NO esté oculta
-                sheet.setColumnHidden(precioVssColIndex, false);
-                
-                logger.info("📏 Ancho de columna {} (Precio VSS) ajustado a 4000, visible=true", (char)('A' + precioVssColIndex));
-                
-                // 🔍 Verificación final: leer lo que se escribió en la primera fila de datos
-                Row primeraFilaDatos = sheet.getRow(dataStartRow);
-                if (primeraFilaDatos != null) {
-                    Cell celdaVerificacion = primeraFilaDatos.getCell(precioVssColIndex);
-                    if (celdaVerificacion != null) {
-                        logger.info("✅ VERIFICACIÓN FINAL: Celda [{},{}] contiene: {}", 
-                            dataStartRow, precioVssColIndex, 
-                            celdaVerificacion.getCellType().toString() + " = " + 
-                            (celdaVerificacion.getCellType().toString().equals("NUMERIC") ? 
-                                celdaVerificacion.getNumericCellValue() : celdaVerificacion.toString()));
-                    } else {
-                        logger.error("❌ VERIFICACIÓN FINAL: La celda [{},{}] es NULL!", dataStartRow, precioVssColIndex);
-                    }
-                }
+                // logger.info("💰 Total filas con Precio VSS > 0: {} de {}", 
+                //     filasConPrecioVss, tablaDinamica.getItems().size());
+                // 
+                // // 📏 Ajustar ancho de la columna Precio VSS para que sea visible
+                // sheet.setColumnWidth(precioVssColIndex, 4000); // ~14 caracteres
+                // 
+                // // 👁️ Asegurar que la columna NO esté oculta
+                // sheet.setColumnHidden(precioVssColIndex, false);
+                // 
+                // logger.info("📏 Ancho de columna {} (Precio VSS) ajustado a 4000, visible=true", (char)('A' + precioVssColIndex));
+                // 
+                // // 🔍 Verificación final: leer lo que se escribió en la primera fila de datos
+                // Row primeraFilaDatos = sheet.getRow(dataStartRow);
+                // if (primeraFilaDatos != null) {
+                //     Cell celdaVerificacion = primeraFilaDatos.getCell(precioVssColIndex);
+                //     if (celdaVerificacion != null) {
+                //         logger.info("✅ VERIFICACIÓN FINAL: Celda [{},{}] contiene: {}", 
+                //             dataStartRow, precioVssColIndex, 
+                //             celdaVerificacion.getCellType().toString() + " = " + 
+                //             (celdaVerificacion.getCellType().toString().equals("NUMERIC") ? 
+                //                 celdaVerificacion.getNumericCellValue() : celdaVerificacion.toString()));
+                //     } else {
+                //         logger.error("❌ VERIFICACIÓN FINAL: La celda [{},{}] es NULL!", dataStartRow, precioVssColIndex);
+                //     }
+                // }
                 
                 // Guardar archivo con el nuevo contenido
                 try (FileOutputStream outputStream = new FileOutputStream(archivoDestino)) {
@@ -2285,8 +2288,7 @@ private void cargarProductos() {
                     "\n✓ Plantilla: SÍ (formato original preservado)" +
                     "\n✓ Logo: Preservado" +
                     "\n✓ Macros: Preservadas" +
-                    "\n✓ Productos: " + tablaDinamica.getItems().size() +
-                    "\n✓ Precio VSS: Incluido (columna " + (char)('A' + precioVssColIndex) + ")");
+                    "\n✓ Productos: " + tablaDinamica.getItems().size());
                 alert.showAndWait();
             }
             
@@ -3437,53 +3439,54 @@ private void configurarTablaDinamica() {
         tablaDinamica.getColumns().add(column);
     }
     
-    // � Agregar columna calculada "Precio VSS"
-    TableColumn<RowData, String> colPrecioVSS = new TableColumn<>("Precio VSS");
-    colPrecioVSS.setPrefWidth(120);
-    colPrecioVSS.setCellValueFactory(cellData -> {
-        RowData rowData = cellData.getValue();
-        
-        // Obtener cantidad (puede estar en QUANTITY o QTY)
-        String cantidadStr = obtenerValorDeCampo(rowData, "QUANTITY", "QTY", "CANTIDAD");
-        double cantidad = 0;
-        try {
-            if (cantidadStr != null && !cantidadStr.trim().isEmpty()) {
-                cantidad = Double.parseDouble(cantidadStr.trim());
-            }
-        } catch (NumberFormatException e) {
-            cantidad = 0;
-        }
-        
-        // Obtener precio VSS calculado (guardado previamente desde la BD)
-        String precioVSSStr = rowData.get("precio_vss_calculado");
-        double precioVSS = 0;
-        try {
-            if (precioVSSStr != null && !precioVSSStr.trim().isEmpty()) {
-                precioVSS = Double.parseDouble(precioVSSStr.trim());
-            }
-        } catch (NumberFormatException e) {
-            precioVSS = 0;
-        }
-        
-        return new SimpleStringProperty(String.format("$%,.2f", precioVSS));
-    });
-    
-    colPrecioVSS.setCellFactory(tc -> new TableCell<RowData, String>() {
-        @Override
-        protected void updateItem(String item, boolean empty) {
-            super.updateItem(item, empty);
-            
-            if (empty || item == null) {
-                setText(null);
-                setStyle("");
-            } else {
-                setText(item);
-                setStyle("-fx-alignment: CENTER; -fx-font-weight: bold; -fx-text-fill: #0A3D91;");
-            }
-        }
-    });
-    
-    tablaDinamica.getColumns().add(colPrecioVSS);
+    // 💰 Agregar columna calculada "Precio VSS"
+    // COMENTADO: El usuario solicitó no mostrar esta columna en el frontend
+    // TableColumn<RowData, String> colPrecioVSS = new TableColumn<>("Precio VSS");
+    // colPrecioVSS.setPrefWidth(120);
+    // colPrecioVSS.setCellValueFactory(cellData -> {
+    //     RowData rowData = cellData.getValue();
+    //     
+    //     // Obtener cantidad (puede estar en QUANTITY o QTY)
+    //     String cantidadStr = obtenerValorDeCampo(rowData, "QUANTITY", "QTY", "CANTIDAD");
+    //     double cantidad = 0;
+    //     try {
+    //         if (cantidadStr != null && !cantidadStr.trim().isEmpty()) {
+    //             cantidad = Double.parseDouble(cantidadStr.trim());
+    //         }
+    //     } catch (NumberFormatException e) {
+    //         cantidad = 0;
+    //     }
+    //     
+    //     // Obtener precio VSS calculado (guardado previamente desde la BD)
+    //     String precioVSSStr = rowData.get("precio_vss_calculado");
+    //     double precioVSS = 0;
+    //     try {
+    //         if (precioVSSStr != null && !precioVSSStr.trim().isEmpty()) {
+    //             precioVSS = Double.parseDouble(precioVSSStr.trim());
+    //         }
+    //     } catch (NumberFormatException e) {
+    //         precioVSS = 0;
+    //     }
+    //     
+    //     return new SimpleStringProperty(String.format("$%,.2f", precioVSS));
+    // });
+    // 
+    // colPrecioVSS.setCellFactory(tc -> new TableCell<RowData, String>() {
+    //     @Override
+    //     protected void updateItem(String item, boolean empty) {
+    //         super.updateItem(item, empty);
+    //         
+    //         if (empty || item == null) {
+    //             setText(null);
+    //             setStyle("");
+    //         } else {
+    //             setText(item);
+    //             setStyle("-fx-alignment: CENTER; -fx-font-weight: bold; -fx-text-fill: #0A3D91;");
+    //         }
+    //     }
+    // });
+    // 
+    // tablaDinamica.getColumns().add(colPrecioVSS);
     
     // �👆 Agregar listener de doble clic para editar producto
     tablaDinamica.setRowFactory(tv -> {
@@ -3618,27 +3621,11 @@ private void leerExcelConFormato(File archivo) {
                     // Guardar precio total en rowData
                     rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
                     
-                    // 💰 Guardar precio unitario en USD en la columna UNIT_PRICE o PRICE
-                    // Intentar múltiples nombres de columna posibles
-                    boolean precioUnitarioGuardado = false;
-                    String[] posiblesCamposUnitPrice = {
-                        "UNIT_PRICE", "UNIT_PRICE_USD", "PRICE", "PRICE_USD", 
-                        "PRECIO_UNITARIO", "PRECIO_UNIT", "UNIT PRICE (USD)"
-                    };
-                    
-                    for (String campoUnitPrice : posiblesCamposUnitPrice) {
-                        if (rowData.hasKey(campoUnitPrice)) {
-                            rowData.set(campoUnitPrice, String.format("%.2f", precioVentaNetoDolares));
-                            precioUnitarioGuardado = true;
-                            logger.debug("💰 Precio unitario USD guardado en campo: {} = ${}", 
-                                campoUnitPrice, String.format("%.2f", precioVentaNetoDolares));
-                            break;
-                        }
-                    }
-                    
-                    if (!precioUnitarioGuardado) {
-                        logger.debug("⚠️ No se encontró columna para precio unitario USD en el formato");
-                    }
+                    // 💰 Actualizar UNIT_PRICE con precio_venta_neto_dolares desde la BD
+                    // Siempre intentamos establecer el valor, sin verificar hasKey
+                    rowData.set("UNIT_PRICE", String.format("%.2f", precioVentaNetoDolares));
+                    logger.info("💰 UNIT_PRICE actualizado con precio_venta_neto: ${} para producto: {}", 
+                        String.format("%.2f", precioVentaNetoDolares), descripcion.substring(0, Math.min(30, descripcion.length())));
                     
                     logger.debug("Producto encontrado automáticamente: {} - Precio VSS: ${}", 
                         descripcion, String.format("%,.2f", precioVSS));
