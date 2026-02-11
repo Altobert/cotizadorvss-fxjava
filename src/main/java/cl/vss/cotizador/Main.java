@@ -2498,13 +2498,56 @@ private void cargarProductos() {
                 logger.warn("⚠️ Columna TOTAL no detectada (colTotal={})", colTotal);
             }
             
-            // Limpiar filas de datos existentes (preservar estructura y formato)
-            // NOTA: No limpiar la fila especial (ej: PROVISIONS)
+            // ============================
+            // DETECTAR FILA DE SUBTOTAL (ej: "Item Sub Total")
+            // ============================
+            int filaSubtotalIndex = -1;
+            String formulaSubtotalOriginal = null;
+            int colSubtotalFormula = -1;
+            
             int lastDataRow = cells.getMaxDataRow();
+            logger.info("🔍 Buscando fila de subtotal entre filas {} y {}...", dataStartRow + 1, lastDataRow + 1);
+            
+            for (int searchRow = lastDataRow; searchRow >= dataStartRow; searchRow--) {
+                // Buscar en las primeras columnas por texto "Sub Total", "Subtotal", etc.
+                for (int colCheck = 0; colCheck <= 5; colCheck++) {
+                    com.aspose.cells.Cell celdaCheck = cells.get(searchRow, colCheck);
+                    if (celdaCheck != null && celdaCheck.getValue() != null) {
+                        String valorCelda = celdaCheck.getStringValue().trim().toUpperCase();
+                        if (valorCelda.contains("SUB TOTAL") || valorCelda.contains("SUBTOTAL") ||
+                            valorCelda.contains("ITEM SUB TOTAL") || valorCelda.equals("TOTAL")) {
+                            filaSubtotalIndex = searchRow;
+                            logger.info("📊 Fila de subtotal detectada: fila {} con texto '{}'", 
+                                searchRow + 1, celdaCheck.getStringValue().trim());
+                            
+                            // Buscar la fórmula de suma en la columna TOTAL de esta fila
+                            if (colTotal >= 0) {
+                                com.aspose.cells.Cell celdaSubtotal = cells.get(searchRow, colTotal);
+                                if (celdaSubtotal != null && celdaSubtotal.isFormula()) {
+                                    formulaSubtotalOriginal = celdaSubtotal.getFormula();
+                                    colSubtotalFormula = colTotal;
+                                    logger.info("📝 Fórmula de subtotal original: {}", formulaSubtotalOriginal);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (filaSubtotalIndex >= 0) break;
+            }
+            
+            // Limpiar filas de datos existentes (preservar estructura y formato)
+            // NOTA: No limpiar la fila especial (ej: PROVISIONS) ni la fila de subtotal
             for (int rowIdx = lastDataRow; rowIdx >= dataStartRow; rowIdx--) {
                 // Saltar la fila especial si existe
                 if (filaEspecialIndex >= 0 && rowIdx == filaEspecialIndex) {
                     logger.debug("🟡 Preservando fila especial {} sin limpiar", filaEspecialIndex + 1);
+                    continue;
+                }
+                
+                // Saltar la fila de subtotal si existe
+                if (filaSubtotalIndex >= 0 && rowIdx == filaSubtotalIndex) {
+                    logger.debug("📊 Preservando fila de subtotal {} sin limpiar", filaSubtotalIndex + 1);
                     continue;
                 }
                 
@@ -2683,6 +2726,35 @@ private void cargarProductos() {
                 }
                 primeraFila = false;
                 currentRow++;
+            }
+            
+            // ============================
+            // ACTUALIZAR FÓRMULA DE SUBTOTAL
+            // ============================
+            if (filaSubtotalIndex >= 0 && colTotal >= 0) {
+                // Calcular el rango de filas de datos
+                int primeraFilaDatos = dataStartRow + 1;  // Fila Excel (1-indexed)
+                int ultimaFilaDatos = currentRow;          // currentRow ya apunta a la siguiente fila vacía
+                
+                // Crear nueva fórmula de suma
+                String letraCol = letraTotal;
+                if (letraCol == null || letraCol.isEmpty()) {
+                    // Calcular letra de columna si no está disponible
+                    letraCol = String.valueOf((char)('A' + colTotal));
+                    if (colTotal >= 26) {
+                        letraCol = String.valueOf((char)('A' + colTotal / 26 - 1)) + 
+                                   String.valueOf((char)('A' + colTotal % 26));
+                    }
+                }
+                
+                String nuevaFormulaSubtotal = "=SUM(" + letraCol + primeraFilaDatos + ":" + letraCol + ultimaFilaDatos + ")";
+                
+                com.aspose.cells.Cell celdaSubtotal = cells.get(filaSubtotalIndex, colTotal);
+                if (celdaSubtotal != null) {
+                    celdaSubtotal.setFormula(nuevaFormulaSubtotal);
+                    logger.info("📊 Fórmula de subtotal actualizada: {} (fila {})", 
+                        nuevaFormulaSubtotal, filaSubtotalIndex + 1);
+                }
             }
             
             // ============================
