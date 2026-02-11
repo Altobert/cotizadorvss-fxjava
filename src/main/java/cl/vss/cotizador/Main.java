@@ -35,6 +35,7 @@ import cl.vss.cotizador.service.BrokerDAO;
 import cl.vss.cotizador.service.BrokerMetadataDAO;
 import cl.vss.cotizador.service.FormatoDAO;
 import cl.vss.cotizador.service.AuditoriaRegistro;
+import cl.vss.cotizador.service.AsposeExcelService;
 import cl.vss.cotizador.service.CotizacionService;
 import cl.vss.cotizador.service.ParametrosDAO;
 import javafx.application.Application;
@@ -151,6 +152,10 @@ public class Main extends Application {
 
     // ✅ Mapa en memoria para filtros instantáneos
     private Map<String, Integer> mapaFamilias;
+    
+    // 🔷 Aspose: Servicio para manejo de Excel con macros
+    private final AsposeExcelService asposeService = AsposeExcelService.getInstance();
+    private String rutaArchivoConMacros = null; // Ruta del archivo .xlsm cargado
 
     @Override
     public void start(Stage stage) {
@@ -1772,20 +1777,24 @@ private void cargarProductos() {
             return;
         }
         
+        // 🔷 Verificar si hay workbook Aspose cargado (archivo con macros)
+        boolean usarAspose = asposeService.hayWorkbookCargado() && rutaArchivoConMacros != null;
+        
         // Verificar si hay plantilla disponible para este broker
         String rutaPlantilla = formatoActual.getRutaPlantilla();
         boolean usarPlantilla = rutaPlantilla != null && !rutaPlantilla.isEmpty();
         
-        logger.info("📤 Exportando cotización - Broker: {}, Plantilla: {}", 
+        logger.info("📤 Exportando cotización - Broker: {}, Plantilla: {}, Aspose: {}", 
             formatoActual.getBrokerName(), 
-            usarPlantilla ? rutaPlantilla : "NO (usando formato dinámico)");
+            usarPlantilla ? rutaPlantilla : "NO",
+            usarAspose ? "✅ SÍ (macros preservadas)" : "❌ NO");
         
         // FileChooser para seleccionar ubicación
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Exportar Cotización");
         
-        // Si hay plantilla, usar extensión .xlsm para preservar macros
-        String extension = usarPlantilla ? ".xlsm" : ".xlsx";
+        // Si hay Aspose o plantilla, usar extensión .xlsm para preservar macros
+        String extension = (usarAspose || usarPlantilla) ? ".xlsm" : ".xlsx";
         fileChooser.setInitialFileName("Cotizacion_" + formatoActual.getBrokerName() + "_" + 
             LocalDate.now().toString() + extension);
         fileChooser.getExtensionFilters().add(
@@ -1795,6 +1804,12 @@ private void cargarProductos() {
         File archivo = fileChooser.showSaveDialog(stage);
         if (archivo == null) {
             return; // Usuario canceló
+        }
+        
+        // 🔷 Si hay workbook Aspose, exportar con Aspose (preserva macros del archivo original)
+        if (usarAspose) {
+            exportarConAspose(archivo);
+            return;
         }
         
         // Si hay plantilla, usar el método de exportación con plantilla
@@ -2300,6 +2315,342 @@ private void cargarProductos() {
             alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
             alert.showAndWait();
         }
+    }
+    
+    // ============================================================
+    // 🔷 EXPORTAR CON ASPOSE (PRESERVA MACROS VBA DEL ARCHIVO ORIGINAL)
+    // ============================================================
+    /**
+     * Exporta la cotización usando el workbook Aspose cargado.
+     * Preserva todas las macros VBA, fórmulas, formatos y estructura del archivo original.
+     * Solo modifica las celdas de datos.
+     * 
+     * @param archivoDestino Archivo donde guardar la exportación
+     */
+    private void exportarConAspose(File archivoDestino) {
+        logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
+        
+        try {
+            com.aspose.cells.Workbook workbook = asposeService.getWorkbookActual();
+            if (workbook == null) {
+                throw new IllegalStateException("No hay workbook Aspose cargado");
+            }
+            
+            com.aspose.cells.Worksheet sheet = workbook.getWorksheets().get(0);
+            com.aspose.cells.Cells cells = sheet.getCells();
+            
+            // Fila donde están las cabeceras (headerRow ya está en 0-indexed)
+            int headerRowIndex = formatoActual.getHeaderRow();
+            int dataStartRow = headerRowIndex + 1;
+            
+            logger.info("📊 Header row del formato: {} (Excel) -> {} (Aspose 0-indexed)", 
+                formatoActual.getHeaderRow(), headerRowIndex);
+            logger.info("📦 Escribiendo {} productos a partir de la fila {} (preservando macros)", 
+                tablaDinamica.getItems().size(), dataStartRow + 1);
+            
+            // ============================
+            // ENCONTRAR ÍNDICES DE COLUMNAS PARA FÓRMULAS
+            // ============================
+            int colQuantity = -1;
+            int colUnitPrice = -1;
+            int colTotal = -1;
+            String letraQuantity = "";
+            String letraUnitPrice = "";
+            String letraTotal = "";
+            
+            for (FormatoColumna columna : formatoActual.getColumnas()) {
+                String campo = columna.getCampoEstandar() != null ? columna.getCampoEstandar().toUpperCase() : "";
+                String nombreCol = columna.getNombreColumnaOriginal() != null ? columna.getNombreColumnaOriginal().toUpperCase() : "";
+                
+                // Detectar columna QUANTITY (ej: "Quantity")
+                if (campo.contains("QUANTITY") || campo.equals("QTY") || 
+                    nombreCol.contains("QUANTITY") || nombreCol.equals("QTY") ||
+                    nombreCol.contains("CANTIDAD")) {
+                    colQuantity = columna.getIndiceColumna();
+                    letraQuantity = columna.getLetraColumna();
+                    logger.info("🔍 Columna QUANTITY detectada: {} ({})", letraQuantity, columna.getNombreColumnaOriginal());
+                } 
+                // Detectar columna UNIT_PRICE (ej: "Unit Price ( USD )")
+                // IMPORTANTE: verificar UNIT PRICE antes que TOTAL PRICE
+                else if (campo.contains("UNIT_PRICE") || campo.contains("UNIT PRICE") ||
+                         nombreCol.contains("UNIT PRICE") || 
+                         (nombreCol.contains("PRICE") && nombreCol.contains("USD") && !nombreCol.contains("TOTAL"))) {
+                    colUnitPrice = columna.getIndiceColumna();
+                    letraUnitPrice = columna.getLetraColumna();
+                    logger.info("🔍 Columna UNIT_PRICE detectada: {} ({})", letraUnitPrice, columna.getNombreColumnaOriginal());
+                } 
+                // Detectar columna TOTAL (ej: "Total Price")
+                else if (campo.contains("TOTAL") || campo.equals("AMOUNT") ||
+                         nombreCol.contains("TOTAL PRICE") || nombreCol.contains("TOTAL")) {
+                    colTotal = columna.getIndiceColumna();
+                    letraTotal = columna.getLetraColumna();
+                    logger.info("🔍 Columna TOTAL detectada: {} ({})", letraTotal, columna.getNombreColumnaOriginal());
+                }
+            }
+            
+            logger.info("📝 Columnas para fórmula: QUANTITY={} ({}), UNIT_PRICE={} ({}), TOTAL={} ({})",
+                colQuantity, letraQuantity, colUnitPrice, letraUnitPrice, colTotal, letraTotal);
+            
+            boolean puedeCrearFormula = colQuantity >= 0 && colUnitPrice >= 0 && colTotal >= 0;
+            if (puedeCrearFormula) {
+                logger.info("✅ Columna TOTAL detectada en {} - se copiará fórmula original", letraTotal);
+            } else {
+                logger.warn("⚠️ No se puede crear fórmula TOTAL - faltan columnas");
+            }
+            
+            // ============================
+            // GUARDAR FÓRMULA ORIGINAL DE TOTAL PRICE
+            // ============================
+            String formulaOriginalTotal = null;
+            if (colTotal >= 0) {
+                // Buscar fórmula en las primeras filas de datos
+                logger.info("🔍 Buscando fórmula en columna TOTAL (col {}), desde fila {}", colTotal, dataStartRow);
+                
+                // Revisar varias filas por si la primera no tiene fórmula
+                for (int searchRow = dataStartRow; searchRow <= Math.min(dataStartRow + 10, cells.getMaxDataRow()); searchRow++) {
+                    com.aspose.cells.Cell celdaFormulaOriginal = cells.get(searchRow, colTotal);
+                    if (celdaFormulaOriginal != null) {
+                        logger.debug("  Fila {}: tipo={}, isFormula={}, valor={}", 
+                            searchRow + 1, 
+                            celdaFormulaOriginal.getType(),
+                            celdaFormulaOriginal.isFormula(),
+                            celdaFormulaOriginal.getValue());
+                        
+                        if (celdaFormulaOriginal.isFormula()) {
+                            formulaOriginalTotal = celdaFormulaOriginal.getFormula();
+                            logger.info("📝 Fórmula original de Total Price encontrada en fila {}: {}", 
+                                searchRow + 1, formulaOriginalTotal);
+                            break;
+                        }
+                    }
+                }
+                
+                if (formulaOriginalTotal == null) {
+                    logger.warn("⚠️ No se encontró fórmula en columna TOTAL. Las celdas pueden contener valores estáticos.");
+                }
+            } else {
+                logger.warn("⚠️ Columna TOTAL no detectada (colTotal={})", colTotal);
+            }
+            
+            // Limpiar filas de datos existentes (preservar estructura y formato)
+            int lastDataRow = cells.getMaxDataRow();
+            for (int rowIdx = lastDataRow; rowIdx >= dataStartRow; rowIdx--) {
+                for (FormatoColumna columna : formatoActual.getColumnas()) {
+                    com.aspose.cells.Cell cell = cells.get(rowIdx, columna.getIndiceColumna());
+                    if (cell != null) {
+                        cell.putValue(""); // Limpiar contenido, preservar formato
+                    }
+                }
+            }
+            
+            // ============================
+            // ESCRIBIR CABECERAS DE COLUMNAS
+            // ============================
+            logger.info("📊 Escribiendo cabeceras en fila {} (Aspose index: {})", 
+                formatoActual.getHeaderRow(), headerRowIndex);
+            
+            for (FormatoColumna columna : formatoActual.getColumnas()) {
+                int colIdx = columna.getIndiceColumna();
+                com.aspose.cells.Cell headerCell = cells.get(headerRowIndex, colIdx);
+                
+                // Escribir nombre de columna original
+                String nombreColumna = columna.getNombreColumnaOriginal();
+                if (nombreColumna != null && !nombreColumna.isEmpty()) {
+                    headerCell.putValue(nombreColumna);
+                    
+                    // Aplicar estilo de cabecera (negrita)
+                    com.aspose.cells.Style headerStyle = headerCell.getStyle();
+                    if (headerStyle == null) {
+                        headerStyle = workbook.createStyle();
+                    }
+                    com.aspose.cells.Font headerFont = headerStyle.getFont();
+                    headerFont.setBold(true);
+                    headerCell.setStyle(headerStyle);
+                    
+                    logger.debug("  └─ Col {} [{}]: '{}'", 
+                        columna.getLetraColumna(), 
+                        columna.getCampoEstandar(),
+                        nombreColumna);
+                }
+            }
+            
+            // ============================
+            // ESCRIBIR DATOS DE LA TABLA
+            // ============================
+            int currentRow = dataStartRow;
+            for (RowData rowData : tablaDinamica.getItems()) {
+                for (FormatoColumna columna : formatoActual.getColumnas()) {
+                    int colIdx = columna.getIndiceColumna();
+                    String campoEstandar = columna.getCampoEstandar();
+                    
+                    com.aspose.cells.Cell cell = cells.get(currentRow, colIdx);
+                    
+                    // ============================
+                    // CASO ESPECIAL: COLUMNA TOTAL - COPIAR FÓRMULA ORIGINAL
+                    // ============================
+                    String campoUpper = campoEstandar != null ? campoEstandar.toUpperCase() : "";
+                    String nombreColUpper = columna.getNombreColumnaOriginal() != null ? 
+                                           columna.getNombreColumnaOriginal().toUpperCase() : "";
+                    
+                    boolean esColumnaTOTAL = campoUpper.contains("TOTAL") || campoUpper.equals("AMOUNT") ||
+                                            nombreColUpper.contains("TOTAL") || nombreColUpper.contains("AMOUNT");
+                    
+                    if (esColumnaTOTAL && formulaOriginalTotal != null) {
+                        // Copiar la fórmula original - Aspose ajustará las referencias de fila automáticamente
+                        // Calcular el desplazamiento de filas desde la fórmula original
+                        int filaOriginal = dataStartRow + 1; // Fila Excel donde estaba la fórmula original
+                        int filaActual = currentRow + 1;     // Fila Excel actual
+                        int desplazamiento = filaActual - filaOriginal;
+                        
+                        // Ajustar las referencias de fila en la fórmula
+                        String formulaAjustada = ajustarReferenciasFormula(formulaOriginalTotal, desplazamiento);
+                        cell.setFormula(formulaAjustada);
+                        
+                        logger.debug("📝 Fórmula copiada a {}{}: {}", 
+                            columna.getLetraColumna(), filaActual, formulaAjustada);
+                        continue;
+                    } else if (esColumnaTOTAL) {
+                        // Si no hay fórmula original, escribir el valor del campo TOTAL
+                        String valorTotal = rowData.get(campoEstandar);
+                        if (valorTotal != null && !valorTotal.isEmpty()) {
+                            try {
+                                String valorLimpio = valorTotal.replace(",", "").replace("$", "").trim();
+                                double numValue = Double.parseDouble(valorLimpio);
+                                cell.putValue(numValue);
+                            } catch (NumberFormatException e) {
+                                cell.putValue(valorTotal);
+                            }
+                        }
+                        continue;
+                    }
+                    
+                    String valor = rowData.get(campoEstandar);
+                    
+                    // Caso especial: PRECIO_VSS usa el valor calculado
+                    if ("PRECIO_VSS".equals(campoEstandar)) {
+                        valor = rowData.get("precio_vss_calculado");
+                    }
+                    
+                    if (valor == null || valor.isEmpty()) {
+                        continue;
+                    }
+                    
+                    // Escribir valor (intentar como número si es posible)
+                    String tipoDato = columna.getTipoDato();
+                    if (tipoDato != null && (tipoDato.equalsIgnoreCase("DECIMAL") || 
+                                             tipoDato.equalsIgnoreCase("INTEGER") ||
+                                             tipoDato.equalsIgnoreCase("NUMERIC"))) {
+                        try {
+                            String valorLimpio = valor.replace(",", "").replace("$", "").trim();
+                            double numValue = Double.parseDouble(valorLimpio);
+                            cell.putValue(numValue);
+                        } catch (NumberFormatException e) {
+                            cell.putValue(valor);
+                        }
+                    } else {
+                        cell.putValue(valor);
+                    }
+                }
+                currentRow++;
+            }
+            
+            // ============================
+            // RECALCULAR FÓRMULAS
+            // ============================
+            logger.info("📊 Recalculando fórmulas...");
+            workbook.calculateFormula();
+            logger.info("✅ Fórmulas recalculadas");
+            
+            // Guardar con Aspose (preserva macros automáticamente)
+            String rutaDestino = archivoDestino.getAbsolutePath();
+            
+            // Asegurar extensión .xlsm si tiene macros
+            if (workbook.getVbaProject() != null && !rutaDestino.toLowerCase().endsWith(".xlsm")) {
+                rutaDestino = rutaDestino.replaceAll("\\.[^.]+$", ".xlsm");
+            }
+            
+            asposeService.guardarWorkbook(rutaDestino);
+            
+            // Verificar macros preservadas
+            String infoMacros = "";
+            if (workbook.getVbaProject() != null) {
+                int modulosVba = workbook.getVbaProject().getModules().getCount();
+                infoMacros = "\n✅ Macros VBA: " + modulosVba + " módulos preservados";
+                logger.info("✅ Macros VBA preservadas: {} módulos", modulosVba);
+            }
+            
+            logger.info("✅ Cotización exportada exitosamente con Aspose: {}", rutaDestino);
+            
+            // Mensaje de confirmación
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Exportación Exitosa (Aspose)");
+            alert.setHeaderText("✅ Cotización exportada con macros preservadas");
+            alert.setContentText("Archivo guardado en:\n" + rutaDestino + 
+                "\n\n✔ Broker: " + formatoActual.getBrokerName() +
+                "\n✔ Motor: Aspose.Cells (preserva macros)" +
+                "\n✔ Productos: " + tablaDinamica.getItems().size() +
+                infoMacros +
+                "\n\n💡 Las macros VBA del archivo original están intactas.");
+            alert.showAndWait();
+            
+        } catch (Exception e) {
+            logger.error("❌ Error al exportar con Aspose", e);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Error al exportar con Aspose");
+            alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
+            alert.showAndWait();
+        }
+    }
+    
+    /**
+     * Ajusta las referencias de fila en una fórmula de Excel.
+     * Por ejemplo, si la fórmula es "=K25*M25" y el desplazamiento es 1,
+     * el resultado será "=K26*M26".
+     * 
+     * @param formula Fórmula original
+     * @param desplazamiento Número de filas a desplazar (positivo = abajo, negativo = arriba)
+     * @return Fórmula con las referencias de fila ajustadas
+     */
+    private String ajustarReferenciasFormula(String formula, int desplazamiento) {
+        if (formula == null || formula.isEmpty() || desplazamiento == 0) {
+            return formula;
+        }
+        
+        // Usar regex para encontrar referencias de celdas (ej: A1, AB123, $A$1, A$1, $A1)
+        // Patrón: letra(s) seguida(s) de número(s), opcionalmente con $ antes de cada parte
+        StringBuilder resultado = new StringBuilder();
+        java.util.regex.Pattern patron = java.util.regex.Pattern.compile(
+            "(\\$?[A-Z]+)(\\$?)(\\d+)"
+        );
+        java.util.regex.Matcher matcher = patron.matcher(formula);
+        
+        int ultimaPosicion = 0;
+        while (matcher.find()) {
+            // Agregar texto antes de la coincidencia
+            resultado.append(formula, ultimaPosicion, matcher.start());
+            
+            String columna = matcher.group(1);  // Ej: "K" o "$K"
+            String signoFila = matcher.group(2); // "$" si es referencia absoluta de fila, "" si es relativa
+            String filaStr = matcher.group(3);   // Ej: "25"
+            
+            // Si la fila tiene $, es absoluta y no se debe ajustar
+            if ("$".equals(signoFila)) {
+                resultado.append(columna).append(signoFila).append(filaStr);
+            } else {
+                // Ajustar la fila
+                int filaOriginal = Integer.parseInt(filaStr);
+                int filaNueva = filaOriginal + desplazamiento;
+                resultado.append(columna).append(filaNueva);
+            }
+            
+            ultimaPosicion = matcher.end();
+        }
+        
+        // Agregar el resto de la fórmula
+        resultado.append(formula.substring(ultimaPosicion));
+        
+        return resultado.toString();
     }
     
     /**
@@ -3515,8 +3866,16 @@ private void leerExcelConFormato(File archivo) {
         return;
     }
     
+    // 🔷 Verificar si el archivo tiene macros (.xlsm)
+    boolean usarAspose = asposeService.archivoTieneMacros(archivo.getAbsolutePath());
+    
+    if (usarAspose) {
+        leerExcelConAspose(archivo);
+        return;
+    }
+    
     try {
-        // Usar Apache POI para leer el Excel
+        // Usar Apache POI para leer el Excel (archivos sin macros)
         org.apache.poi.ss.usermodel.Workbook workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(archivo);
         org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
         
@@ -3723,11 +4082,209 @@ private void leerExcelConFormato(File archivo) {
 }
 
 
-
-
-
-
-
+// ============================================================
+// 🔷 LEER EXCEL CON ASPOSE (PRESERVA MACROS VBA)
+// ============================================================
+/**
+ * Lee archivos Excel con macros (.xlsm) usando Aspose.Cells.
+ * Preserva el workbook en memoria para exportación posterior con macros intactas.
+ */
+private void leerExcelConAspose(File archivo) {
+    try {
+        logger.info("🔷 Cargando archivo con Aspose (macros preservadas): {}", archivo.getName());
+        
+        // Cargar workbook con Aspose (preserva macros)
+        asposeService.cargarWorkbook(archivo.getAbsolutePath());
+        rutaArchivoConMacros = archivo.getAbsolutePath();
+        
+        com.aspose.cells.Workbook workbook = asposeService.getWorkbookActual();
+        com.aspose.cells.Worksheet sheet = workbook.getWorksheets().get(0);
+        com.aspose.cells.Cells cells = sheet.getCells();
+        
+        ObservableList<RowData> datos = FXCollections.observableArrayList();
+        
+        // Leer desde la fila siguiente al header
+        int startRow = formatoActual.getHeaderRow() + 1; // Primera fila de datos (después del header)
+        int lastRow = cells.getMaxDataRow();
+        
+        logger.info("📖 Leyendo datos desde fila {} hasta {}", startRow + 1, lastRow + 1);
+        
+        for (int i = startRow; i <= lastRow; i++) {
+            RowData rowData = new RowData();
+            boolean filaVacia = true;
+            int camposConDatos = 0;
+            
+            // Leer cada columna según el formato
+            for (FormatoColumna col : formatoActual.getColumnas()) {
+                int colIndex = col.getIndiceColumna();
+                com.aspose.cells.Cell cell = cells.get(i, colIndex);
+                
+                String valor = "";
+                if (cell != null) {
+                    int cellType = cell.getType();
+                    if (cellType == com.aspose.cells.CellValueType.IS_STRING) {
+                        valor = cell.getStringValue();
+                    } else if (cellType == com.aspose.cells.CellValueType.IS_NUMERIC) {
+                        // Simplemente obtener el valor numérico como string
+                        valor = String.valueOf(cell.getDoubleValue());
+                    } else if (cellType == com.aspose.cells.CellValueType.IS_BOOL) {
+                        valor = String.valueOf(cell.getBoolValue());
+                    } else {
+                        try {
+                            valor = cell.getStringValue();
+                        } catch (Exception e) {
+                            valor = "";
+                        }
+                    }
+                }
+                
+                // Verificar si el valor tiene contenido real
+                if (valor != null && !valor.trim().isEmpty() && !valor.equals("0.0")) {
+                    filaVacia = false;
+                    camposConDatos++;
+                }
+                
+                rowData.set(col.getCampoEstandar(), valor);
+            }
+            
+            // 💰 Inicializar columna PRECIO_VSS con 0.0 si existe en el formato
+            for (FormatoColumna col : formatoActual.getColumnas()) {
+                if ("PRECIO_VSS".equals(col.getCampoEstandar())) {
+                    String valorActual = rowData.get("PRECIO_VSS");
+                    if (valorActual == null || valorActual.trim().isEmpty()) {
+                        rowData.set("PRECIO_VSS", "0.0");
+                    }
+                    break;
+                }
+            }
+            
+            // 🔍 Buscar automáticamente el producto en la BD y calcular precio VSS
+            String descripcion = obtenerValorDeCampo(rowData, "ITEM_DESCRIPTION", "DESCRIPTION", 
+                "ITEM_NAME", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
+            
+            if (descripcion != null && !descripcion.trim().isEmpty()) {
+                List<cl.vss.cotizador.model.ProductoSimilar> productos = 
+                    cotizacionService.buscarProductosSimilares(descripcion);
+                
+                if (!productos.isEmpty()) {
+                    cl.vss.cotizador.model.ProductoSimilar producto = productos.get(0);
+                    
+                    String cantidadStr = obtenerValorDeCampo(rowData, "QUANTITY", "QTY", "CANTIDAD");
+                    double cantidad = 1.0;
+                    try {
+                        if (cantidadStr != null && !cantidadStr.trim().isEmpty()) {
+                            cantidad = Double.parseDouble(cantidadStr.trim());
+                            if (cantidad <= 0) cantidad = 1.0;
+                        }
+                    } catch (NumberFormatException ex) {
+                        cantidad = 1.0;
+                    }
+                    
+                    double precioVentaNeto = producto.getPrecioVentaNeto();
+                    double precioVentaNetoDolares = producto.getPrecioVentaNetoDolares();
+                    double precioVSS = precioVentaNeto * cantidad;
+                    
+                    rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
+                    rowData.set("UNIT_PRICE", String.format("%.2f", precioVentaNetoDolares));
+                    
+                    logger.debug("Producto encontrado: {} - Precio VSS: ${}", 
+                        descripcion.substring(0, Math.min(30, descripcion.length())), 
+                        String.format("%,.2f", precioVSS));
+                } else {
+                    rowData.set("precio_vss_calculado", "0.0");
+                }
+            } else {
+                rowData.set("precio_vss_calculado", "0.0");
+            }
+            
+            // 🚫 Filtrar filas que son títulos/encabezados adicionales
+            boolean esFilaTitulo = false;
+            String descripcionFila = obtenerValorDeCampo(rowData, "ITEM_DESCRIPTION", "DESCRIPTION", 
+                "ITEM_NAME", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
+            String productCode = obtenerValorDeCampo(rowData, "PRODUCT_CODE", "ITEM_CODE", "CODE", "CODIGO");
+            
+            String[] camposARevisar = {descripcionFila, productCode};
+            
+            for (String campo : camposARevisar) {
+                if (campo != null && !campo.trim().isEmpty()) {
+                    String valorUpper = campo.trim().toUpperCase();
+                    if (valorUpper.equals("PROVISIONS") || valorUpper.equals("PROVISION") ||
+                        valorUpper.equals("ITEMS") || valorUpper.equals("PRODUCTS") ||
+                        valorUpper.equals("DESCRIPCION") || valorUpper.equals("DESCRIPTION") ||
+                        valorUpper.equals("ITEM DESCRIPTION") || valorUpper.equals("PRODUCT LIST") ||
+                        valorUpper.equals("PRODUCT CODE") || valorUpper.equals("ITEM CODE") ||
+                        valorUpper.startsWith("----") || valorUpper.startsWith("====")) {
+                        esFilaTitulo = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!filaVacia && !esFilaTitulo) {
+                datos.add(rowData);
+            }
+        }
+        
+        // NO cerrar el workbook - lo mantenemos en memoria para exportar
+        
+        int totalFilasLeidas = lastRow - startRow + 1;
+        int filasVacias = totalFilasLeidas - datos.size();
+        
+        int productosConPrecio = 0;
+        for (RowData row : datos) {
+            String precio = row.get("precio_vss_calculado");
+            if (precio != null) {
+                try {
+                    double precioVal = Double.parseDouble(precio);
+                    if (precioVal > 0) {
+                        productosConPrecio++;
+                    }
+                } catch (NumberFormatException e) {
+                    // Ignorar
+                }
+            }
+        }
+        
+        tablaDinamica.setItems(datos);
+        
+        logger.info("✅ Se cargaron {} filas con Aspose (macros preservadas)", datos.size());
+        logger.info("📎 Macros VBA: {}", workbook.getVbaProject() != null ? "✅ Detectadas" : "❌ No hay");
+        
+        // Mensaje de confirmación
+        Alert info = new Alert(Alert.AlertType.INFORMATION);
+        info.setTitle("Archivo cargado con Aspose");
+        info.setHeaderText("✅ Excel con macros procesado exitosamente");
+        
+        String infoMacros = "";
+        if (workbook.getVbaProject() != null) {
+            int modulosVba = workbook.getVbaProject().getModules().getCount();
+            infoMacros = "\n\n📌 Macros VBA: " + modulosVba + " módulos preservados";
+        }
+        
+        String mensajeFilasVacias = filasVacias > 0 ? "\n🗑️ Filas vacías filtradas: " + filasVacias : "";
+        info.setContentText("Se cargaron " + datos.size() + " filas con formato de " + 
+                          formatoActual.getBrokerName() + 
+                          mensajeFilasVacias +
+                          "\n\n✅ Precios VSS calculados: " + productosConPrecio + 
+                          " de " + datos.size() + " productos" +
+                          infoMacros +
+                          "\n\n💡 Al exportar, las macros se preservarán.");
+        info.showAndWait();
+        
+    } catch (Exception e) {
+        logger.error("❌ Error al leer Excel con Aspose", e);
+        rutaArchivoConMacros = null;
+        
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Error");
+        alert.setHeaderText("Error al procesar Excel con Aspose");
+        alert.setContentText("Error: " + e.getMessage() + "\n\nIntentando con Apache POI...");
+        alert.showAndWait();
+        
+        // Fallback a POI si Aspose falla
+        // (no debería ocurrir, pero por seguridad)
+    }
+}
 
 // ============================================================
 // 🔵 MÉTODO AUXILIAR: OBTENER VALOR DE CAMPO FLEXIBLE

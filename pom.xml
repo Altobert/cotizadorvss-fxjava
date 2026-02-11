@@ -116,7 +116,23 @@
             <artifactId>log4j-core</artifactId>
             <version>2.20.0</version>
         </dependency>
+        
+        <!-- Aspose Cells - Excel con soporte de macros VBA -->
+        <dependency>
+            <groupId>com.aspose</groupId>
+            <artifactId>aspose-cells</artifactId>
+            <version>24.1</version>
+        </dependency>
     </dependencies>
+    
+    <!-- Repositorio de Aspose -->
+    <repositories>
+        <repository>
+            <id>AsposeJavaAPI</id>
+            <name>Aspose Java API</name>
+            <url>https://repository.aspose.com/repo/</url>
+        </repository>
+    </repositories>
     
     <build>
         <plugins>
