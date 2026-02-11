@@ -2343,6 +2343,69 @@ private void cargarProductos() {
             int headerRowIndex = formatoActual.getHeaderRow();
             int dataStartRow = headerRowIndex + 1;
             
+            // ============================
+            // DETECTAR FILA ESPECIAL (ej: "PROVISIONS" con fondo amarillo)
+            // ============================
+            int filaEspecialIndex = -1; // -1 significa que no hay fila especial
+            boolean filaEspecialDetectada = false;
+            
+            logger.info("🔍 Verificando fila {} (Excel) para detectar fila especial...", dataStartRow + 1);
+            
+            // ESTRATEGIA 1: Buscar texto "PROVISIONS" en cualquier columna de la fila
+            for (int colCheck = 0; colCheck <= 20 && !filaEspecialDetectada; colCheck++) {
+                com.aspose.cells.Cell celdaCheck = cells.get(dataStartRow, colCheck);
+                if (celdaCheck != null && celdaCheck.getValue() != null) {
+                    String valorCelda = celdaCheck.getStringValue().trim().toUpperCase();
+                    if (valorCelda.equals("PROVISIONS") || valorCelda.equals("PROVISION") ||
+                        valorCelda.equals("ITEMS") || valorCelda.equals("PRODUCTS") ||
+                        valorCelda.equals("PRODUCTOS") || valorCelda.equals("LISTA")) {
+                        filaEspecialIndex = dataStartRow;
+                        filaEspecialDetectada = true;
+                        logger.info("🟡 Fila especial '{}' detectada por texto en columna {} de fila {}", 
+                            valorCelda, colCheck, filaEspecialIndex + 1);
+                    }
+                }
+            }
+            
+            // ESTRATEGIA 2: Verificar si la fila tiene fondo amarillo (color RGB)
+            if (!filaEspecialDetectada) {
+                com.aspose.cells.Cell celdaPrimeraCol = cells.get(dataStartRow, 0);
+                if (celdaPrimeraCol != null) {
+                    com.aspose.cells.Style estilo = celdaPrimeraCol.getStyle();
+                    if (estilo != null) {
+                        com.aspose.cells.Color bgColor = estilo.getBackgroundColor();
+                        com.aspose.cells.Color fgColor = estilo.getForegroundColor();
+                        // Amarillo típico: R=255, G=255, B=0 o similar
+                        if (bgColor != null && bgColor.getR() == (byte)255 && bgColor.getG() == (byte)255 && bgColor.getB() == (byte)0) {
+                            filaEspecialIndex = dataStartRow;
+                            filaEspecialDetectada = true;
+                            logger.info("🟡 Fila especial detectada por color amarillo en fila {}", filaEspecialIndex + 1);
+                        } else if (fgColor != null && fgColor.getR() == (byte)255 && fgColor.getG() == (byte)255 && fgColor.getB() == (byte)0) {
+                            filaEspecialIndex = dataStartRow;
+                            filaEspecialDetectada = true;
+                            logger.info("🟡 Fila especial detectada por color amarillo (foreground) en fila {}", filaEspecialIndex + 1);
+                        }
+                    }
+                }
+            }
+            
+            // ESTRATEGIA 3: Para BSM CATERING específicamente - verificar si la fila 20 no tiene datos
+            // y la fila 21 sí tiene datos (asumiendo que headerRow=19 para BSM)
+            if (!filaEspecialDetectada && formatoActual.getBrokerName() != null && 
+                formatoActual.getBrokerName().toUpperCase().contains("BSM")) {
+                // Para BSM, la fila después de las cabeceras es siempre la fila PROVISIONS
+                filaEspecialIndex = dataStartRow;
+                filaEspecialDetectada = true;
+                logger.info("🟡 Fila especial detectada para BSM CATERING en fila {} (forzado)", filaEspecialIndex + 1);
+            }
+            
+            // Si se detectó fila especial, incrementar dataStartRow
+            if (filaEspecialDetectada) {
+                dataStartRow = dataStartRow + 1;
+                logger.info("📦 Los datos empezarán desde la fila {} (saltando fila especial {})", 
+                    dataStartRow + 1, filaEspecialIndex + 1);
+            }
+            
             logger.info("📊 Header row del formato: {} (Excel) -> {} (Aspose 0-indexed)", 
                 formatoActual.getHeaderRow(), headerRowIndex);
             logger.info("📦 Escribiendo {} productos a partir de la fila {} (preservando macros)", 
@@ -2402,9 +2465,11 @@ private void cargarProductos() {
             // GUARDAR FÓRMULA ORIGINAL DE TOTAL PRICE
             // ============================
             String formulaOriginalTotal = null;
+            int filaFormulaOriginal = -1; // Fila exacta donde se encontró la fórmula (0-indexed)
+            
             if (colTotal >= 0) {
                 // Buscar fórmula en las primeras filas de datos
-                logger.info("🔍 Buscando fórmula en columna TOTAL (col {}), desde fila {}", colTotal, dataStartRow);
+                logger.info("🔍 Buscando fórmula en columna TOTAL (col {}), desde fila {}", colTotal, dataStartRow + 1);
                 
                 // Revisar varias filas por si la primera no tiene fórmula
                 for (int searchRow = dataStartRow; searchRow <= Math.min(dataStartRow + 10, cells.getMaxDataRow()); searchRow++) {
@@ -2418,8 +2483,9 @@ private void cargarProductos() {
                         
                         if (celdaFormulaOriginal.isFormula()) {
                             formulaOriginalTotal = celdaFormulaOriginal.getFormula();
-                            logger.info("📝 Fórmula original de Total Price encontrada en fila {}: {}", 
-                                searchRow + 1, formulaOriginalTotal);
+                            filaFormulaOriginal = searchRow; // Guardar la fila exacta (0-indexed)
+                            logger.info("📝 Fórmula original de Total Price encontrada en fila {} (0-idx: {}): {}", 
+                                searchRow + 1, searchRow, formulaOriginalTotal);
                             break;
                         }
                     }
@@ -2433,8 +2499,15 @@ private void cargarProductos() {
             }
             
             // Limpiar filas de datos existentes (preservar estructura y formato)
+            // NOTA: No limpiar la fila especial (ej: PROVISIONS)
             int lastDataRow = cells.getMaxDataRow();
             for (int rowIdx = lastDataRow; rowIdx >= dataStartRow; rowIdx--) {
+                // Saltar la fila especial si existe
+                if (filaEspecialIndex >= 0 && rowIdx == filaEspecialIndex) {
+                    logger.debug("🟡 Preservando fila especial {} sin limpiar", filaEspecialIndex + 1);
+                    continue;
+                }
+                
                 for (FormatoColumna columna : formatoActual.getColumnas()) {
                     com.aspose.cells.Cell cell = cells.get(rowIdx, columna.getIndiceColumna());
                     if (cell != null) {
@@ -2495,19 +2568,20 @@ private void cargarProductos() {
                     boolean esColumnaTOTAL = campoUpper.contains("TOTAL") || campoUpper.equals("AMOUNT") ||
                                             nombreColUpper.contains("TOTAL") || nombreColUpper.contains("AMOUNT");
                     
-                    if (esColumnaTOTAL && formulaOriginalTotal != null) {
-                        // Copiar la fórmula original - Aspose ajustará las referencias de fila automáticamente
-                        // Calcular el desplazamiento de filas desde la fórmula original
-                        int filaOriginal = dataStartRow + 1; // Fila Excel donde estaba la fórmula original
-                        int filaActual = currentRow + 1;     // Fila Excel actual
-                        int desplazamiento = filaActual - filaOriginal;
+                    if (esColumnaTOTAL && formulaOriginalTotal != null && filaFormulaOriginal >= 0) {
+                        // Copiar la fórmula original ajustando las referencias de fila
+                        // Calcular el desplazamiento desde la fila EXACTA donde estaba la fórmula
+                        int filaExcelOriginal = filaFormulaOriginal + 1; // Fila Excel donde estaba la fórmula (1-indexed)
+                        int filaExcelActual = currentRow + 1;            // Fila Excel actual (1-indexed)
+                        int desplazamiento = filaExcelActual - filaExcelOriginal;
                         
                         // Ajustar las referencias de fila en la fórmula
                         String formulaAjustada = ajustarReferenciasFormula(formulaOriginalTotal, desplazamiento);
                         cell.setFormula(formulaAjustada);
                         
-                        logger.debug("📝 Fórmula copiada a {}{}: {}", 
-                            columna.getLetraColumna(), filaActual, formulaAjustada);
+                        logger.debug("📝 Fórmula copiada a {}{}: {} (desplazamiento={} desde fila {})", 
+                            columna.getLetraColumna(), filaExcelActual, formulaAjustada, 
+                            desplazamiento, filaExcelOriginal);
                         continue;
                     } else if (esColumnaTOTAL) {
                         // Si no hay fórmula original, escribir el valor del campo TOTAL
