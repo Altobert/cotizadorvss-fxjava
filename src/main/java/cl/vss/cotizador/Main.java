@@ -2550,7 +2550,24 @@ private void cargarProductos() {
             // ============================
             // ESCRIBIR DATOS DE LA TABLA
             // ============================
+            
+            // Log de mapeo de columnas para verificar posiciones
+            logger.info("📊 MAPEO DE COLUMNAS DEL FORMATO:");
+            for (FormatoColumna col : formatoActual.getColumnas()) {
+                logger.info("  {} (col {}) = {} [{}]", 
+                    col.getLetraColumna(), col.getIndiceColumna(), 
+                    col.getCampoEstandar(), col.getNombreColumnaOriginal());
+            }
+            
+            // Verificar que las columnas de la fórmula coincidan
+            logger.info("🔍 VERIFICACIÓN DE COLUMNAS PARA FÓRMULA:");
+            logger.info("  Fórmula original: {}", formulaOriginalTotal);
+            logger.info("  Columna QUANTITY detectada: {} (col {})", letraQuantity, colQuantity);
+            logger.info("  Columna UNIT_PRICE detectada: {} (col {})", letraUnitPrice, colUnitPrice);
+            logger.info("  Columna TOTAL detectada: {} (col {})", letraTotal, colTotal);
+            
             int currentRow = dataStartRow;
+            boolean primeraFila = true;
             for (RowData rowData : tablaDinamica.getItems()) {
                 for (FormatoColumna columna : formatoActual.getColumnas()) {
                     int colIdx = columna.getIndiceColumna();
@@ -2609,22 +2626,62 @@ private void cargarProductos() {
                         continue;
                     }
                     
-                    // Escribir valor (intentar como número si es posible)
+                    // Log detallado para primera fila
+                    if (primeraFila) {
+                        logger.info("📝 Fila {}: {}{}='{}' (tipo={})", 
+                            currentRow + 1, columna.getLetraColumna(), currentRow + 1, 
+                            valor, columna.getTipoDato());
+                    }
+                    
+                    // Escribir valor - SIEMPRE intentar como número para columnas numéricas
                     String tipoDato = columna.getTipoDato();
-                    if (tipoDato != null && (tipoDato.equalsIgnoreCase("DECIMAL") || 
-                                             tipoDato.equalsIgnoreCase("INTEGER") ||
-                                             tipoDato.equalsIgnoreCase("NUMERIC"))) {
+                    String campoUpperCheck = campoEstandar != null ? campoEstandar.toUpperCase() : "";
+                    
+                    // Forzar escritura numérica para columnas de cantidad, precio, descuento, etc.
+                    boolean esColumnaNum = tipoDato != null && 
+                        (tipoDato.equalsIgnoreCase("DECIMAL") || 
+                         tipoDato.equalsIgnoreCase("INTEGER") ||
+                         tipoDato.equalsIgnoreCase("NUMERIC"));
+                    boolean esColumnaQueDebeSerNum = campoUpperCheck.contains("QUANTITY") ||
+                        campoUpperCheck.contains("PRICE") || campoUpperCheck.contains("DISCOUNT") ||
+                        campoUpperCheck.contains("VAT") || campoUpperCheck.contains("AMOUNT") ||
+                        campoUpperCheck.contains("QTY") || campoUpperCheck.contains("TOTAL");
+                    
+                    if (esColumnaNum || esColumnaQueDebeSerNum) {
                         try {
-                            String valorLimpio = valor.replace(",", "").replace("$", "").trim();
+                            // Limpiar valor: remover comas de miles, símbolos de moneda, espacios
+                            String valorLimpio = valor
+                                .replace(" ", "")
+                                .replace("$", "")
+                                .replace("€", "")
+                                .trim();
+                            
+                            // Manejar formato europeo (coma decimal) vs americano (punto decimal)
+                            // Si tiene coma pero no punto, asumir que la coma es decimal
+                            if (valorLimpio.contains(",") && !valorLimpio.contains(".")) {
+                                valorLimpio = valorLimpio.replace(",", ".");
+                            } else {
+                                // Si tiene ambos, asumir formato americano (coma = miles)
+                                valorLimpio = valorLimpio.replace(",", "");
+                            }
+                            
                             double numValue = Double.parseDouble(valorLimpio);
                             cell.putValue(numValue);
+                            
+                            if (primeraFila) {
+                                logger.info("  ✔️ Escrito como número: {}", numValue);
+                            }
                         } catch (NumberFormatException e) {
                             cell.putValue(valor);
+                            if (primeraFila) {
+                                logger.warn("  ⚠️ No se pudo convertir a número, escrito como texto: {}", valor);
+                            }
                         }
                     } else {
                         cell.putValue(valor);
                     }
                 }
+                primeraFila = false;
                 currentRow++;
             }
             
