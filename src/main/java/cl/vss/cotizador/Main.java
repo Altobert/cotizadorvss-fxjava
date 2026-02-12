@@ -3092,6 +3092,213 @@ private void cargarProductos() {
         }
     }
     
+    // ============================================================
+    // 🏛️ MÉTODOS ESPECÍFICOS POR BROKER
+    // ============================================================
+    
+    /**
+     * Clase interna para almacenar información del broker durante la exportación
+     */
+    private static class BrokerExportContext {
+        public int filaEspecialIndex = -1;
+        public int filaSubtotalIndex = -1;
+        public int dataStartRow;
+        public int colTotal = -1;
+        public String letraTotal = "";
+        
+        public BrokerExportContext(int dataStartRow) {
+            this.dataStartRow = dataStartRow;
+        }
+    }
+    
+    /**
+     * Aplica lógica específica del broker para detectar y procesar particularidades.
+     * Delega a métodos específicos según el broker.
+     * 
+     * @param brokerName Nombre del broker
+     * @param cells Celdas del workbook Aspose
+     * @param context Contexto de exportación del broker
+     */
+    private void aplicarLogicaEspecificaBroker(String brokerName, com.aspose.cells.Cells cells, BrokerExportContext context) {
+        if (brokerName == null) {
+            aplicarLogicaGenerica(cells, context);
+            return;
+        }
+        
+        String brokerUpper = brokerName.toUpperCase();
+        
+        if (brokerUpper.contains("BSM") || brokerUpper.contains("CATERING")) {
+            aplicarLogicaBSM(cells, context);
+        } else if (brokerUpper.contains("CMA") && brokerUpper.contains("CGM")) {
+            aplicarLogicaCMAGM(cells, context);
+        } else if (brokerUpper.contains("MCTC") || brokerUpper.contains("MARINE")) {
+            aplicarLogicaMCTC(cells, context);
+        } else if (brokerUpper.contains("OCEANIC")) {
+            aplicarLogicaOceanic(cells, context);
+        } else if (brokerUpper.contains("GARRETS")) {
+            aplicarLogicaGarrets(cells, context);
+        } else if (brokerUpper.contains("PROCURESHIP")) {
+            aplicarLogicaProcureship(cells, context);
+        } else {
+            aplicarLogicaGenerica(cells, context);
+        }
+    }
+    
+    /**
+     * Lógica genérica para brokers sin configuración específica.
+     * Intenta detectar automáticamente filas especiales y subtotales.
+     */
+    private void aplicarLogicaGenerica(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        logger.info("🔧 Aplicando lógica genérica de detección");
+        
+        // Intentar detectar fila especial por texto común
+        detectarFilaEspecialPorTexto(cells, context, new String[]{
+            "PROVISIONS", "PROVISION", "ITEMS", "PRODUCTS", "PRODUCTOS", "LISTA"
+        });
+        
+        // Intentar detectar subtotal automáticamente
+        detectarFilaSubtotalAutomatica(cells, context);
+    }
+    
+    /**
+     * Lógica específica para BSM CATERING.
+     * - Fila especial "PROVISIONS" después de las cabeceras
+     * - Subtotal con fórmula SUM desde dataStartRow
+     */
+    private void aplicarLogicaBSM(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        logger.info("🏛️ Aplicando lógica específica de BSM CATERING");
+        
+        // FILA ESPECIAL: Para BSM, la fila después de las cabeceras es siempre "PROVISIONS"
+        context.filaEspecialIndex = context.dataStartRow;
+        context.dataStartRow = context.dataStartRow + 1;
+        logger.info("🟡 BSM: Fila especial 'PROVISIONS' en fila {} (forzado)", context.filaEspecialIndex + 1);
+        logger.info("📦 BSM: Datos empezarán desde fila {}", context.dataStartRow + 1);
+        
+        // SUBTOTAL: Detectar automáticamente por fórmula SUM
+        detectarFilaSubtotalAutomatica(cells, context);
+    }
+    
+    /**
+     * Lógica específica para CMA CGM.
+     * NOTA: Implementar particularidades según necesidades del broker.
+     */
+    private void aplicarLogicaCMAGM(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        logger.info("🏛️ Aplicando lógica específica de CMA CGM");
+        
+        // TODO: Agregar particularidades de CMA CGM aquí
+        // Por ahora, usar detección genérica
+        aplicarLogicaGenerica(cells, context);
+    }
+    
+    /**
+     * Lógica específica para MCTC MARINE LTD.
+     */
+    private void aplicarLogicaMCTC(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        logger.info("🏛️ Aplicando lógica específica de MCTC MARINE LTD");
+        aplicarLogicaGenerica(cells, context);
+    }
+    
+    /**
+     * Lógica específica para OCEANIC CATERING LTD.
+     */
+    private void aplicarLogicaOceanic(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        logger.info("🏛️ Aplicando lógica específica de OCEANIC CATERING LTD");
+        aplicarLogicaGenerica(cells, context);
+    }
+    
+    /**
+     * Lógica específica para GARRETS INTERNATIONAL LTD.
+     */
+    private void aplicarLogicaGarrets(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        logger.info("🏛️ Aplicando lógica específica de GARRETS INTERNATIONAL LTD");
+        aplicarLogicaGenerica(cells, context);
+    }
+    
+    /**
+     * Lógica específica para PROCURESHIP.
+     */
+    private void aplicarLogicaProcureship(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        logger.info("🏛️ Aplicando lógica específica de PROCURESHIP");
+        aplicarLogicaGenerica(cells, context);
+    }
+    
+    /**
+     * Detecta fila especial buscando textos específicos en la primera fila de datos.
+     */
+    private void detectarFilaEspecialPorTexto(com.aspose.cells.Cells cells, BrokerExportContext context, String[] textosABuscar) {
+        for (int colCheck = 0; colCheck <= 20; colCheck++) {
+            com.aspose.cells.Cell celdaCheck = cells.get(context.dataStartRow, colCheck);
+            if (celdaCheck != null && celdaCheck.getValue() != null) {
+                String valorCelda = celdaCheck.getStringValue().trim().toUpperCase();
+                for (String texto : textosABuscar) {
+                    if (valorCelda.equals(texto)) {
+                        context.filaEspecialIndex = context.dataStartRow;
+                        context.dataStartRow = context.dataStartRow + 1;
+                        logger.info("🟡 Fila especial '{}' detectada en col {} de fila {}", 
+                            valorCelda, colCheck, context.filaEspecialIndex + 1);
+                        logger.info("📦 Datos empezarán desde fila {}", context.dataStartRow + 1);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Detecta automáticamente la fila de subtotal buscando fórmulas SUM/SUMA
+     * que sumen desde cerca de dataStartRow.
+     */
+    private void detectarFilaSubtotalAutomatica(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        if (context.colTotal < 0) {
+            return; // No hay columna Total, no se puede detectar subtotal
+        }
+        
+        int lastDataRow = cells.getMaxDataRow();
+        logger.info("🔍 Buscando subtotal entre filas {} y {} (lastDataRow: {})...", 
+            context.dataStartRow + 1, lastDataRow + 1, lastDataRow);
+        
+        // Buscar desde el final hacia arriba
+        for (int searchRow = lastDataRow; searchRow >= context.dataStartRow; searchRow--) {
+            com.aspose.cells.Cell celdaTotalCheck = cells.get(searchRow, context.colTotal);
+            if (celdaTotalCheck != null && celdaTotalCheck.isFormula()) {
+                String formulaCheck = celdaTotalCheck.getFormula().toUpperCase();
+                logger.info("🔍 Fila {} tiene fórmula: {}", searchRow + 1, formulaCheck);
+                
+                // Verificar si es una fórmula SUM/SUMA que suma desde cerca de dataStartRow
+                if (formulaCheck.contains("SUM") || formulaCheck.contains("SUMA")) {
+                    // Extraer el rango de la fórmula: =SUM(P21:P234) -> P21:P234
+                    java.util.regex.Pattern patronRango = java.util.regex.Pattern.compile("([A-Z]+)(\\d+):([A-Z]+)(\\d+)");
+                    java.util.regex.Matcher matcherRango = patronRango.matcher(formulaCheck);
+                    
+                    if (matcherRango.find()) {
+                        int filaInicio = Integer.parseInt(matcherRango.group(2));
+                        int filaFin = Integer.parseInt(matcherRango.group(4));
+                        
+                        int dataStartExcel = context.dataStartRow + 1;  // Convertir a 1-based
+                        int rangoReal = filaFin - filaInicio + 1;
+                        
+                        logger.info("  → Rango: {}-{} ({} filas), esperado desde fila {}",
+                            filaInicio, filaFin, rangoReal, dataStartExcel);
+                        
+                        // Si empieza cerca de dataStartRow (dentro de 5 filas) y suma un rango grande
+                        if (Math.abs(filaInicio - dataStartExcel) <= 5 && rangoReal >= 10) {
+                            context.filaSubtotalIndex = searchRow;
+                            logger.info("📊 ✅ FILA DE SUBTOTAL DETECTADA: fila {} (0-idx: {}) con fórmula: {}",
+                                searchRow + 1, searchRow, celdaTotalCheck.getFormula());
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        
+        logger.info("⚠️ No se detectó fila de subtotal automáticamente");
+    }
+    
+    // ============================================================
+    // 🛠️ MÉTODOS AUXILIARES
+    // ============================================================
+    
     /**
      * Ajusta las referencias de fila en una fórmula de Excel.
      * Por ejemplo, si la fórmula es "=K25*M25" y el desplazamiento es 1,
