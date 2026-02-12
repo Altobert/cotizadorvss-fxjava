@@ -3101,7 +3101,8 @@ private void cargarProductos() {
      */
     private static class BrokerExportContext {
         public int filaEspecialIndex = -1;
-        public int filaSubtotalIndex = -1;
+        public int filaSubtotalIndex = -1;      // "Item Sub Total"
+        public int filaTotalPriceIndex = -1;    // "Total Price" (para CMA CGM y otros)
         public int dataStartRow;
         public int colTotal = -1;
         public String letraTotal = "";
@@ -3180,14 +3181,184 @@ private void cargarProductos() {
     
     /**
      * Lógica específica para CMA CGM.
-     * NOTA: Implementar particularidades según necesidades del broker.
+     * Particularidades:
+     * - Puede tener fila especial
+     * - Tiene DOS filas de totales:
+     *   1. "Item Sub Total" - Suma de todos los productos
+     *   2. "Total Price" - Total final (con impuestos/descuentos)
      */
     private void aplicarLogicaCMAGM(com.aspose.cells.Cells cells, BrokerExportContext context) {
         logger.info("🏛️ Aplicando lógica específica de CMA CGM");
         
-        // TODO: Agregar particularidades de CMA CGM aquí
-        // Por ahora, usar detección genérica
-        aplicarLogicaGenerica(cells, context);
+        // PASO 1: Detectar fila especial si existe
+        detectarFilaEspecialPorTexto(cells, context, new String[]{
+            "PROVISIONS", "PROVISION", "ITEMS", "PRODUCTS", "SUPPLY LIST"
+        });
+        
+        // PASO 2: Detectar las DOS filas de totales de CMA CGM
+        detectarFilasTotalesCMAGM(cells, context);
+    }
+    
+    /**
+     * Detecta las dos filas de totales específicas de CMA CGM:
+     * 1. "Item Sub Total" - Suma de productos
+     * 2. "Total Price" - Total final
+     */
+    private void detectarFilasTotalesCMAGM(com.aspose.cells.Cells cells, BrokerExportContext context) {
+        int lastDataRow = cells.getMaxDataRow();
+        logger.info("🔍 CMA CGM: Buscando filas de totales entre {} y {}...", 
+            context.dataStartRow + 1, lastDataRow + 1);
+        
+        // Buscar desde el final hacia arriba
+        for (int searchRow = lastDataRow; searchRow >= context.dataStartRow; searchRow--) {
+            // Buscar texto "Item Sub Total" o "Total Price" en las primeras columnas
+            for (int colCheck = 0; colCheck <= 10; colCheck++) {
+                com.aspose.cells.Cell celdaCheck = cells.get(searchRow, colCheck);
+                if (celdaCheck != null && celdaCheck.getValue() != null) {
+                    String valorCelda = celdaCheck.getStringValue().trim().toUpperCase();
+                    
+                    // Detectar "Item Sub Total"
+                    if ((valorCelda.contains("ITEM") && valorCelda.contains("SUB") && valorCelda.contains("TOTAL")) ||
+                        valorCelda.equals("ITEM SUB TOTAL") || valorCelda.equals("SUB TOTAL")) {
+                        
+                        context.filaSubtotalIndex = searchRow;
+                        logger.info("📊 CMA CGM: 'Item Sub Total' detectado en fila {} (0-idx: {})", 
+                            searchRow + 1, searchRow);
+                        
+                        // Verificar si tiene fórmula SUM en colTotal
+                        if (context.colTotal >= 0) {
+                            com.aspose.cells.Cell celdaTotal = cells.get(searchRow, context.colTotal);
+                            if (celdaTotal != null && celdaTotal.isFormula()) {
+                                logger.info("📝   Fórmula actual: {}", celdaTotal.getFormula());
+                            }
+                        }
+                    }
+                    
+                    // Detectar "Total Price"
+                    else if ((valorCelda.contains("TOTAL") && valorCelda.contains("PRICE")) ||
+                             valorCelda.equals("TOTAL PRICE") || 
+                             (valorCelda.equals("TOTAL") && context.filaSubtotalIndex >= 0 && searchRow > context.filaSubtotalIndex)) {
+                        
+                        context.filaTotalPriceIndex = searchRow;
+                        logger.info("📊 CMA CGM: 'Total Price' detectado en fila {} (0-idx: {})", 
+                            searchRow + 1, searchRow);
+                        
+                        // Verificar si tiene fórmula en colTotal
+                        if (context.colTotal >= 0) {
+                            com.aspose.cells.Cell celdaTotal = cells.get(searchRow, context.colTotal);
+                            if (celdaTotal != null && celdaTotal.isFormula()) {
+                                logger.info("📝   Fórmula actual: {}", celdaTotal.getFormula());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Resumen de lo detectado
+        if (context.filaSubtotalIndex >= 0) {
+            logger.info("✅ CMA CGM: Item Sub Total en fila {}", context.filaSubtotalIndex + 1);
+        } else {
+            logger.warn("⚠️ CMA CGM: NO se detectó 'Item Sub Total'");
+        }
+        
+        if (context.filaTotalPriceIndex >= 0) {
+            logger.info("✅ CMA CGM: Total Price en fila {}", context.filaTotalPriceIndex + 1);
+        } else {
+            logger.warn("⚠️ CMA CGM: NO se detectó 'Total Price'");
+        }
+    }
+    
+    /**
+     * Actualiza las fórmulas de las dos filas de totales de CMA CGM.
+     * Debe llamarse DESPUÉS de escribir los datos.
+     * 
+     * @param cells Celdas del workbook
+     * @param context Contexto con las filas detectadas
+     * @param currentRow Fila actual después de escribir todos los productos (0-based)
+     */
+    private void actualizarFormulasTotalesCMAGM(com.aspose.cells.Cells cells, BrokerExportContext context, int currentRow) {
+        if (context.colTotal < 0) {
+            logger.warn("⚠️ CMA CGM: No se puede actualizar totales - columna Total no detectada");
+            return;
+        }
+        
+        String letraCol = context.letraTotal;
+        int primeraFilaDatosExcel = context.dataStartRow + 1;  // Convertir a 1-based
+        int ultimaFilaDatosExcel = currentRow;  // Última fila escrita (ya en formato para Excel)
+        
+        // Ajustar rango excluyendo filas especiales
+        if (context.filaSubtotalIndex >= 0 && context.filaSubtotalIndex < currentRow) {
+            ultimaFilaDatosExcel = context.filaSubtotalIndex;  // Terminar antes del subtotal
+        }
+        
+        logger.info("🔧 CMA CGM: Actualizando fórmulas de totales...");
+        logger.info("   Rango de datos: {}{} hasta {}{}", letraCol, primeraFilaDatosExcel, letraCol, ultimaFilaDatosExcel);
+        
+        // ============================
+        // 1. ACTUALIZAR "Item Sub Total"
+        // ============================
+        if (context.filaSubtotalIndex >= 0) {
+            com.aspose.cells.Cell celdaSubtotal = cells.get(context.filaSubtotalIndex, context.colTotal);
+            if (celdaSubtotal != null) {
+                String formulaAnterior = celdaSubtotal.isFormula() ? celdaSubtotal.getFormula() : "(sin fórmula)";
+                
+                // Crear fórmula SUMA para Item Sub Total
+                String formulaItemSubTotal = "=SUM(" + letraCol + primeraFilaDatosExcel + ":" + letraCol + ultimaFilaDatosExcel + ")";
+                
+                // Limpiar celda y establecer nueva fórmula
+                celdaSubtotal.putValue("");  // Limpiar
+                celdaSubtotal.setFormula(formulaItemSubTotal);
+                
+                // Establecer formato numérico
+                com.aspose.cells.Style style = celdaSubtotal.getStyle();
+                style.setNumber(2);  // 2 decimales
+                celdaSubtotal.setStyle(style);
+                
+                logger.info("✅ CMA CGM: 'Item Sub Total' actualizado en fila {}", context.filaSubtotalIndex + 1);
+                logger.info("   Fórmula anterior: {}", formulaAnterior);
+                logger.info("   Fórmula nueva: {}", formulaItemSubTotal);
+            }
+        }
+        
+        // ============================
+        // 2. ACTUALIZAR "Total Price"
+        // ============================
+        if (context.filaTotalPriceIndex >= 0) {
+            com.aspose.cells.Cell celdaTotalPrice = cells.get(context.filaTotalPriceIndex, context.colTotal);
+            if (celdaTotalPrice != null) {
+                String formulaAnterior = celdaTotalPrice.isFormula() ? celdaTotalPrice.getFormula() : "(sin fórmula)";
+                
+                // Total Price generalmente referencia al Item Sub Total (o suma lo mismo)
+                // Opción A: Referenciar directamente al Item Sub Total
+                String formulaTotalPrice;
+                if (context.filaSubtotalIndex >= 0) {
+                    // Referenciar al Item Sub Total
+                    String celdaSubtotalRef = letraCol + (context.filaSubtotalIndex + 1);
+                    formulaTotalPrice = "=" + celdaSubtotalRef;
+                    logger.info("🔗 Total Price referenciará al Item Sub Total: {}", celdaSubtotalRef);
+                } else {
+                    // Si no hay Item Sub Total, sumar directamente
+                    formulaTotalPrice = "=SUM(" + letraCol + primeraFilaDatosExcel + ":" + letraCol + ultimaFilaDatosExcel + ")";
+                    logger.info("📊 Total Price sumará directamente los productos");
+                }
+                
+                // Limpiar celda y establecer nueva fórmula
+                celdaTotalPrice.putValue("");  // Limpiar
+                celdaTotalPrice.setFormula(formulaTotalPrice);
+                
+                // Establecer formato numérico
+                com.aspose.cells.Style style = celdaTotalPrice.getStyle();
+                style.setNumber(2);  // 2 decimales
+                celdaTotalPrice.setStyle(style);
+                
+                logger.info("✅ CMA CGM: 'Total Price' actualizado en fila {}", context.filaTotalPriceIndex + 1);
+                logger.info("   Fórmula anterior: {}", formulaAnterior);
+                logger.info("   Fórmula nueva: {}", formulaTotalPrice);
+            }
+        }
+        
+        logger.info("✅ CMA CGM: Totales actualizados exitosamente");
     }
     
     /**
