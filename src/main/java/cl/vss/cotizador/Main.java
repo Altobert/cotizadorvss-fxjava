@@ -1835,6 +1835,13 @@ private void cargarProductos() {
                         int filaExcel = metadata.getFilaOrigen() - 1; // Excel es 1-indexed, POI es 0-indexed
                         int colExcel = metadata.getColumnaOrigen();
                         
+                        // Validar que la fila no sea negativa
+                        if (filaExcel < 0) {
+                            logger.warn("⚠️ Metadata con fila inválida ({}), saltando: {}", 
+                                metadata.getFilaOrigen(), metadata.getCampoNombre());
+                            continue;
+                        }
+                        
                         // Crear fila si no existe
                         Row row = sheet.getRow(filaExcel);
                         if (row == null) {
@@ -1864,7 +1871,25 @@ private void cargarProductos() {
             // ============================
             // PASO 2: CREAR ENCABEZADOS EN header_row CON FORMATO ESPECÍFICO
             // ============================
-            int headerRowIndex = formatoActual.getHeaderRow() - 1; // Convertir a 0-indexed
+            // Nota: getHeaderRow() puede ser 0-indexed (Aspose) o 1-indexed (original)
+            // Si es >= 1, asumimos 1-indexed y restamos 1
+            // Si es 0, lo usamos directamente
+            int headerRowIndex = formatoActual.getHeaderRow();
+            if (headerRowIndex >= 1) {
+                // Verificar si parece ser 1-indexed (mayor que 0)
+                // Para la mayoría de brokers, headerRow es >= 10, así que asumimos 0-indexed
+                // Solo restamos 1 si parece ser 1-indexed (valor muy bajo como 1-5)
+                // Por seguridad, no restamos nada - getHeaderRow() ya debería ser 0-indexed
+            }
+            
+            // Validar que no sea negativo
+            if (headerRowIndex < 0) {
+                headerRowIndex = 0;
+                logger.warn("⚠️ HeaderRow era negativo, usando fila 0");
+            }
+            
+            logger.info("📊 HeaderRow para exportación POI: {} (0-indexed)", headerRowIndex);
+            
             Row headerRow = sheet.getRow(headerRowIndex);
             if (headerRow == null) {
                 headerRow = sheet.createRow(headerRowIndex);
@@ -2499,6 +2524,53 @@ private void cargarProductos() {
             }
             
             // ============================
+            // DETECTAR COLUMNAS DESDE LA FÓRMULA (para escribir datos en posiciones correctas)
+            // ============================
+            int colQuantityFormula = -1;   // Columna donde la fórmula espera Quantity
+            int colUnitPriceFormula = -1;  // Columna donde la fórmula espera Unit Price
+            int colDiscountFormula = -1;   // Columna donde la fórmula espera Discount
+            int colVatFormula = -1;        // Columna donde la fórmula espera VAT
+            
+            if (formulaOriginalTotal != null) {
+                // Extraer todas las referencias de columna de la fórmula
+                java.util.regex.Pattern patronColumna = java.util.regex.Pattern.compile("([A-Z]+)\\d+");
+                java.util.regex.Matcher matcherColumna = patronColumna.matcher(formulaOriginalTotal);
+                
+                java.util.List<String> columnasEnFormula = new java.util.ArrayList<>();
+                java.util.Set<String> columnasUnicas = new java.util.LinkedHashSet<>();
+                
+                while (matcherColumna.find()) {
+                    String letraCol = matcherColumna.group(1);
+                    columnasEnFormula.add(letraCol);
+                    columnasUnicas.add(letraCol);
+                }
+                
+                logger.info("🔍 Columnas detectadas en fórmula: {}", columnasUnicas);
+                
+                // Convertir a lista ordenada para asignar roles
+                java.util.List<String> listaColumnas = new java.util.ArrayList<>(columnasUnicas);
+                
+                // Asignar columnas según la estructura típica de fórmulas:
+                // Primera columna = Quantity, Segunda = Unit Price, Tercera = Discount, Cuarta = VAT
+                if (listaColumnas.size() >= 1) {
+                    colQuantityFormula = letraAIndice(listaColumnas.get(0));
+                    logger.info("📌 Fórmula usa columna {} para QUANTITY (col {})", listaColumnas.get(0), colQuantityFormula);
+                }
+                if (listaColumnas.size() >= 2) {
+                    colUnitPriceFormula = letraAIndice(listaColumnas.get(1));
+                    logger.info("📌 Fórmula usa columna {} para UNIT_PRICE (col {})", listaColumnas.get(1), colUnitPriceFormula);
+                }
+                if (listaColumnas.size() >= 3) {
+                    colDiscountFormula = letraAIndice(listaColumnas.get(2));
+                    logger.info("📌 Fórmula usa columna {} para DISCOUNT (col {})", listaColumnas.get(2), colDiscountFormula);
+                }
+                if (listaColumnas.size() >= 4) {
+                    colVatFormula = letraAIndice(listaColumnas.get(3));
+                    logger.info("📌 Fórmula usa columna {} para VAT (col {})", listaColumnas.get(3), colVatFormula);
+                }
+            }
+            
+            // ============================
             // DETECTAR FILA DE SUBTOTAL (ej: "Item Sub Total")
             // ============================
             int filaSubtotalIndex = -1;
@@ -2506,38 +2578,78 @@ private void cargarProductos() {
             int colSubtotalFormula = -1;
             
             int lastDataRow = cells.getMaxDataRow();
-            logger.info("🔍 Buscando fila de subtotal entre filas {} y {}...", dataStartRow + 1, lastDataRow + 1);
+            logger.info("🔍 Buscando fila de subtotal entre filas {} y {} (lastDataRow: {})...", dataStartRow + 1, lastDataRow + 1, lastDataRow);
             
+            // Buscar desde el final hacia arriba
             for (int searchRow = lastDataRow; searchRow >= dataStartRow; searchRow--) {
-                // Buscar en las primeras columnas por texto "Sub Total", "Subtotal", etc.
-                for (int colCheck = 0; colCheck <= 5; colCheck++) {
-                    com.aspose.cells.Cell celdaCheck = cells.get(searchRow, colCheck);
-                    if (celdaCheck != null && celdaCheck.getValue() != null) {
-                        String valorCelda = celdaCheck.getStringValue().trim().toUpperCase();
-                        if (valorCelda.contains("SUB TOTAL") || valorCelda.contains("SUBTOTAL") ||
-                            valorCelda.contains("ITEM SUB TOTAL") || valorCelda.equals("TOTAL")) {
-                            filaSubtotalIndex = searchRow;
-                            logger.info("📊 Fila de subtotal detectada: fila {} con texto '{}'", 
-                                searchRow + 1, celdaCheck.getStringValue().trim());
+                // Primero, verificar si la fila tiene una fórmula en colTotal que sea de SUBTOTAL
+                // Una fórmula de subtotal suma un rango grande desde dataStartRow
+                boolean esFilaSubtotal = false;
+                if (colTotal >= 0) {
+                    com.aspose.cells.Cell celdaTotalCheck = cells.get(searchRow, colTotal);
+                    if (celdaTotalCheck != null && celdaTotalCheck.isFormula()) {
+                        String formulaCheck = celdaTotalCheck.getFormula().toUpperCase();
+                        logger.info("🔍 Fila {} tiene fórmula: {}", searchRow + 1, formulaCheck);
+                        
+                        // Verificar si es una fórmula SUM/SUMA que suma desde cerca de dataStartRow
+                        if (formulaCheck.contains("SUM") || formulaCheck.contains("SUMA")) {
+                            // Extraer el rango de la fórmula: =SUM(P21:P234) -> P21:P234
+                            java.util.regex.Pattern patronRango = java.util.regex.Pattern.compile("([A-Z]+)(\\d+):([A-Z]+)(\\d+)");
+                            java.util.regex.Matcher matcherRango = patronRango.matcher(formulaCheck);
                             
-                            // Buscar la fórmula de suma en la columna TOTAL de esta fila
-                            if (colTotal >= 0) {
-                                com.aspose.cells.Cell celdaSubtotal = cells.get(searchRow, colTotal);
-                                if (celdaSubtotal != null && celdaSubtotal.isFormula()) {
-                                    formulaSubtotalOriginal = celdaSubtotal.getFormula();
+                            if (matcherRango.find()) {
+                                int filaInicio = Integer.parseInt(matcherRango.group(2));
+                                int filaFin = Integer.parseInt(matcherRango.group(4));
+                                
+                                // Si la fórmula suma desde cerca de dataStartRow (21) hasta cerca de searchRow,
+                                // entonces ES la fila de subtotal
+                                int dataStartExcel = dataStartRow + 1;  // Convertir a 1-based
+                                int rangoEsperado = searchRow - dataStartRow;
+                                int rangoReal = filaFin - filaInicio + 1;
+                                
+                                logger.info("  → Rango: {}-{} ({} filas), esperado desde fila {} ({} filas desde dataStart)",
+                                    filaInicio, filaFin, rangoReal, dataStartExcel, rangoEsperado);
+                                
+                                // Si empieza cerca de dataStartRow (dentro de 5 filas) y suma un rango grande
+                                if (Math.abs(filaInicio - dataStartExcel) <= 5 && rangoReal >= 10) {
+                                    esFilaSubtotal = true;
+                                    filaSubtotalIndex = searchRow;
+                                    formulaSubtotalOriginal = celdaTotalCheck.getFormula();
                                     colSubtotalFormula = colTotal;
-                                    logger.info("📝 Fórmula de subtotal original: {}", formulaSubtotalOriginal);
+                                    logger.info("📊 ✅ FILA DE SUBTOTAL DETECTADA por fórmula: fila {} (0-idx: {}) con fórmula: {}",
+                                        searchRow + 1, searchRow, formulaSubtotalOriginal);
+                                    break;  // Salir del bucle, ya encontramos el subtotal
                                 }
                             }
-                            break;
                         }
                     }
                 }
-                if (filaSubtotalIndex >= 0) break;
+                
+                // Si ya encontramos el subtotal, salir
+                if (esFilaSubtotal) break;
+            }
+            
+            if (filaSubtotalIndex < 0) {
+                logger.warn("⚠️ NO SE DETECTÓ FILA DE SUBTOTAL. Se buscará en el archivo original...");
+            }
+            
+            // ============================
+            // LIMPIAR ESPECÍFICAMENTE LA CELDA DE SUBTOTAL
+            // ============================
+            // IMPORTANTE: Limpiar la celda del subtotal ANTES de escribir datos
+            // porque tiene una fórmula incorrecta (fórmula de fila de datos) que será reemplazada
+            if (filaSubtotalIndex >= 0 && colTotal >= 0) {
+                com.aspose.cells.Cell celdaSubtotalLimpiar = cells.get(filaSubtotalIndex, colTotal);
+                if (celdaSubtotalLimpiar != null) {
+                    String formulaAnterior = celdaSubtotalLimpiar.isFormula() ? celdaSubtotalLimpiar.getFormula() : "(sin fórmula)";
+                    celdaSubtotalLimpiar.putValue("");  // Limpiar completamente la celda
+                    logger.info("🧹 LIMPIADA celda de subtotal en fila {}, col {} ({}). Fórmula anterior: {}", 
+                        filaSubtotalIndex + 1, colTotal, letraTotal, formulaAnterior);
+                }
             }
             
             // Limpiar filas de datos existentes (preservar estructura y formato)
-            // NOTA: No limpiar la fila especial (ej: PROVISIONS) ni la fila de subtotal
+            // NOTA: No limpiar la fila especial (ej: PROVISIONS)
             for (int rowIdx = lastDataRow; rowIdx >= dataStartRow; rowIdx--) {
                 // Saltar la fila especial si existe
                 if (filaEspecialIndex >= 0 && rowIdx == filaEspecialIndex) {
@@ -2545,12 +2657,13 @@ private void cargarProductos() {
                     continue;
                 }
                 
-                // Saltar la fila de subtotal si existe
+                // Saltar la fila de subtotal (ya fue limpiada arriba específicamente)
                 if (filaSubtotalIndex >= 0 && rowIdx == filaSubtotalIndex) {
-                    logger.debug("📊 Preservando fila de subtotal {} sin limpiar", filaSubtotalIndex + 1);
+                    logger.debug("📊 Saltando fila de subtotal {} (ya limpiada)", filaSubtotalIndex + 1);
                     continue;
                 }
                 
+                // Limpiar filas de datos normales
                 for (FormatoColumna columna : formatoActual.getColumnas()) {
                     com.aspose.cells.Cell cell = cells.get(rowIdx, columna.getIndiceColumna());
                     if (cell != null) {
@@ -2608,10 +2721,25 @@ private void cargarProductos() {
             logger.info("  Columna QUANTITY detectada: {} (col {})", letraQuantity, colQuantity);
             logger.info("  Columna UNIT_PRICE detectada: {} (col {})", letraUnitPrice, colUnitPrice);
             logger.info("  Columna TOTAL detectada: {} (col {})", letraTotal, colTotal);
+            logger.info("📌 COLUMNAS DETECTADAS DESDE FÓRMULA (donde escribir datos):");
+            logger.info("  QUANTITY en col {}, UNIT_PRICE en col {}, DISCOUNT en col {}, VAT en col {}",
+                colQuantityFormula, colUnitPriceFormula, colDiscountFormula, colVatFormula);
             
             int currentRow = dataStartRow;
             boolean primeraFila = true;
             for (RowData rowData : tablaDinamica.getItems()) {
+                // IMPORTANTE: Saltar la fila de subtotal al escribir datos
+                if (filaSubtotalIndex >= 0 && currentRow == filaSubtotalIndex) {
+                    logger.info("🚫 Saltando fila de subtotal {} al escribir datos", filaSubtotalIndex + 1);
+                    currentRow++;  // Saltar a la siguiente fila
+                }
+                
+                // También saltar la fila especial si existe
+                if (filaEspecialIndex >= 0 && currentRow == filaEspecialIndex) {
+                    logger.info("🚫 Saltando fila especial {} al escribir datos", filaEspecialIndex + 1);
+                    currentRow++;  // Saltar a la siguiente fila
+                }
+                
                 for (FormatoColumna columna : formatoActual.getColumnas()) {
                     int colIdx = columna.getIndiceColumna();
                     String campoEstandar = columna.getCampoEstandar();
@@ -2711,6 +2839,38 @@ private void cargarProductos() {
                             double numValue = Double.parseDouble(valorLimpio);
                             cell.putValue(numValue);
                             
+                            // ============================
+                            // ESCRIBIR TAMBIÉN EN COLUMNA DETECTADA DE LA FÓRMULA (si es diferente)
+                            // ============================
+                            int colFormula = -1;
+                            String nombreCampo = "";
+                            
+                            if (campoUpperCheck.contains("QUANTITY") || campoUpperCheck.contains("QTY")) {
+                                colFormula = colQuantityFormula;
+                                nombreCampo = "QUANTITY";
+                            } else if (campoUpperCheck.contains("UNIT_PRICE") || campoUpperCheck.contains("UNIT PRICE") ||
+                                       (campoUpperCheck.contains("PRICE") && !campoUpperCheck.contains("TOTAL"))) {
+                                colFormula = colUnitPriceFormula;
+                                nombreCampo = "UNIT_PRICE";
+                            } else if (campoUpperCheck.contains("DISCOUNT")) {
+                                colFormula = colDiscountFormula;
+                                nombreCampo = "DISCOUNT";
+                            } else if (campoUpperCheck.contains("VAT") || campoUpperCheck.contains("TAX") ||
+                                       campoUpperCheck.contains("IVA")) {
+                                colFormula = colVatFormula;
+                                nombreCampo = "VAT";
+                            }
+                            
+                            // Si la columna de la fórmula es diferente a la del mapeo, escribir también ahí
+                            if (colFormula >= 0 && colFormula != colIdx) {
+                                com.aspose.cells.Cell cellFormula = cells.get(currentRow, colFormula);
+                                cellFormula.putValue(numValue);
+                                if (primeraFila) {
+                                    logger.info("  📌 {} también escrito en col {} (fórmula) además de col {} (mapeo)", 
+                                        nombreCampo, colFormula, colIdx);
+                                }
+                            }
+                            
                             if (primeraFila) {
                                 logger.info("  ✔️ Escrito como número: {}", numValue);
                             }
@@ -2724,6 +2884,49 @@ private void cargarProductos() {
                         cell.putValue(valor);
                     }
                 }
+                
+                // ============================
+                // ESCRIBIR 0 EN COLUMNAS DE FÓRMULA QUE QUEDARON VACÍAS
+                // ============================
+                // Las fórmulas de Total Price esperan valores numéricos en las columnas de
+                // Quantity, Unit Price, Discount y VAT. Si alguna está vacía, escribir 0.
+                if (colQuantityFormula >= 0) {
+                    com.aspose.cells.Cell cellQty = cells.get(currentRow, colQuantityFormula);
+                    if (cellQty.getValue() == null || cellQty.getStringValue().isEmpty()) {
+                        cellQty.putValue(0.0);
+                        if (primeraFila) {
+                            logger.info("  📌 QUANTITY: escrito 0 en col {} (fórmula) - celda estaba vacía", colQuantityFormula);
+                        }
+                    }
+                }
+                if (colUnitPriceFormula >= 0) {
+                    com.aspose.cells.Cell cellPrice = cells.get(currentRow, colUnitPriceFormula);
+                    if (cellPrice.getValue() == null || cellPrice.getStringValue().isEmpty()) {
+                        cellPrice.putValue(0.0);
+                        if (primeraFila) {
+                            logger.info("  📌 UNIT_PRICE: escrito 0 en col {} (fórmula) - celda estaba vacía", colUnitPriceFormula);
+                        }
+                    }
+                }
+                if (colDiscountFormula >= 0) {
+                    com.aspose.cells.Cell cellDiscount = cells.get(currentRow, colDiscountFormula);
+                    if (cellDiscount.getValue() == null || cellDiscount.getStringValue().isEmpty()) {
+                        cellDiscount.putValue(0.0);
+                        if (primeraFila) {
+                            logger.info("  📌 DISCOUNT: escrito 0 en col {} (fórmula) - celda estaba vacía", colDiscountFormula);
+                        }
+                    }
+                }
+                if (colVatFormula >= 0) {
+                    com.aspose.cells.Cell cellVat = cells.get(currentRow, colVatFormula);
+                    if (cellVat.getValue() == null || cellVat.getStringValue().isEmpty()) {
+                        cellVat.putValue(0.0);
+                        if (primeraFila) {
+                            logger.info("  📌 VAT: escrito 0 en col {} (fórmula) - celda estaba vacía", colVatFormula);
+                        }
+                    }
+                }
+                
                 primeraFila = false;
                 currentRow++;
             }
@@ -2732,28 +2935,86 @@ private void cargarProductos() {
             // ACTUALIZAR FÓRMULA DE SUBTOTAL
             // ============================
             if (filaSubtotalIndex >= 0 && colTotal >= 0) {
-                // Calcular el rango de filas de datos
-                int primeraFilaDatos = dataStartRow + 1;  // Fila Excel (1-indexed)
-                int ultimaFilaDatos = currentRow;          // currentRow ya apunta a la siguiente fila vacía
+                // IMPORTANTE: Aspose usa índices 0-based, Excel usa 1-based
+                // dataStartRow es 0-based (Aspose)
+                // currentRow es 0-based (Aspose)
+                // La fórmula de Excel necesita filas 1-based
                 
-                // Crear nueva fórmula de suma
-                String letraCol = letraTotal;
-                if (letraCol == null || letraCol.isEmpty()) {
-                    // Calcular letra de columna si no está disponible
-                    letraCol = String.valueOf((char)('A' + colTotal));
-                    if (colTotal >= 26) {
-                        letraCol = String.valueOf((char)('A' + colTotal / 26 - 1)) + 
-                                   String.valueOf((char)('A' + colTotal % 26));
-                    }
+                // Calcular el rango de filas de datos (en formato Excel 1-based)
+                int primeraFilaDatosExcel = dataStartRow + 1;  // Convertir a 1-based
+                int ultimaFilaDatosExcel = currentRow;         // currentRow-1 (0-based) + 1 (para Excel) = currentRow
+                
+                logger.info("🔍 Calculando subtotal: dataStartRow(0-based)={}, currentRow(0-based)={}, primeraFilaDatosExcel(1-based)={}, ultimaFilaDatosExcel(1-based)={}",
+                    dataStartRow, currentRow, primeraFilaDatosExcel, ultimaFilaDatosExcel);
+                
+                // IMPORTANTE: Excluir la fila de subtotal del rango de suma
+                // La fila de subtotal está en filaSubtotalIndex (0-based), que corresponde a filaSubtotalIndex+1 (1-based)
+                // El rango debe terminar ANTES de la fila de subtotal
+                if (filaSubtotalIndex >= dataStartRow && filaSubtotalIndex < currentRow) {
+                    ultimaFilaDatosExcel = filaSubtotalIndex;  // filaSubtotalIndex (0-based) = filaSubtotalIndex (1-based - 1)
+                    logger.info("⚠️ Fila de subtotal en índice {} (1-based: {}), terminando rango en fila {}", 
+                        filaSubtotalIndex, filaSubtotalIndex + 1, ultimaFilaDatosExcel);
                 }
                 
-                String nuevaFormulaSubtotal = "=SUM(" + letraCol + primeraFilaDatos + ":" + letraCol + ultimaFilaDatos + ")";
+                // Si hay fila especial, ajustar el rango para excluirla también
+                if (filaEspecialIndex >= 0 && filaEspecialIndex >= dataStartRow && filaEspecialIndex < ultimaFilaDatosExcel) {
+                    logger.info("⚠️ Hay fila especial en índice {} (1-based: {}), ajustando rango", 
+                        filaEspecialIndex, filaEspecialIndex + 1);
+                    // Terminar antes de la fila especial si está dentro del rango actual
+                    ultimaFilaDatosExcel = filaEspecialIndex;  // filaEspecialIndex (0-based) = fila anterior en 1-based
+                }
                 
-                com.aspose.cells.Cell celdaSubtotal = cells.get(filaSubtotalIndex, colTotal);
-                if (celdaSubtotal != null) {
-                    celdaSubtotal.setFormula(nuevaFormulaSubtotal);
-                    logger.info("📊 Fórmula de subtotal actualizada: {} (fila {})", 
-                        nuevaFormulaSubtotal, filaSubtotalIndex + 1);
+                // Validar que hay filas de datos para sumar
+                if (ultimaFilaDatosExcel < primeraFilaDatosExcel) {
+                    logger.warn("⚠️ No hay filas de datos válidas para el subtotal. Primera: {}, Última: {}", 
+                        primeraFilaDatosExcel, ultimaFilaDatosExcel);
+                    // Poner 0 directamente en lugar de fórmula inválida
+                    com.aspose.cells.Cell celdaSubtotal = cells.get(filaSubtotalIndex, colTotal);
+                    if (celdaSubtotal != null) {
+                        celdaSubtotal.putValue(0.0);
+                        logger.info("📊 Subtotal establecido a 0 (sin datos para sumar)");
+                    }
+                } else {
+                    // Crear nueva fórmula de suma
+                    String letraCol = letraTotal;
+                    if (letraCol == null || letraCol.isEmpty()) {
+                        // Calcular letra de columna si no está disponible
+                        letraCol = String.valueOf((char)('A' + colTotal));
+                        if (colTotal >= 26) {
+                            letraCol = String.valueOf((char)('A' + colTotal / 26 - 1)) + 
+                                       String.valueOf((char)('A' + colTotal % 26));
+                        }
+                    }
+                    
+                    // Usar SUM (nombre universal de la función que funciona en todas las versiones de Excel)
+                    String nuevaFormulaSubtotal = "=SUM(" + letraCol + primeraFilaDatosExcel + ":" + letraCol + ultimaFilaDatosExcel + ")";
+                    
+                    com.aspose.cells.Cell celdaSubtotal = cells.get(filaSubtotalIndex, colTotal);
+                    if (celdaSubtotal != null) {
+                        // Verificar estado actual de la celda ANTES de establecer fórmula
+                        String estadoAntes = celdaSubtotal.isFormula() ? 
+                            "Fórmula: " + celdaSubtotal.getFormula() : 
+                            "Valor: " + celdaSubtotal.getValue();
+                        
+                        // Establecer estilo numérico antes de poner la fórmula
+                        com.aspose.cells.Style style = celdaSubtotal.getStyle();
+                        style.setNumber(2);  // Formato numérico con 2 decimales
+                        celdaSubtotal.setStyle(style);
+                        
+                        // SIEMPRE establecer la fórmula (no verificar valores porque las fórmulas aún no se han calculado)
+                        celdaSubtotal.setFormula(nuevaFormulaSubtotal);
+                        
+                        // Verificar que se estableció correctamente
+                        String estadoDespues = celdaSubtotal.isFormula() ? 
+                            "Fórmula: " + celdaSubtotal.getFormula() : 
+                            "Valor: " + celdaSubtotal.getValue();
+                        
+                        logger.info("📊 ✅ SUBTOTAL ACTUALIZADO:");
+                        logger.info("   Celda: {}{} (fila 0-based: {}, col: {})", letraCol, filaSubtotalIndex + 1, filaSubtotalIndex, colTotal);
+                        logger.info("   Antes: {}", estadoAntes);
+                        logger.info("   Después: {}", estadoDespues);
+                        logger.info("   Rango de suma: {}{} hasta {}{}", letraCol, primeraFilaDatosExcel, letraCol, ultimaFilaDatosExcel);
+                    }
                 }
             }
             
@@ -2763,6 +3024,31 @@ private void cargarProductos() {
             logger.info("📊 Recalculando fórmulas...");
             workbook.calculateFormula();
             logger.info("✅ Fórmulas recalculadas");
+            
+            // ============================
+            // VERIFICAR SUBTOTAL DESPUÉS DEL RECÁLCULO
+            // ============================
+            if (filaSubtotalIndex >= 0 && colTotal >= 0) {
+                com.aspose.cells.Cell celdaSubtotalVerificar = cells.get(filaSubtotalIndex, colTotal);
+                if (celdaSubtotalVerificar != null) {
+                    String estadoFinal = celdaSubtotalVerificar.isFormula() ? 
+                        "Fórmula: " + celdaSubtotalVerificar.getFormula() : 
+                        "Valor: " + celdaSubtotalVerificar.getValue();
+                    logger.info("⚠️ 🔍 VERIFICACIÓN DESPUÉS DEL RECÁLCULO:");
+                    logger.info("   Celda del subtotal: {}{}", letraTotal, filaSubtotalIndex + 1);
+                    logger.info("   Estado final: {}", estadoFinal);
+                    
+                    // Si la fórmula cambió, registrar ALERTA
+                    if (celdaSubtotalVerificar.isFormula()) {
+                        String formulaActual = celdaSubtotalVerificar.getFormula();
+                        if (!formulaActual.toUpperCase().contains("SUMA") && !formulaActual.toUpperCase().contains("SUM")) {
+                            logger.error("❌ ❌ ❌ PROBLEMA DETECTADO: La fórmula del subtotal fue SOBRESCRITA después del recálculo!");
+                            logger.error("   Fórmula incorrecta: {}", formulaActual);
+                            logger.error("   Debería ser: =SUMA({}{}:{}{})", letraTotal, dataStartRow + 1, letraTotal, filaSubtotalIndex);
+                        }
+                    }
+                }
+            }
             
             // Guardar con Aspose (preserva macros automáticamente)
             String rutaDestino = archivoDestino.getAbsolutePath();
@@ -2854,6 +3140,23 @@ private void cargarProductos() {
         resultado.append(formula.substring(ultimaPosicion));
         
         return resultado.toString();
+    }
+    
+    /**
+     * Convierte una letra de columna de Excel (A, B, ..., Z, AA, AB, ...) a un índice (0, 1, ..., 25, 26, 27, ...)
+     * @param letra Letra de columna (ej: "A", "B", "AA", "AB")
+     * @return Índice de columna (0-indexed)
+     */
+    private int letraAIndice(String letra) {
+        if (letra == null || letra.isEmpty()) {
+            return -1;
+        }
+        letra = letra.toUpperCase();
+        int indice = 0;
+        for (int i = 0; i < letra.length(); i++) {
+            indice = indice * 26 + (letra.charAt(i) - 'A' + 1);
+        }
+        return indice - 1; // Convertir a 0-indexed
     }
     
     /**
@@ -4069,14 +4372,17 @@ private void leerExcelConFormato(File archivo) {
         return;
     }
     
-    // 🔷 Verificar si el archivo tiene macros (.xlsm)
-    boolean usarAspose = asposeService.archivoTieneMacros(archivo.getAbsolutePath());
+    // 🔷 SIEMPRE usar Aspose para cargar archivos Excel
+    // Aspose maneja mejor los formatos, fórmulas y preserva macros si existen
+    boolean usarAspose = true; // Siempre usar Aspose
     
     if (usarAspose) {
         leerExcelConAspose(archivo);
         return;
     }
     
+    // NOTA: El código de Apache POI a continuación ya no se usa,
+    // pero se mantiene como fallback en caso de problemas con Aspose
     try {
         // Usar Apache POI para leer el Excel (archivos sin macros)
         org.apache.poi.ss.usermodel.Workbook workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(archivo);

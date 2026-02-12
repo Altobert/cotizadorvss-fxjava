@@ -125,7 +125,7 @@
         </dependency>
     </dependencies>
     
-    <!-- Repositorio de Aspose 
+    <!-- Repositorio de Aspose -->
     <repositories>
         <repository>
             <id>AsposeJavaAPI</id>
@@ -133,7 +133,6 @@
             <url>https://repository.aspose.com/repo/</url>
         </repository>
     </repositories>
-    -->
     
     <build>
         <plugins>
