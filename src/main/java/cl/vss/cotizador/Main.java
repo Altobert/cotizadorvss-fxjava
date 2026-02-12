@@ -5465,8 +5465,13 @@ private void abrirPopupEdicionProducto(RowData rowData) {
             
             double precioTotal = precioUnitario * cant;
             
-            // Actualizar la fila con el nuevo precio
+            // Actualizar la fila con el nuevo precio total
             rowData.set("precio_vss_calculado", String.valueOf(precioTotal));
+            
+            // 💰 Actualizar UNIT_PRICE con precio_venta_neto (precio unitario en USD)
+            rowData.set("UNIT_PRICE", String.format("%.2f", precioUnitario));
+            logger.info("💰 UNIT_PRICE actualizado con precio_venta_neto: ${} para producto: {}", 
+                String.format("%.2f", precioUnitario), seleccionado.getDescripcionEs().substring(0, Math.min(30, seleccionado.getDescripcionEs().length())));
             
             // Refrescar la tabla
             tablaDinamica.refresh();
