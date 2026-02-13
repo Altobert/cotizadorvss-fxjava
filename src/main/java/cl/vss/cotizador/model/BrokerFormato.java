@@ -14,6 +14,7 @@ public class BrokerFormato {
     private Integer headerRow;
     private String descripcion;
     private String archivoEjemplo;
+    private String rutaPlantilla;
     private Boolean activo;
     private List<FormatoColumna> columnas;
     
@@ -76,6 +77,14 @@ public class BrokerFormato {
     
     public void setArchivoEjemplo(String archivoEjemplo) {
         this.archivoEjemplo = archivoEjemplo;
+    }
+    
+    public String getRutaPlantilla() {
+        return rutaPlantilla;
+    }
+    
+    public void setRutaPlantilla(String rutaPlantilla) {
+        this.rutaPlantilla = rutaPlantilla;
     }
     
     public Boolean getActivo() {
