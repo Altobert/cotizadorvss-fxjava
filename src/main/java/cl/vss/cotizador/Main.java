@@ -2678,8 +2678,19 @@ private void cargarProductos() {
             logger.info("📊 Escribiendo cabeceras en fila {} (Aspose index: {})", 
                 formatoActual.getHeaderRow(), headerRowIndex);
             
+            // Verificar si es GARRETS para omitir columna PRECIO_VSS
+            boolean esGarretsHeader = formatoActual != null && formatoActual.getBrokerName() != null && 
+                                      formatoActual.getBrokerName().toUpperCase().contains("GARRET");
+            
             for (FormatoColumna columna : formatoActual.getColumnas()) {
                 int colIdx = columna.getIndiceColumna();
+                
+                // Omitir columna PRECIO_VSS para GARRETS
+                if (esGarretsHeader && "PRECIO_VSS".equals(columna.getCampoEstandar())) {
+                    logger.info("🚫 GARRETS: Omitiendo encabezado PRECIO_VSS");
+                    continue;
+                }
+                
                 com.aspose.cells.Cell headerCell = cells.get(headerRowIndex, colIdx);
                 
                 // Escribir nombre de columna original
@@ -2740,9 +2751,23 @@ private void cargarProductos() {
                     currentRow++;  // Saltar a la siguiente fila
                 }
                 
+                // Verificar si es GARRETS para omitir columna PRECIO_VSS
+                boolean esGarretsExport = formatoActual != null && formatoActual.getBrokerName() != null && 
+                                          formatoActual.getBrokerName().toUpperCase().contains("GARRET");
+                
                 for (FormatoColumna columna : formatoActual.getColumnas()) {
                     int colIdx = columna.getIndiceColumna();
                     String campoEstandar = columna.getCampoEstandar();
+                    
+                    // ============================
+                    // OMITIR PRECIO_VSS PARA GARRETS
+                    // ============================
+                    if (esGarretsExport && "PRECIO_VSS".equals(campoEstandar)) {
+                        if (primeraFila) {
+                            logger.info("🚫 GARRETS: Omitiendo columna PRECIO_VSS en exportación");
+                        }
+                        continue; // Saltar esta columna
+                    }
                     
                     com.aspose.cells.Cell cell = cells.get(currentRow, colIdx);
                     
@@ -5221,7 +5246,10 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // Extraer Vendor Remarks si existe
     String vendorRemarks = obtenerValorDeCampo(rowData,
         "VENDOR_REMARKS", "VENDOR_REMARK", "VENDOR_NOTES", "VENDOR_NOTE", 
-        "VENDOR_COMMENTS", "VENDOR_COMMENT", "REMARKS", "NOTES", "COMMENTS");
+        "VENDOR_COMMENTS", "VENDOR_COMMENT", "REMARKS", "COMMENTS");
+    
+    // Extraer Notes para Garret
+    String notesGarret = obtenerValorDeCampo(rowData, "NOTES", "Notes");
     
     // 🚨 DEBUG: Mostrar todos los campos disponibles en la fila
     logger.debug("🚨 DEBUG - Campos disponibles en RowData: {}", rowData.getKeys());
@@ -5229,6 +5257,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     logger.debug("🚨 DEBUG - Cantidad extraída: '{}'", cantidad);
     logger.debug("🚨 DEBUG - Unidad extraída: '{}'", unidad);
     logger.debug("🚨 DEBUG - Vendor Remarks extraído: '{}'", vendorRemarks);
+    logger.debug("🚨 DEBUG - Notes (Garret) extraído: '{}'", notesGarret);
     
     dialog.setHeaderText("Producto: " + (descripcion != null && !descripcion.isEmpty() ? descripcion : "[Sin descripción]"));
     
@@ -5277,6 +5306,36 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         lblRemarksHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666; -fx-font-style: italic;");
         
         panelVendorRemarks.getChildren().addAll(lblRemarksTitle, txtVendorRemarks, lblRemarksHelp);
+    }
+    
+    // ============================
+    // PANEL NOTES (Para GARRETS)
+    // ============================
+    VBox panelNotes = null;
+    TextField txtNotes = null;
+    
+    // Verificar si es GARRETS
+    boolean esGarrets = formatoActual != null && formatoActual.getBrokerName() != null && 
+                        formatoActual.getBrokerName().toUpperCase().contains("GARRET");
+    
+    if (esGarrets) {
+        panelNotes = new VBox(8);
+        panelNotes.setStyle("-fx-padding: 10; -fx-background-color: #E8F5E9; -fx-border-color: #4CAF50; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
+        
+        Label lblNotesTitle = new Label("📝 Notes");
+        lblNotesTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #2E7D32;");
+        
+        txtNotes = new TextField();
+        txtNotes.setPromptText("Ingrese notas para este producto...");
+        txtNotes.setPrefWidth(800);
+        if (notesGarret != null && !notesGarret.isEmpty()) {
+            txtNotes.setText(notesGarret);
+        }
+        
+        Label lblNotesHelp = new Label("💡 Estas notas se guardarán en la columna Notes");
+        lblNotesHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666; -fx-font-style: italic;");
+        
+        panelNotes.getChildren().addAll(lblNotesTitle, txtNotes, lblNotesHelp);
     }
     
     // ============================
@@ -5511,9 +5570,14 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     VBox contenidoPrincipal = new VBox(15);
     contenidoPrincipal.getChildren().add(infoPanel);
     
-    // Agregar panel de Vendor Remarks si es BSM CATERING
+    // Agregar panel de Vendor Remarks si es BSM CATERING o CMA CGM
     if (panelVendorRemarks != null) {
         contenidoPrincipal.getChildren().add(panelVendorRemarks);
+    }
+    
+    // Agregar panel de Notes si es GARRETS
+    if (panelNotes != null) {
+        contenidoPrincipal.getChildren().add(panelNotes);
     }
     
     contenidoPrincipal.getChildren().addAll(
@@ -5530,9 +5594,11 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
     dialog.getDialogPane().setPrefSize(900, 750);
     
-    // Guardar Vendor Remarks al cerrar el diálogo
+    // Guardar Vendor Remarks y Notes al cerrar el diálogo
     final TextField txtVendorRemarksFinal = txtVendorRemarks;
+    final TextField txtNotesFinal = txtNotes;
     dialog.setOnCloseRequest(event -> {
+        // Guardar Vendor Remarks (BSM, CMA CGM)
         if (txtVendorRemarksFinal != null) {
             String nuevoValorRemarks = txtVendorRemarksFinal.getText();
             
@@ -5553,6 +5619,32 @@ private void abrirPopupEdicionProducto(RowData rowData) {
                 logger.info("✅ Vendor Remarks actualizado: {} = '{}'", campoVendorRemarks, nuevoValorRemarks);
             } else {
                 logger.warn("⚠️ No se encontró el campo Vendor Remarks en la fila");
+            }
+        }
+        
+        // Guardar Notes (GARRETS)
+        if (txtNotesFinal != null) {
+            String nuevoValorNotes = txtNotesFinal.getText();
+            
+            // Buscar el campo Notes en la fila
+            String campoNotes = null;
+            for (String key : rowData.getKeys()) {
+                String keyUpper = key.toUpperCase();
+                if (keyUpper.equals("NOTES")) {
+                    campoNotes = key;
+                    break;
+                }
+            }
+            
+            if (campoNotes != null) {
+                rowData.set(campoNotes, nuevoValorNotes);
+                tablaDinamica.refresh();
+                logger.info("✅ Notes actualizado: {} = '{}'", campoNotes, nuevoValorNotes);
+            } else {
+                // Si no existe el campo, crearlo
+                rowData.set("NOTES", nuevoValorNotes);
+                tablaDinamica.refresh();
+                logger.info("✅ Notes creado: NOTES = '{}'", nuevoValorNotes);
             }
         }
     });
