@@ -5455,9 +5455,9 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // ============================
     // BOTÓN APLICAR PRECIO
     // ============================
-    Button btnAplicarPrecio = new Button("✅ Aplicar Precio Seleccionado");
+    Button btnAplicarPrecio = new Button("✅ Aplicar Precio Seleccionado o Guardar Notas");
     btnAplicarPrecio.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14px;");
-    btnAplicarPrecio.setPrefWidth(250);
+    btnAplicarPrecio.setPrefWidth(310);
     btnAplicarPrecio.setPrefHeight(40);
     
     // ============================
