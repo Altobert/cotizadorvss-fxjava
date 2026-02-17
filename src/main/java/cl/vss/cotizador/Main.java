@@ -5515,10 +5515,67 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // ============================
     // LÓGICA DE APLICAR PRECIO
     // ============================
+    final TextField txtVendorRemarksBtnRef = txtVendorRemarks;
+    final TextField txtNotesBtnRef = txtNotes;
+    
     btnAplicarPrecio.setOnAction(e -> {
         cl.vss.cotizador.model.ProductoSimilar seleccionado = 
             tablaProductos.getSelectionModel().getSelectedItem();
         
+        // ============================
+        // GUARDAR NOTAS/REMARKS (siempre, aunque no haya producto seleccionado)
+        // ============================
+        boolean notasGuardadas = false;
+        StringBuilder mensajeNotas = new StringBuilder();
+        
+        // Guardar Vendor Remarks (BSM, CMA CGM)
+        if (txtVendorRemarksBtnRef != null) {
+            String nuevoValorRemarks = txtVendorRemarksBtnRef.getText();
+            String campoVendorRemarks = null;
+            for (String key : rowData.getKeys()) {
+                String keyUpper = key.toUpperCase();
+                if ((keyUpper.contains("VENDOR") && 
+                    (keyUpper.contains("REMARK") || keyUpper.contains("NOTE") || keyUpper.contains("COMMENT")))) {
+                    campoVendorRemarks = key;
+                    break;
+                }
+            }
+            if (campoVendorRemarks != null) {
+                rowData.set(campoVendorRemarks, nuevoValorRemarks);
+                if (nuevoValorRemarks != null && !nuevoValorRemarks.trim().isEmpty()) {
+                    notasGuardadas = true;
+                    mensajeNotas.append("✅ Vendor Remarks guardado\n");
+                }
+                logger.info("✅ Vendor Remarks actualizado: {} = '{}'", campoVendorRemarks, nuevoValorRemarks);
+            }
+        }
+        
+        // Guardar Notes (GARRETS)
+        if (txtNotesBtnRef != null) {
+            String nuevoValorNotes = txtNotesBtnRef.getText();
+            String campoNotes = null;
+            for (String key : rowData.getKeys()) {
+                String keyUpper = key.toUpperCase();
+                if (keyUpper.equals("NOTES")) {
+                    campoNotes = key;
+                    break;
+                }
+            }
+            if (campoNotes != null) {
+                rowData.set(campoNotes, nuevoValorNotes);
+            } else {
+                rowData.set("NOTES", nuevoValorNotes);
+            }
+            if (nuevoValorNotes != null && !nuevoValorNotes.trim().isEmpty()) {
+                notasGuardadas = true;
+                mensajeNotas.append("✅ Notes guardado\n");
+            }
+            logger.info("✅ Notes actualizado: NOTES = '{}'", nuevoValorNotes);
+        }
+        
+        // ============================
+        // APLICAR PRECIO (solo si hay producto seleccionado)
+        // ============================
         if (seleccionado != null) {
             // Calcular precio total
             double precioUnitario = seleccionado.getPrecioVentaNeto();
@@ -5554,7 +5611,8 @@ private void abrirPopupEdicionProducto(RowData rowData) {
                 "Producto: %s\n" +
                 "Precio unitario: $%,.2f\n" +
                 "Cantidad: %d\n" +
-                "Precio total: $%,.2f",
+                "Precio total: $%,.2f" +
+                (notasGuardadas ? "\n\n" + mensajeNotas.toString() : ""),
                 seleccionado.getDescripcionEs(),
                 precioUnitario,
                 cant,
@@ -5567,11 +5625,27 @@ private void abrirPopupEdicionProducto(RowData rowData) {
             // Cerrar el diálogo
             dialog.close();
         } else {
-            Alert advertencia = new Alert(Alert.AlertType.WARNING);
-            advertencia.setTitle("Producto No Seleccionado");
-            advertencia.setHeaderText("Debe seleccionar un producto");
-            advertencia.setContentText("Por favor, seleccione un producto de la tabla antes de aplicar el precio.");
-            advertencia.showAndWait();
+            // No hay producto seleccionado, pero igual se guardan las notas
+            tablaDinamica.refresh();
+            
+            if (notasGuardadas) {
+                // Mostrar confirmación de que las notas fueron guardadas
+                Alert confirmacion = new Alert(Alert.AlertType.INFORMATION);
+                confirmacion.setTitle("Notas Guardadas");
+                confirmacion.setHeaderText("✅ Notas guardadas exitosamente");
+                confirmacion.setContentText(mensajeNotas.toString() + "\n(No se seleccionó producto para actualizar precio)");
+                confirmacion.showAndWait();
+                
+                // Cerrar el diálogo
+                dialog.close();
+            } else {
+                // No hay notas ni producto seleccionado
+                Alert advertencia = new Alert(Alert.AlertType.WARNING);
+                advertencia.setTitle("Sin Cambios");
+                advertencia.setHeaderText("No hay cambios para guardar");
+                advertencia.setContentText("Seleccione un producto para actualizar el precio,\no escriba una nota/remarks para guardar.");
+                advertencia.showAndWait();
+            }
         }
     });
     
