@@ -240,17 +240,28 @@ public class Main extends Application {
     );
     rootCotizador.setTop(barraCotizador);
     
+    // TODO: Descomentar cuando se necesite usar el panel de metadata
+    /*
     // Crear panel con metadata dentro de un ScrollPane con altura limitada
     panelMetadata = crearPanelMetadata(); // Inicializar panel de metadata vacío
     ScrollPane scrollMetadata = new ScrollPane(panelMetadata);
     scrollMetadata.setFitToWidth(true);
-    scrollMetadata.setMaxHeight(300); // Altura máxima del panel de metadata
-    scrollMetadata.setMinHeight(200); // Altura mínima
+    scrollMetadata.setMaxHeight(50); // Altura máxima del panel de metadata (reducida)
+    scrollMetadata.setMinHeight(50); // Altura mínima (reducida)
     scrollMetadata.setStyle("-fx-background-color: transparent;");
     
     // Panel principal con metadata arriba y tabla abajo
     VBox panelConMetadata = new VBox(10);
     panelConMetadata.getChildren().addAll(scrollMetadata, tablaDinamica);
+    VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
+    panelConMetadata.setStyle("-fx-padding: 10;");
+    
+    rootCotizador.setCenter(panelConMetadata);
+    */
+    
+    // Panel simplificado solo con la tabla dinámica
+    VBox panelConMetadata = new VBox(10);
+    panelConMetadata.getChildren().add(tablaDinamica);
     VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
     panelConMetadata.setStyle("-fx-padding: 10;");
     
@@ -4599,7 +4610,7 @@ private void cargarFormatoBroker(Broker broker) {
             logger.warn("No se encontró formato para broker {}", broker.getBrokerName());
             
             // Limpiar panel de metadata
-            actualizarPanelMetadata(null);
+            //actualizarPanelMetadata(null);
             
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Formato no encontrado");
@@ -5444,9 +5455,9 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // ============================
     // BOTÓN APLICAR PRECIO
     // ============================
-    Button btnAplicarPrecio = new Button("✅ Aplicar Precio Seleccionado");
+    Button btnAplicarPrecio = new Button("✅ Aplicar Precio Seleccionado o Guardar Notas");
     btnAplicarPrecio.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14px;");
-    btnAplicarPrecio.setPrefWidth(250);
+    btnAplicarPrecio.setPrefWidth(310);
     btnAplicarPrecio.setPrefHeight(40);
     
     // ============================
@@ -5504,10 +5515,67 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // ============================
     // LÓGICA DE APLICAR PRECIO
     // ============================
+    final TextField txtVendorRemarksBtnRef = txtVendorRemarks;
+    final TextField txtNotesBtnRef = txtNotes;
+    
     btnAplicarPrecio.setOnAction(e -> {
         cl.vss.cotizador.model.ProductoSimilar seleccionado = 
             tablaProductos.getSelectionModel().getSelectedItem();
         
+        // ============================
+        // GUARDAR NOTAS/REMARKS (siempre, aunque no haya producto seleccionado)
+        // ============================
+        boolean notasGuardadas = false;
+        StringBuilder mensajeNotas = new StringBuilder();
+        
+        // Guardar Vendor Remarks (BSM, CMA CGM)
+        if (txtVendorRemarksBtnRef != null) {
+            String nuevoValorRemarks = txtVendorRemarksBtnRef.getText();
+            String campoVendorRemarks = null;
+            for (String key : rowData.getKeys()) {
+                String keyUpper = key.toUpperCase();
+                if ((keyUpper.contains("VENDOR") && 
+                    (keyUpper.contains("REMARK") || keyUpper.contains("NOTE") || keyUpper.contains("COMMENT")))) {
+                    campoVendorRemarks = key;
+                    break;
+                }
+            }
+            if (campoVendorRemarks != null) {
+                rowData.set(campoVendorRemarks, nuevoValorRemarks);
+                if (nuevoValorRemarks != null && !nuevoValorRemarks.trim().isEmpty()) {
+                    notasGuardadas = true;
+                    mensajeNotas.append("✅ Vendor Remarks guardado\n");
+                }
+                logger.info("✅ Vendor Remarks actualizado: {} = '{}'", campoVendorRemarks, nuevoValorRemarks);
+            }
+        }
+        
+        // Guardar Notes (GARRETS)
+        if (txtNotesBtnRef != null) {
+            String nuevoValorNotes = txtNotesBtnRef.getText();
+            String campoNotes = null;
+            for (String key : rowData.getKeys()) {
+                String keyUpper = key.toUpperCase();
+                if (keyUpper.equals("NOTES")) {
+                    campoNotes = key;
+                    break;
+                }
+            }
+            if (campoNotes != null) {
+                rowData.set(campoNotes, nuevoValorNotes);
+            } else {
+                rowData.set("NOTES", nuevoValorNotes);
+            }
+            if (nuevoValorNotes != null && !nuevoValorNotes.trim().isEmpty()) {
+                notasGuardadas = true;
+                mensajeNotas.append("✅ Notes guardado\n");
+            }
+            logger.info("✅ Notes actualizado: NOTES = '{}'", nuevoValorNotes);
+        }
+        
+        // ============================
+        // APLICAR PRECIO (solo si hay producto seleccionado)
+        // ============================
         if (seleccionado != null) {
             // Calcular precio total
             double precioUnitario = seleccionado.getPrecioVentaNeto();
@@ -5543,7 +5611,8 @@ private void abrirPopupEdicionProducto(RowData rowData) {
                 "Producto: %s\n" +
                 "Precio unitario: $%,.2f\n" +
                 "Cantidad: %d\n" +
-                "Precio total: $%,.2f",
+                "Precio total: $%,.2f" +
+                (notasGuardadas ? "\n\n" + mensajeNotas.toString() : ""),
                 seleccionado.getDescripcionEs(),
                 precioUnitario,
                 cant,
@@ -5556,11 +5625,27 @@ private void abrirPopupEdicionProducto(RowData rowData) {
             // Cerrar el diálogo
             dialog.close();
         } else {
-            Alert advertencia = new Alert(Alert.AlertType.WARNING);
-            advertencia.setTitle("Producto No Seleccionado");
-            advertencia.setHeaderText("Debe seleccionar un producto");
-            advertencia.setContentText("Por favor, seleccione un producto de la tabla antes de aplicar el precio.");
-            advertencia.showAndWait();
+            // No hay producto seleccionado, pero igual se guardan las notas
+            tablaDinamica.refresh();
+            
+            if (notasGuardadas) {
+                // Mostrar confirmación de que las notas fueron guardadas
+                Alert confirmacion = new Alert(Alert.AlertType.INFORMATION);
+                confirmacion.setTitle("Notas Guardadas");
+                confirmacion.setHeaderText("✅ Notas guardadas exitosamente");
+                confirmacion.setContentText(mensajeNotas.toString() + "\n(No se seleccionó producto para actualizar precio)");
+                confirmacion.showAndWait();
+                
+                // Cerrar el diálogo
+                dialog.close();
+            } else {
+                // No hay notas ni producto seleccionado
+                Alert advertencia = new Alert(Alert.AlertType.WARNING);
+                advertencia.setTitle("Sin Cambios");
+                advertencia.setHeaderText("No hay cambios para guardar");
+                advertencia.setContentText("Seleccione un producto para actualizar el precio,\no escriba una nota/remarks para guardar.");
+                advertencia.showAndWait();
+            }
         }
     });
     
@@ -5684,20 +5769,24 @@ private void cargarMetadataBroker(int formatoId) {
         // Guardar metadata en variable de instancia
         this.metadataActual = metadataPorSeccion;
         
-        actualizarPanelMetadata(metadataPorSeccion);
+        // TODO: Descomentar cuando se necesite usar el panel de metadata
+        // actualizarPanelMetadata(metadataPorSeccion);
         
         logger.info("Metadata cargada para formato ID {}: {} secciones", formatoId, metadataPorSeccion.size());
         
     } catch (SQLException e) {
         logger.error("Error al cargar metadata del formato ID {}", formatoId, e);
         this.metadataActual = null;
-        actualizarPanelMetadata(null);
+        // TODO: Descomentar cuando se necesite usar el panel de metadata
+        // actualizarPanelMetadata(null);
     }
 }
 
 // ============================================================
 // 🔵 ACTUALIZAR PANEL DE METADATA CON DATOS
 // ============================================================
+// TODO: Descomentar cuando se necesite usar el panel de metadata
+/*
 private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataPorSeccion) {
     panelMetadata.getChildren().clear();
     
@@ -5812,6 +5901,7 @@ private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataP
     
     panelMetadata.getChildren().add(contenedorSecciones);
 }
+*/
 
 // ============================================================
 // 🔵 GUARDAR METADATA DE RFQ
