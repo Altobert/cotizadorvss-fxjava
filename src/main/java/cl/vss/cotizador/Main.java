@@ -240,17 +240,28 @@ public class Main extends Application {
     );
     rootCotizador.setTop(barraCotizador);
     
+    // TODO: Descomentar cuando se necesite usar el panel de metadata
+    /*
     // Crear panel con metadata dentro de un ScrollPane con altura limitada
     panelMetadata = crearPanelMetadata(); // Inicializar panel de metadata vacío
     ScrollPane scrollMetadata = new ScrollPane(panelMetadata);
     scrollMetadata.setFitToWidth(true);
-    scrollMetadata.setMaxHeight(300); // Altura máxima del panel de metadata
-    scrollMetadata.setMinHeight(200); // Altura mínima
+    scrollMetadata.setMaxHeight(50); // Altura máxima del panel de metadata (reducida)
+    scrollMetadata.setMinHeight(50); // Altura mínima (reducida)
     scrollMetadata.setStyle("-fx-background-color: transparent;");
     
     // Panel principal con metadata arriba y tabla abajo
     VBox panelConMetadata = new VBox(10);
     panelConMetadata.getChildren().addAll(scrollMetadata, tablaDinamica);
+    VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
+    panelConMetadata.setStyle("-fx-padding: 10;");
+    
+    rootCotizador.setCenter(panelConMetadata);
+    */
+    
+    // Panel simplificado solo con la tabla dinámica
+    VBox panelConMetadata = new VBox(10);
+    panelConMetadata.getChildren().add(tablaDinamica);
     VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
     panelConMetadata.setStyle("-fx-padding: 10;");
     
@@ -4599,7 +4610,7 @@ private void cargarFormatoBroker(Broker broker) {
             logger.warn("No se encontró formato para broker {}", broker.getBrokerName());
             
             // Limpiar panel de metadata
-            actualizarPanelMetadata(null);
+            //actualizarPanelMetadata(null);
             
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Formato no encontrado");
@@ -5684,20 +5695,24 @@ private void cargarMetadataBroker(int formatoId) {
         // Guardar metadata en variable de instancia
         this.metadataActual = metadataPorSeccion;
         
-        actualizarPanelMetadata(metadataPorSeccion);
+        // TODO: Descomentar cuando se necesite usar el panel de metadata
+        // actualizarPanelMetadata(metadataPorSeccion);
         
         logger.info("Metadata cargada para formato ID {}: {} secciones", formatoId, metadataPorSeccion.size());
         
     } catch (SQLException e) {
         logger.error("Error al cargar metadata del formato ID {}", formatoId, e);
         this.metadataActual = null;
-        actualizarPanelMetadata(null);
+        // TODO: Descomentar cuando se necesite usar el panel de metadata
+        // actualizarPanelMetadata(null);
     }
 }
 
 // ============================================================
 // 🔵 ACTUALIZAR PANEL DE METADATA CON DATOS
 // ============================================================
+// TODO: Descomentar cuando se necesite usar el panel de metadata
+/*
 private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataPorSeccion) {
     panelMetadata.getChildren().clear();
     
@@ -5812,6 +5827,7 @@ private void actualizarPanelMetadata(Map<String, List<BrokerMetadata>> metadataP
     
     panelMetadata.getChildren().add(contenedorSecciones);
 }
+*/
 
 // ============================================================
 // 🔵 GUARDAR METADATA DE RFQ
