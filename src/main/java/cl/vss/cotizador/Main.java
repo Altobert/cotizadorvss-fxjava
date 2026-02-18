@@ -5081,16 +5081,19 @@ private void leerExcelConAspose(File archivo) {
                 }
             }
             
-            // 🔍 Buscar automáticamente el producto en la BD y calcular precio VSS
+            // 🎯 Buscar el mejor match del producto en la BD usando scoring
             String descripcion = obtenerValorDeCampo(rowData, "ITEM_DESCRIPTION", "DESCRIPTION", 
                 "ITEM_NAME", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
             
             if (descripcion != null && !descripcion.trim().isEmpty()) {
+                // Usar el nuevo método con matching más exacto
                 List<cl.vss.cotizador.model.ProductoSimilar> productos = 
-                    cotizacionService.buscarProductosSimilares(descripcion);
+                    cotizacionService.buscarMatchLoMasExactoPosible(descripcion);
                 
                 if (!productos.isEmpty()) {
+                    // El primer producto es el mejor match (ordenado por score)
                     cl.vss.cotizador.model.ProductoSimilar producto = productos.get(0);
+                    double scoreMatch = producto.getPrecioVentaNetoDolares(); // Score guardado aquí
                     
                     String cantidadStr = obtenerValorDeCampo(rowData, "QUANTITY", "QTY", "CANTIDAD");
                     double cantidad = 1.0;
@@ -5104,20 +5107,31 @@ private void leerExcelConAspose(File archivo) {
                     }
                     
                     double precioVentaNeto = producto.getPrecioVentaNeto();
-                    double precioVentaNetoDolares = producto.getPrecioVentaNetoDolares();
                     double precioVSS = precioVentaNeto * cantidad;
                     
                     rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
-                    rowData.set("UNIT_PRICE", String.format("%.2f", precioVentaNetoDolares));
+                    rowData.set("UNIT_PRICE", String.format("%.2f", precioVentaNeto));
                     
-                    logger.debug("Producto encontrado: {} - Precio VSS: ${}", 
-                        descripcion.substring(0, Math.min(30, descripcion.length())), 
-                        String.format("%,.2f", precioVSS));
+                    // Guardar información del match para mostrar en la tabla
+                    rowData.set("match_score", String.format("%.1f%%", scoreMatch * 100));
+                    rowData.set("producto_match", producto.getDescripcionEs() != null ? 
+                        producto.getDescripcionEs() : producto.getDescripcionEn());
+                    
+                    logger.info("🎯 Match encontrado (score={}) para '{}' -> '{}'", 
+                        String.format("%.1f%%", scoreMatch * 100),
+                        descripcion.substring(0, Math.min(25, descripcion.length())),
+                        producto.getDescripcionEs() != null ? 
+                            producto.getDescripcionEs().substring(0, Math.min(25, producto.getDescripcionEs().length())) : "N/A");
                 } else {
                     rowData.set("precio_vss_calculado", "0.0");
+                    rowData.set("match_score", "0%");
+                    rowData.set("producto_match", "NO ENCONTRADO");
+                    logger.warn("⚠️ Sin match para: {}", descripcion.substring(0, Math.min(30, descripcion.length())));
                 }
             } else {
                 rowData.set("precio_vss_calculado", "0.0");
+                rowData.set("match_score", "-");
+                rowData.set("producto_match", "-");
             }
             
             // 🚫 Filtrar filas que son títulos/encabezados adicionales
