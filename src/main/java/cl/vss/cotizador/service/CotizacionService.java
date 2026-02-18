@@ -1514,7 +1514,7 @@ public class CotizacionService {
    * @param descripcion descripción del producto a buscar
    * @return lista de productos similares encontrados
    */
-  public List<ProductoSimilar> buscarProductosSimilares(String descripcion) {
+  /*public List<ProductoSimilar> buscarProductosSimilares(String descripcion) {
       logger.info("🔍 Buscando productos similares para descripción: " + descripcion);
       List<ProductoSimilar> productos = new ArrayList<>();
       
@@ -1595,7 +1595,446 @@ public class CotizacionService {
       }
       
       return productos;
-  }
+  }*/
+
+  public List<ProductoSimilar> buscarProductosSimilares(String descripcion) {
+    logger.info("🔍 Buscando productos similares (TSVECTOR + fallback mejorado) para: " + descripcion);
+
+    List<ProductoSimilar> productos = new ArrayList<>();
+
+    if (descripcion == null || descripcion.trim().isEmpty()) {
+        return productos;
+    }
+
+    // ============================================================
+    // 1) BÚSQUEDA PRINCIPAL (TSQUERY)
+    // ============================================================
+    String sqlTsQuery = """
+        SELECT DISTINCT ON (descripcion_es, descripcion_en)
+            descripcion_es,
+            descripcion_en,
+            unidad_medida,
+            precio_venta_neto,
+            valor_pesos,
+            ts_rank(
+                to_tsvector('spanish', descripcion_es || ' ' || descripcion_en),
+                websearch_to_tsquery('spanish', ?)
+            ) AS relevancia
+        FROM vista_producto_precio
+        WHERE 
+            to_tsvector('spanish', descripcion_es || ' ' || descripcion_en)
+            @@ websearch_to_tsquery('spanish', ?)
+        ORDER BY descripcion_es, descripcion_en, relevancia DESC
+        LIMIT 50;
+    """;
+
+    try (Connection connection = DBConnection.getConnection();
+         PreparedStatement statement = connection.prepareStatement(sqlTsQuery)) {
+
+        statement.setString(1, descripcion);
+        statement.setString(2, descripcion);
+
+        try (ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) {
+                productos.add(new ProductoSimilar(
+                    rs.getString("descripcion_es"),
+                    rs.getString("descripcion_en"),
+                    rs.getString("unidad_medida"),
+                    rs.getDouble("precio_venta_neto"),
+                    0.0,
+                    rs.getDouble("valor_pesos")
+                ));
+            }
+        }
+
+    } catch (SQLException e) {
+        logger.error("❌ Error en búsqueda TSQUERY", e);
+    }
+
+    if (!productos.isEmpty()) {
+        logger.info("✅ TSQUERY encontró " + productos.size() + " productos");
+        return productos;
+    }
+
+    logger.warn("⚠️ TSQUERY no encontró nada. Aplicando fallback por tokens…");
+
+    // ============================================================
+    // 2) FALLBACK POR TOKENS (mínimo 2 coincidencias)
+    // ============================================================
+    String[] tokens = descripcion.toLowerCase().split("\\s+");
+    
+    // Filtrar tokens muy cortos (menos de 3 caracteres) para mejorar la búsqueda
+    List<String> tokensFiltrados = new ArrayList<>();
+    for (String token : tokens) {
+        if (token.length() >= 3) {
+            tokensFiltrados.add(token);
+        }
+    }
+    
+    // Si no hay tokens válidos, saltar al siguiente fallback
+    if (tokensFiltrados.isEmpty()) {
+        logger.warn("⚠️ No hay tokens válidos para búsqueda por tokens");
+    } else {
+        // Construimos un score: +1 por cada token que coincida
+        StringBuilder score = new StringBuilder();
+        for (int i = 0; i < tokensFiltrados.size(); i++) {
+            if (i > 0) score.append(" + ");
+            score.append("(CASE WHEN LOWER(descripcion_es) LIKE ? OR LOWER(descripcion_en) LIKE ? THEN 1 ELSE 0 END)");
+        }
+        
+        // Usar subconsulta para poder filtrar por el alias "coincidencias"
+        String sqlTokens = """
+            SELECT * FROM (
+                SELECT DISTINCT ON (descripcion_es, descripcion_en)
+                    descripcion_es,
+                    descripcion_en,
+                    unidad_medida,
+                    precio_venta_neto,
+                    valor_pesos,
+                    (
+            """ + score.toString() + """
+                    ) AS coincidencias
+                FROM vista_producto_precio
+                ORDER BY descripcion_es, descripcion_en
+            ) sub
+            WHERE coincidencias >= 2
+            ORDER BY coincidencias DESC
+            LIMIT 50
+        """;
+
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sqlTokens)) {
+
+            int index = 1;
+            for (String token : tokensFiltrados) {
+                String like = "%" + token + "%";
+                statement.setString(index++, like);
+                statement.setString(index++, like);
+            }
+
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    productos.add(new ProductoSimilar(
+                        rs.getString("descripcion_es"),
+                        rs.getString("descripcion_en"),
+                        rs.getString("unidad_medida"),
+                        rs.getDouble("precio_venta_neto"),
+                        0.0,
+                        rs.getDouble("valor_pesos")
+                    ));
+                }
+            }
+
+        } catch (SQLException e) {
+            logger.error("❌ Error en fallback por tokens", e);
+        }
+
+        if (!productos.isEmpty()) {
+            logger.info("✅ Fallback por tokens encontró " + productos.size() + " productos");
+            return productos;
+        }
+    } // fin if tokensFiltrados no vacío
+
+    logger.warn("⚠️ Fallback por tokens tampoco encontró nada. Aplicando fallback LIKE final…");
+
+    // ============================================================
+    // 3) FALLBACK FINAL LIKE (cadena completa)
+    // ============================================================
+    String sqlLike = """
+        SELECT DISTINCT ON (descripcion_es, descripcion_en)
+            descripcion_es,
+            descripcion_en,
+            unidad_medida,
+            precio_venta_neto,
+            valor_pesos
+        FROM vista_producto_precio
+        WHERE 
+            LOWER(descripcion_es) LIKE ? 
+            OR LOWER(descripcion_en) LIKE ?
+        ORDER BY descripcion_es, descripcion_en
+        LIMIT 50;
+    """;
+
+    try (Connection connection = DBConnection.getConnection();
+         PreparedStatement statement = connection.prepareStatement(sqlLike)) {
+
+        String like = "%" + descripcion.toLowerCase() + "%";
+        statement.setString(1, like);
+        statement.setString(2, like);
+
+        try (ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) {
+                productos.add(new ProductoSimilar(
+                    rs.getString("descripcion_es"),
+                    rs.getString("descripcion_en"),
+                    rs.getString("unidad_medida"),
+                    rs.getDouble("precio_venta_neto"),
+                    0.0,
+                    rs.getDouble("valor_pesos")
+                ));
+            }
+        }
+
+    } catch (SQLException e) {
+        logger.error("❌ Error en fallback LIKE final", e);
+    }
+
+    if (!productos.isEmpty()) {
+        logger.info("✅ Fallback LIKE (cadena completa) encontró " + productos.size() + " productos");
+        return productos;
+    }
+
+    // ============================================================
+    // 4) FALLBACK ÚLTIMO RECURSO: buscar por primer token significativo
+    // ============================================================
+    logger.warn("⚠️ LIKE con cadena completa no encontró nada. Buscando por primer token…");
+    
+    // Buscar el primer token significativo (mínimo 3 caracteres, solo letras)
+    String primerToken = null;
+    for (String token : tokens) {
+        String tokenLimpio = token.replaceAll("[^a-zA-Z]", "");
+        if (tokenLimpio.length() >= 3) {
+            primerToken = tokenLimpio;
+            break;
+        }
+    }
+    
+    if (primerToken != null) {
+        logger.info("🔍 Buscando por primer token: '" + primerToken + "'");
+        
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sqlLike)) {
+
+            String likePrimerToken = "%" + primerToken.toLowerCase() + "%";
+            statement.setString(1, likePrimerToken);
+            statement.setString(2, likePrimerToken);
+
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    productos.add(new ProductoSimilar(
+                        rs.getString("descripcion_es"),
+                        rs.getString("descripcion_en"),
+                        rs.getString("unidad_medida"),
+                        rs.getDouble("precio_venta_neto"),
+                        0.0,
+                        rs.getDouble("valor_pesos")
+                    ));
+                }
+            }
+
+        } catch (SQLException e) {
+            logger.error("❌ Error en fallback por primer token", e);
+        }
+        
+        if (!productos.isEmpty()) {
+            logger.info("✅ Fallback por primer token ('" + primerToken + "') encontró " + productos.size() + " productos");
+            return productos;
+        }
+    }
+
+    logger.info("🔚 Resultado final: " + productos.size() + " productos encontrados");
+    return productos;
+    }    
+
+    /**
+     * Busca el producto con el match más exacto posible usando un sistema de scoring.
+     * Prioridad: 1) Match exacto, 2) Similarity (pg_trgm), 3) Token matching
+     * @param descripcion descripción del producto a buscar
+     * @return lista de productos ordenados por score de similitud (el primero es el mejor match)
+     */
+    public List<ProductoSimilar> buscarMatchLoMasExactoPosible(String descripcion) {
+        logger.info("🎯 Buscando match más exacto para: " + descripcion);
+        List<ProductoSimilar> productos = new ArrayList<>();
+        
+        if (descripcion == null || descripcion.trim().isEmpty()) {
+            logger.warn("⚠️ Descripción vacía o nula");
+            return productos;
+        }
+        
+        String descripcionNormalizada = normalizarTexto(descripcion);
+        
+        // ============================================================
+        // 1) BÚSQUEDA CON SIMILARITY (pg_trgm) + MATCH EXACTO
+        // ============================================================
+        String sqlSimilarity = """
+            SELECT 
+                descripcion_es,
+                descripcion_en,
+                unidad_medida,
+                precio_venta_neto,
+                valor_pesos,
+                CASE 
+                    WHEN UPPER(TRIM(descripcion_es)) = UPPER(TRIM(?)) 
+                      OR UPPER(TRIM(descripcion_en)) = UPPER(TRIM(?)) THEN 1.0
+                    ELSE GREATEST(
+                        similarity(LOWER(descripcion_es), LOWER(?)),
+                        similarity(LOWER(descripcion_en), LOWER(?))
+                    )
+                END AS score_similitud
+            FROM vista_producto_precio
+            WHERE 
+                similarity(LOWER(descripcion_es), LOWER(?)) > 0.2
+                OR similarity(LOWER(descripcion_en), LOWER(?)) > 0.2
+                OR UPPER(TRIM(descripcion_es)) = UPPER(TRIM(?))
+                OR UPPER(TRIM(descripcion_en)) = UPPER(TRIM(?))
+            ORDER BY score_similitud DESC
+            LIMIT 10
+        """;
+        
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sqlSimilarity)) {
+            
+            // Parámetros para match exacto y similarity
+            statement.setString(1, descripcionNormalizada);  // match exacto ES
+            statement.setString(2, descripcionNormalizada);  // match exacto EN
+            statement.setString(3, descripcionNormalizada);  // similarity ES
+            statement.setString(4, descripcionNormalizada);  // similarity EN
+            statement.setString(5, descripcionNormalizada);  // WHERE similarity ES
+            statement.setString(6, descripcionNormalizada);  // WHERE similarity EN
+            statement.setString(7, descripcionNormalizada);  // WHERE exacto ES
+            statement.setString(8, descripcionNormalizada);  // WHERE exacto EN
+            
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    double score = rs.getDouble("score_similitud");
+                    ProductoSimilar producto = new ProductoSimilar(
+                        rs.getString("descripcion_es"),
+                        rs.getString("descripcion_en"),
+                        rs.getString("unidad_medida"),
+                        rs.getDouble("precio_venta_neto"),
+                        score,  // Usar el campo precioDolares para guardar el score
+                        rs.getDouble("valor_pesos")
+                    );
+                    productos.add(producto);
+                    logger.info("📦 Match encontrado (score=" + String.format("%.3f", score) + "): " 
+                        + producto.getDescripcionEs());
+                }
+            }
+            
+            if (!productos.isEmpty()) {
+                logger.info("✅ pg_trgm encontró " + productos.size() + " productos. Mejor score: " 
+                    + String.format("%.3f", productos.get(0).getPrecioVentaNetoDolares()));
+                return productos;
+            }
+            
+        } catch (SQLException e) {
+            // pg_trgm puede no estar instalada, intentar fallback
+            logger.warn("⚠️ pg_trgm no disponible o error: " + e.getMessage() + ". Usando fallback...");
+        }
+        
+        // ============================================================
+        // 2) FALLBACK: TOKEN MATCHING CON SCORING
+        // ============================================================
+        logger.info("🔄 Aplicando fallback por token matching...");
+        
+        String[] tokens = descripcionNormalizada.toLowerCase().split("\\s+");
+        List<String> tokensFiltrados = new ArrayList<>();
+        for (String token : tokens) {
+            // Filtrar tokens cortos y palabras comunes
+            if (token.length() >= 3 && !esStopWord(token)) {
+                tokensFiltrados.add(token);
+            }
+        }
+        
+        if (tokensFiltrados.isEmpty()) {
+            logger.warn("⚠️ No hay tokens válidos para búsqueda");
+            return productos;
+        }
+        
+        // Construir score basado en coincidencia de tokens
+        StringBuilder scoreBuilder = new StringBuilder();
+        int totalTokens = tokensFiltrados.size();
+        
+        for (int i = 0; i < totalTokens; i++) {
+            if (i > 0) scoreBuilder.append(" + ");
+            // Dar más peso a coincidencias exactas de palabras
+            scoreBuilder.append("(CASE WHEN LOWER(descripcion_es) LIKE ? OR LOWER(descripcion_en) LIKE ? THEN 1.0 ELSE 0.0 END)");
+        }
+        
+        String sqlTokens = 
+            "SELECT * FROM (" +
+            "    SELECT DISTINCT ON (descripcion_es)" +
+            "        descripcion_es," +
+            "        descripcion_en," +
+            "        unidad_medida," +
+            "        precio_venta_neto," +
+            "        valor_pesos," +
+            "        (" + scoreBuilder.toString() + ") / " + totalTokens + ".0 AS score_similitud" +
+            "    FROM vista_producto_precio" +
+            "    ORDER BY descripcion_es" +
+            ") sub " +
+            "WHERE score_similitud > 0.3 " +
+            "ORDER BY score_similitud DESC " +
+            "LIMIT 10";
+        
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sqlTokens)) {
+            
+            int paramIndex = 1;
+            for (String token : tokensFiltrados) {
+                String likePattern = "% " + token + " %";  // Palabra completa
+                String likePatternInicio = token + " %";   // Al inicio
+                String likePatternFin = "% " + token;      // Al final
+                String likePatternSimple = "%" + token + "%"; // Contenido
+                
+                // Usar patrón que busca la palabra (simplificado)
+                statement.setString(paramIndex++, likePatternSimple);
+                statement.setString(paramIndex++, likePatternSimple);
+            }
+            
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    double score = rs.getDouble("score_similitud");
+                    ProductoSimilar producto = new ProductoSimilar(
+                        rs.getString("descripcion_es"),
+                        rs.getString("descripcion_en"),
+                        rs.getString("unidad_medida"),
+                        rs.getDouble("precio_venta_neto"),
+                        score,
+                        rs.getDouble("valor_pesos")
+                    );
+                    productos.add(producto);
+                    logger.info("📦 Match por tokens (score=" + String.format("%.3f", score) + "): " 
+                        + producto.getDescripcionEs());
+                }
+            }
+            
+        } catch (SQLException e) {
+            logger.error("❌ Error en búsqueda por tokens", e);
+        }
+        
+        if (productos.isEmpty()) {
+            logger.warn("⚠️ No se encontró ningún match para: " + descripcion);
+        } else {
+            logger.info("✅ Token matching encontró " + productos.size() + " productos");
+        }
+        
+        return productos;
+    }
+    
+    /**
+     * Normaliza el texto para búsqueda: elimina caracteres especiales, múltiples espacios, etc.
+     */
+    private String normalizarTexto(String texto) {
+        if (texto == null) return "";
+        return texto.trim()
+            .replaceAll("[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\\s]", " ")  // Quitar caracteres especiales
+            .replaceAll("\\s+", " ")                          // Múltiples espacios a uno
+            .trim();
+    }
+    
+    /**
+     * Verifica si una palabra es una stop word (palabra común sin valor semántico)
+     */
+    private boolean esStopWord(String palabra) {
+        Set<String> stopWords = Set.of(
+            "the", "a", "an", "of", "to", "in", "for", "and", "or", "with",
+            "el", "la", "los", "las", "de", "del", "en", "con", "por", "para",
+            "un", "una", "unos", "unas", "y", "o", "kg", "gr", "lt", "ml",
+            "pcs", "pza", "und", "unit", "box", "bag", "can", "btl"
+        );
+        return stopWords.contains(palabra.toLowerCase());
+    }
 
   /**
    * Consulta el precio de venta neto de un producto desde la vista vista_producto_precio
