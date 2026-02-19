@@ -1836,182 +1836,110 @@ public class CotizacionService {
     return productos;
     }    
 
+   //NUEVO METODO MAS FRESCO  
+
     /**
-     * Busca el producto con el match más exacto posible usando un sistema de scoring.
-     * Prioridad: 1) Match exacto, 2) Similarity (pg_trgm), 3) Token matching
-     * @param descripcion descripción del producto a buscar
-     * @return lista de productos ordenados por score de similitud (el primero es el mejor match)
-     */
-    public List<ProductoSimilar> buscarMatchLoMasExactoPosible(String descripcion) {
-        logger.info("🎯 Buscando match más exacto para: " + descripcion);
-        List<ProductoSimilar> productos = new ArrayList<>();
-        
-        if (descripcion == null || descripcion.trim().isEmpty()) {
-            logger.warn("⚠️ Descripción vacía o nula");
-            return productos;
-        }
-        
-        String descripcionNormalizada = normalizarTexto(descripcion);
-        
-        // ============================================================
-        // 1) BÚSQUEDA CON SIMILARITY (pg_trgm) + MATCH EXACTO
-        // ============================================================
-        String sqlSimilarity = """
-            SELECT 
-                descripcion_es,
-                descripcion_en,
-                unidad_medida,
-                precio_venta_neto,
-                valor_pesos,
-                CASE 
-                    WHEN UPPER(TRIM(descripcion_es)) = UPPER(TRIM(?)) 
-                      OR UPPER(TRIM(descripcion_en)) = UPPER(TRIM(?)) THEN 1.0
-                    ELSE GREATEST(
-                        similarity(LOWER(descripcion_es), LOWER(?)),
-                        similarity(LOWER(descripcion_en), LOWER(?))
-                    )
-                END AS score_similitud
-            FROM vista_producto_precio
-            WHERE 
-                similarity(LOWER(descripcion_es), LOWER(?)) > 0.2
-                OR similarity(LOWER(descripcion_en), LOWER(?)) > 0.2
-                OR UPPER(TRIM(descripcion_es)) = UPPER(TRIM(?))
-                OR UPPER(TRIM(descripcion_en)) = UPPER(TRIM(?))
-            ORDER BY score_similitud DESC
-            LIMIT 10
-        """;
-        
-        try (Connection connection = DBConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sqlSimilarity)) {
-            
-            // Parámetros para match exacto y similarity
-            statement.setString(1, descripcionNormalizada);  // match exacto ES
-            statement.setString(2, descripcionNormalizada);  // match exacto EN
-            statement.setString(3, descripcionNormalizada);  // similarity ES
-            statement.setString(4, descripcionNormalizada);  // similarity EN
-            statement.setString(5, descripcionNormalizada);  // WHERE similarity ES
-            statement.setString(6, descripcionNormalizada);  // WHERE similarity EN
-            statement.setString(7, descripcionNormalizada);  // WHERE exacto ES
-            statement.setString(8, descripcionNormalizada);  // WHERE exacto EN
-            
-            try (ResultSet rs = statement.executeQuery()) {
-                while (rs.next()) {
-                    double score = rs.getDouble("score_similitud");
-                    ProductoSimilar producto = new ProductoSimilar(
-                        rs.getString("descripcion_es"),
-                        rs.getString("descripcion_en"),
-                        rs.getString("unidad_medida"),
-                        rs.getDouble("precio_venta_neto"),
-                        score,  // Usar el campo precioDolares para guardar el score
-                        rs.getDouble("valor_pesos")
-                    );
-                    productos.add(producto);
-                    logger.info("📦 Match encontrado (score=" + String.format("%.3f", score) + "): " 
-                        + producto.getDescripcionEs());
-                }
-            }
-            
-            if (!productos.isEmpty()) {
-                logger.info("✅ pg_trgm encontró " + productos.size() + " productos. Mejor score: " 
-                    + String.format("%.3f", productos.get(0).getPrecioVentaNetoDolares()));
-                return productos;
-            }
-            
-        } catch (SQLException e) {
-            // pg_trgm puede no estar instalada, intentar fallback
-            logger.warn("⚠️ pg_trgm no disponible o error: " + e.getMessage() + ". Usando fallback...");
-        }
-        
-        // ============================================================
-        // 2) FALLBACK: TOKEN MATCHING CON SCORING
-        // ============================================================
-        logger.info("🔄 Aplicando fallback por token matching...");
-        
-        String[] tokens = descripcionNormalizada.toLowerCase().split("\\s+");
-        List<String> tokensFiltrados = new ArrayList<>();
-        for (String token : tokens) {
-            // Filtrar tokens cortos y palabras comunes
-            if (token.length() >= 3 && !esStopWord(token)) {
-                tokensFiltrados.add(token);
-            }
-        }
-        
-        if (tokensFiltrados.isEmpty()) {
-            logger.warn("⚠️ No hay tokens válidos para búsqueda");
-            return productos;
-        }
-        
-        // Construir score basado en coincidencia de tokens
-        StringBuilder scoreBuilder = new StringBuilder();
-        int totalTokens = tokensFiltrados.size();
-        
-        for (int i = 0; i < totalTokens; i++) {
-            if (i > 0) scoreBuilder.append(" + ");
-            // Dar más peso a coincidencias exactas de palabras
-            scoreBuilder.append("(CASE WHEN LOWER(descripcion_es) LIKE ? OR LOWER(descripcion_en) LIKE ? THEN 1.0 ELSE 0.0 END)");
-        }
-        
-        String sqlTokens = 
-            "SELECT * FROM (" +
-            "    SELECT DISTINCT ON (descripcion_es)" +
-            "        descripcion_es," +
-            "        descripcion_en," +
-            "        unidad_medida," +
-            "        precio_venta_neto," +
-            "        valor_pesos," +
-            "        (" + scoreBuilder.toString() + ") / " + totalTokens + ".0 AS score_similitud" +
-            "    FROM vista_producto_precio" +
-            "    ORDER BY descripcion_es" +
-            ") sub " +
-            "WHERE score_similitud > 0.3 " +
-            "ORDER BY score_similitud DESC " +
-            "LIMIT 10";
-        
-        try (Connection connection = DBConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sqlTokens)) {
-            
-            int paramIndex = 1;
-            for (String token : tokensFiltrados) {
-                String likePattern = "% " + token + " %";  // Palabra completa
-                String likePatternInicio = token + " %";   // Al inicio
-                String likePatternFin = "% " + token;      // Al final
-                String likePatternSimple = "%" + token + "%"; // Contenido
-                
-                // Usar patrón que busca la palabra (simplificado)
-                statement.setString(paramIndex++, likePatternSimple);
-                statement.setString(paramIndex++, likePatternSimple);
-            }
-            
-            try (ResultSet rs = statement.executeQuery()) {
-                while (rs.next()) {
-                    double score = rs.getDouble("score_similitud");
-                    ProductoSimilar producto = new ProductoSimilar(
-                        rs.getString("descripcion_es"),
-                        rs.getString("descripcion_en"),
-                        rs.getString("unidad_medida"),
-                        rs.getDouble("precio_venta_neto"),
-                        score,
-                        rs.getDouble("valor_pesos")
-                    );
-                    productos.add(producto);
-                    logger.info("📦 Match por tokens (score=" + String.format("%.3f", score) + "): " 
-                        + producto.getDescripcionEs());
-                }
-            }
-            
-        } catch (SQLException e) {
-            logger.error("❌ Error en búsqueda por tokens", e);
-        }
-        
-        if (productos.isEmpty()) {
-            logger.warn("⚠️ No se encontró ningún match para: " + descripcion);
-        } else {
-            logger.info("✅ Token matching encontró " + productos.size() + " productos");
-        }
-        
+ * Busca el producto con el match más exacto posible.
+ * Prioridad:
+ * 1) Match exacto (devuelve SOLO ese producto)
+ * 2) Si no hay match exacto → devolver vacío para forzar popup
+ * 3) pg_trgm solo para mostrar productos relacionados en el popup
+ */
+public List<ProductoSimilar> buscarMatchLoMasExactoPosible(String descripcion) {
+
+    logger.info("🎯 Buscando match más exacto para: " + descripcion);
+    List<ProductoSimilar> productos = new ArrayList<>();
+
+    if (descripcion == null || descripcion.trim().isEmpty()) {
+        logger.warn("⚠️ Descripción vacía o nula");
         return productos;
     }
-    
+
+    String descripcionNormalizada = normalizarTexto(descripcion);
+
+    // ============================================================
+    // 1) BÚSQUEDA CON SIMILARITY (pg_trgm) + MATCH EXACTO
+    // ============================================================
+    String sqlSimilarity = """
+        SELECT 
+            descripcion_es,
+            descripcion_en,
+            unidad_medida,
+            precio_venta_neto,
+            valor_pesos,
+            CASE 
+                WHEN UPPER(TRIM(descripcion_es)) = UPPER(TRIM(?)) 
+                  OR UPPER(TRIM(descripcion_en)) = UPPER(TRIM(?)) THEN 1.0
+                ELSE GREATEST(
+                    similarity(LOWER(descripcion_es), LOWER(?)),
+                    similarity(LOWER(descripcion_en), LOWER(?))
+                )
+            END AS score_similitud
+        FROM vista_producto_precio
+        WHERE 
+            similarity(LOWER(descripcion_es), LOWER(?)) > 0.2
+            OR similarity(LOWER(descripcion_en), LOWER(?)) > 0.2
+            OR UPPER(TRIM(descripcion_es)) = UPPER(TRIM(?))
+            OR UPPER(TRIM(descripcion_en)) = UPPER(TRIM(?))
+        ORDER BY score_similitud DESC
+        LIMIT 10
+    """;
+
+    try (Connection connection = DBConnection.getConnection();
+         PreparedStatement statement = connection.prepareStatement(sqlSimilarity)) {
+
+        // Parámetros
+        statement.setString(1, descripcionNormalizada); // exacto ES
+        statement.setString(2, descripcionNormalizada); // exacto EN
+        statement.setString(3, descripcionNormalizada); // similarity ES
+        statement.setString(4, descripcionNormalizada); // similarity EN
+        statement.setString(5, descripcionNormalizada); // where sim ES
+        statement.setString(6, descripcionNormalizada); // where sim EN
+        statement.setString(7, descripcionNormalizada); // where exacto ES
+        statement.setString(8, descripcionNormalizada); // where exacto EN
+
+        try (ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) {
+                double score = rs.getDouble("score_similitud");
+                productos.add(new ProductoSimilar(
+                    rs.getString("descripcion_es"),
+                    rs.getString("descripcion_en"),
+                    rs.getString("unidad_medida"),
+                    rs.getDouble("precio_venta_neto"),
+                    score,
+                    rs.getDouble("valor_pesos")
+                ));
+            }
+        }
+
+        // ============================================================
+        // 🎯 MATCH EXACTO — PRIORIDAD ABSOLUTA
+        // ============================================================
+        for (ProductoSimilar p : productos) {
+            if (p.getDescripcionEs().equalsIgnoreCase(descripcionNormalizada) ||
+                p.getDescripcionEn().equalsIgnoreCase(descripcionNormalizada)) {
+
+                logger.info("🎯 MATCH EXACTO ENCONTRADO: " + p.getDescripcionEs());
+                return List.of(p); // ← SOLO devolvemos el exacto
+            }
+        }
+
+        // ============================================================
+        // ❌ NO HAY MATCH EXACTO → DEVOLVER VACÍO
+        // ============================================================
+        logger.info("⚠️ No hay match exacto. Devolviendo lista vacía para forzar popup.");
+        return Collections.emptyList();
+
+    } catch (SQLException e) {
+        logger.warn("⚠️ pg_trgm no disponible o error: " + e.getMessage());
+        return Collections.emptyList();
+    }
+}
+
+// HASTA A AQUÍ EL NUEVO MÉTODO MÁS FRESCO
+
+
+
     /**
      * Normaliza el texto para búsqueda: elimina caracteres especiales, múltiples espacios, etc.
      */
