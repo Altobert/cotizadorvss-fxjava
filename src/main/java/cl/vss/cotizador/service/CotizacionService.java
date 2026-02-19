@@ -1833,8 +1833,16 @@ public class CotizacionService {
     }
 
     logger.info("🔚 Resultado final: " + productos.size() + " productos encontrados");
+
+    // Ordenar alfabéticamente por descripción en español
+    productos.sort(Comparator.comparing(
+        ProductoSimilar::getDescripcionEs,
+        String.CASE_INSENSITIVE_ORDER
+    ));
+
     return productos;
-    }    
+}
+  
 
    //NUEVO METODO MAS FRESCO  
 
