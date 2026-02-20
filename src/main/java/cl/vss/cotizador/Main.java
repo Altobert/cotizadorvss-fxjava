@@ -2689,16 +2689,12 @@ private void cargarProductos() {
             logger.info("📊 Escribiendo cabeceras en fila {} (Aspose index: {})", 
                 formatoActual.getHeaderRow(), headerRowIndex);
             
-            // Verificar si es GARRETS para omitir columna PRECIO_VSS
-            boolean esGarretsHeader = formatoActual != null && formatoActual.getBrokerName() != null && 
-                                      formatoActual.getBrokerName().toUpperCase().contains("GARRET");
-            
             for (FormatoColumna columna : formatoActual.getColumnas()) {
                 int colIdx = columna.getIndiceColumna();
                 
-                // Omitir columna PRECIO_VSS para GARRETS
-                if (esGarretsHeader && "PRECIO_VSS".equals(columna.getCampoEstandar())) {
-                    logger.info("🚫 GARRETS: Omitiendo encabezado PRECIO_VSS");
+                // Omitir columna PRECIO_VSS (es columna interna, no debe exportarse)
+                if ("PRECIO_VSS".equals(columna.getCampoEstandar())) {
+                    logger.info("🚫 Omitiendo encabezado PRECIO_VSS (columna interna)");
                     continue;
                 }
                 
@@ -2762,20 +2758,16 @@ private void cargarProductos() {
                     currentRow++;  // Saltar a la siguiente fila
                 }
                 
-                // Verificar si es GARRETS para omitir columna PRECIO_VSS
-                boolean esGarretsExport = formatoActual != null && formatoActual.getBrokerName() != null && 
-                                          formatoActual.getBrokerName().toUpperCase().contains("GARRET");
-                
                 for (FormatoColumna columna : formatoActual.getColumnas()) {
                     int colIdx = columna.getIndiceColumna();
                     String campoEstandar = columna.getCampoEstandar();
                     
                     // ============================
-                    // OMITIR PRECIO_VSS PARA GARRETS
+                    // OMITIR PRECIO_VSS (columna interna, no debe exportarse)
                     // ============================
-                    if (esGarretsExport && "PRECIO_VSS".equals(campoEstandar)) {
+                    if ("PRECIO_VSS".equals(campoEstandar)) {
                         if (primeraFila) {
-                            logger.info("🚫 GARRETS: Omitiendo columna PRECIO_VSS en exportación");
+                            logger.info("🚫 Omitiendo columna PRECIO_VSS en exportación (columna interna)");
                         }
                         continue; // Saltar esta columna
                     }
@@ -2823,11 +2815,6 @@ private void cargarProductos() {
                     }
                     
                     String valor = rowData.get(campoEstandar);
-                    
-                    // Caso especial: PRECIO_VSS usa el valor calculado
-                    if ("PRECIO_VSS".equals(campoEstandar)) {
-                        valor = rowData.get("precio_vss_calculado");
-                    }
                     
                     if (valor == null || valor.isEmpty()) {
                         continue;
@@ -4651,6 +4638,11 @@ private void configurarTablaDinamica() {
             continue; // Saltar esta columna
         }
         
+        // 🚫 Ocultar la columna TOTAL en la tabla dinámica
+        if ("TOTAL".equals(campoEstandar) || "TOTAL_LINE".equals(campoEstandar)) {
+            continue;
+        }
+        
         TableColumn<RowData, String> column = new TableColumn<>(col.getNombreColumnaOriginal());
         
         // 📏 Establecer ancho de columna según el tipo de campo
@@ -4871,8 +4863,9 @@ private void leerExcelConFormato(File archivo) {
             }
             
             // 🔍 Buscar automáticamente el producto en la BD y calcular precio VSS
-            String descripcion = obtenerValorDeCampo(rowData, "ITEM_DESCRIPTION", "DESCRIPTION", 
-                "ITEM_NAME", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
+            // Prioridad: ITEM_NAME (campo estándar MCTC) > ITEM > ITEM_DESCRIPTION > DESCRIPTION
+            String descripcion = obtenerValorDeCampo(rowData, "ITEM_NAME", "ITEM", 
+                "ITEM_DESCRIPTION", "DESCRIPTION", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
             
             if (descripcion != null && !descripcion.trim().isEmpty()) {
                 // Buscar producto en la base de datos
@@ -4924,8 +4917,8 @@ private void leerExcelConFormato(File archivo) {
             boolean esFilaTitulo = false;
             
             // Verificar en múltiples campos posibles
-            String descripcionFila = obtenerValorDeCampo(rowData, "ITEM_DESCRIPTION", "DESCRIPTION", 
-                "ITEM_NAME", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
+            String descripcionFila = obtenerValorDeCampo(rowData, "ITEM_NAME", "ITEM", 
+                "ITEM_DESCRIPTION", "DESCRIPTION", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
             String productCode = obtenerValorDeCampo(rowData, "PRODUCT_CODE", "ITEM_CODE", "CODE", "CODIGO");
             
             // Revisar todos los campos relevantes
@@ -5081,19 +5074,17 @@ private void leerExcelConAspose(File archivo) {
                 }
             }
             
-            // 🎯 Buscar el mejor match del producto en la BD usando scoring
-            String descripcion = obtenerValorDeCampo(rowData, "ITEM_DESCRIPTION", "DESCRIPTION", 
-                "ITEM_NAME", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
+            // 🔍 Buscar automáticamente el producto en la BD y calcular precio VSS
+            // Prioridad: ITEM_NAME (campo estándar MCTC) > ITEM > ITEM_DESCRIPTION > DESCRIPTION
+            String descripcion = obtenerValorDeCampo(rowData, "ITEM_NAME", "ITEM", 
+                "ITEM_DESCRIPTION", "DESCRIPTION", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
             
             if (descripcion != null && !descripcion.trim().isEmpty()) {
-                // Usar el nuevo método con matching más exacto
-                List<cl.vss.cotizador.model.ProductoSimilar> productos = 
+                List<cl.vss.cotizador.model.ProductoSimilar> productos =     
                     cotizacionService.buscarMatchLoMasExactoPosible(descripcion);
                 
                 if (!productos.isEmpty()) {
-                    // El primer producto es el mejor match (ordenado por score)
                     cl.vss.cotizador.model.ProductoSimilar producto = productos.get(0);
-                    double scoreMatch = producto.getPrecioVentaNetoDolares(); // Score guardado aquí
                     
                     String cantidadStr = obtenerValorDeCampo(rowData, "QUANTITY", "QTY", "CANTIDAD");
                     double cantidad = 1.0;
@@ -5107,37 +5098,26 @@ private void leerExcelConAspose(File archivo) {
                     }
                     
                     double precioVentaNeto = producto.getPrecioVentaNeto();
+                    double precioVentaNetoDolares = producto.getPrecioVentaNetoDolares();
                     double precioVSS = precioVentaNeto * cantidad;
                     
                     rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
-                    rowData.set("UNIT_PRICE", String.format("%.2f", precioVentaNeto));
+                    rowData.set("UNIT_PRICE", String.format("%.2f", precioVentaNetoDolares));
                     
-                    // Guardar información del match para mostrar en la tabla
-                    rowData.set("match_score", String.format("%.1f%%", scoreMatch * 100));
-                    rowData.set("producto_match", producto.getDescripcionEs() != null ? 
-                        producto.getDescripcionEs() : producto.getDescripcionEn());
-                    
-                    logger.info("🎯 Match encontrado (score={}) para '{}' -> '{}'", 
-                        String.format("%.1f%%", scoreMatch * 100),
-                        descripcion.substring(0, Math.min(25, descripcion.length())),
-                        producto.getDescripcionEs() != null ? 
-                            producto.getDescripcionEs().substring(0, Math.min(25, producto.getDescripcionEs().length())) : "N/A");
+                    logger.debug("Producto encontrado: {} - Precio VSS: ${}", 
+                        descripcion.substring(0, Math.min(30, descripcion.length())), 
+                        String.format("%,.2f", precioVSS));
                 } else {
                     rowData.set("precio_vss_calculado", "0.0");
-                    rowData.set("match_score", "0%");
-                    rowData.set("producto_match", "NO ENCONTRADO");
-                    logger.warn("⚠️ Sin match para: {}", descripcion.substring(0, Math.min(30, descripcion.length())));
                 }
             } else {
                 rowData.set("precio_vss_calculado", "0.0");
-                rowData.set("match_score", "-");
-                rowData.set("producto_match", "-");
             }
             
-            // 🚫 Filtrar filas que son títulos/encabezados adicionales
+            // 🚠 Filtrar filas que son títulos/encabezados adicionales
             boolean esFilaTitulo = false;
-            String descripcionFila = obtenerValorDeCampo(rowData, "ITEM_DESCRIPTION", "DESCRIPTION", 
-                "ITEM_NAME", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
+            String descripcionFila = obtenerValorDeCampo(rowData, "ITEM_NAME", "ITEM", 
+                "ITEM_DESCRIPTION", "DESCRIPTION", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
             String productCode = obtenerValorDeCampo(rowData, "PRODUCT_CODE", "ITEM_CODE", "CODE", "CODIGO");
             
             String[] camposARevisar = {descripcionFila, productCode};
@@ -5256,9 +5236,9 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     dialog.setTitle("Editar Producto");
     
     // 🔍 Extraer datos de la fila - intentar múltiples campos posibles
-    String descripcion = obtenerValorDeCampo(rowData, 
-        "ITEM_DESCRIPTION", "DESCRIPTION", "ITEM_NAME", "PRODUCT_NAME", 
-        "DESCRIPCION", "NOMBRE", "PRODUCTO");
+    // Prioridad: ITEM_NAME (campo estándar MCTC) > ITEM > ITEM_DESCRIPTION > DESCRIPTION
+    String descripcion = obtenerValorDeCampo(rowData, "ITEM_NAME", "ITEM", 
+        "ITEM_DESCRIPTION", "DESCRIPTION", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
     
     String cantidad = obtenerValorDeCampo(rowData, 
         "QUANTITY", "QTY", "CANTIDAD", "CANT", "QUANTITY_ORDER");
@@ -5271,7 +5251,8 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // Extraer Vendor Remarks si existe
     String vendorRemarks = obtenerValorDeCampo(rowData,
         "VENDOR_REMARKS", "VENDOR_REMARK", "VENDOR_NOTES", "VENDOR_NOTE", 
-        "VENDOR_COMMENTS", "VENDOR_COMMENT", "REMARKS", "COMMENTS");
+        "VENDOR_COMMENTS", "VENDOR_COMMENT", "REMARKS", "COMMENTS",
+        "SUPPLIER_COMMENTS", "SUPPLIER_COMMENT", "SUPPLIER COMMENTS");
     
     // Extraer Notes para Garret
     String notesGarret = obtenerValorDeCampo(rowData, "NOTES", "Notes");
@@ -5303,15 +5284,16 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
     
     // ============================
-    // PANEL VENDOR REMARKS (Para BSM CATERING y CMA CGM)
+    // PANEL VENDOR REMARKS (Para BSM CATERING, CMA CGM y MCTC MARINE)
     // ============================
     VBox panelVendorRemarks = null;
     TextField txtVendorRemarks = null;
     
-    // Verificar si es BSM CATERING o CMA CGM
+    // Verificar si es BSM CATERING, CMA CGM o MCTC MARINE
     boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBrokerName() != null && 
                             (formatoActual.getBrokerName().toUpperCase().contains("BSM") ||
-                             formatoActual.getBrokerName().toUpperCase().contains("CMA"));
+                             formatoActual.getBrokerName().toUpperCase().contains("CMA") ||
+                             formatoActual.getBrokerName().toUpperCase().contains("MCTC"));
     
     if (permitirVendorRemarks) {
         panelVendorRemarks = new VBox(8);
@@ -5443,6 +5425,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     txtBusqueda.setPrefWidth(350);
     // Pre-llenar con descripción actual si existe
     if (descripcion != null && !descripcion.isEmpty()) {
+        logger.debug("Pre-llenando campo de búsqueda con descripción: '{}'", descripcion);
         txtBusqueda.setText(descripcion);
     }
     
@@ -5542,14 +5525,20 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         boolean notasGuardadas = false;
         StringBuilder mensajeNotas = new StringBuilder();
         
-        // Guardar Vendor Remarks (BSM, CMA CGM)
+        // Guardar Vendor Remarks (BSM, CMA CGM, MCTC)
         if (txtVendorRemarksBtnRef != null) {
             String nuevoValorRemarks = txtVendorRemarksBtnRef.getText();
             String campoVendorRemarks = null;
             for (String key : rowData.getKeys()) {
                 String keyUpper = key.toUpperCase();
+                // Buscar VENDOR_REMARKS, VENDOR_COMMENTS, etc.
                 if ((keyUpper.contains("VENDOR") && 
                     (keyUpper.contains("REMARK") || keyUpper.contains("NOTE") || keyUpper.contains("COMMENT")))) {
+                    campoVendorRemarks = key;
+                    break;
+                }
+                // Buscar SUPPLIER_COMMENTS (MCTC Marine)
+                if (keyUpper.contains("SUPPLIER") && keyUpper.contains("COMMENT")) {
                     campoVendorRemarks = key;
                     break;
                 }
@@ -5669,7 +5658,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     VBox contenidoPrincipal = new VBox(15);
     contenidoPrincipal.getChildren().add(infoPanel);
     
-    // Agregar panel de Vendor Remarks si es BSM CATERING o CMA CGM
+    // Agregar panel de Vendor Remarks si es BSM CATERING, CMA CGM o MCTC MARINE
     if (panelVendorRemarks != null) {
         contenidoPrincipal.getChildren().add(panelVendorRemarks);
     }
@@ -5697,7 +5686,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     final TextField txtVendorRemarksFinal = txtVendorRemarks;
     final TextField txtNotesFinal = txtNotes;
     dialog.setOnCloseRequest(event -> {
-        // Guardar Vendor Remarks (BSM, CMA CGM)
+        // Guardar Vendor Remarks (BSM, CMA CGM, MCTC)
         if (txtVendorRemarksFinal != null) {
             String nuevoValorRemarks = txtVendorRemarksFinal.getText();
             
@@ -5705,8 +5694,14 @@ private void abrirPopupEdicionProducto(RowData rowData) {
             String campoVendorRemarks = null;
             for (String key : rowData.getKeys()) {
                 String keyUpper = key.toUpperCase();
+                // Buscar VENDOR_REMARKS, VENDOR_COMMENTS, etc.
                 if ((keyUpper.contains("VENDOR") && 
                     (keyUpper.contains("REMARK") || keyUpper.contains("NOTE") || keyUpper.contains("COMMENT")))) {
+                    campoVendorRemarks = key;
+                    break;
+                }
+                // Buscar SUPPLIER_COMMENTS (MCTC Marine)
+                if (keyUpper.contains("SUPPLIER") && keyUpper.contains("COMMENT")) {
                     campoVendorRemarks = key;
                     break;
                 }
