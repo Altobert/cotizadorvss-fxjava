@@ -2497,6 +2497,27 @@ private void cargarProductos() {
                 logger.warn("⚠️ No se puede crear fórmula TOTAL - faltan columnas");
             }
             
+            // 📝 PROCURESHIP: Detectar columna "Supplier Notes" en el header (no está en formato BD)
+            int supplierNotesExportColIndex = -1;
+            boolean esProcureshipExport = formatoActual.getBrokerName() != null && 
+                formatoActual.getBrokerName().toUpperCase().contains("PROCURE");
+            if (esProcureshipExport) {
+                int maxColHeader = cells.getMaxDataColumn();
+                for (int colScan = 0; colScan <= maxColHeader; colScan++) {
+                    com.aspose.cells.Cell headerCell = cells.get(headerRowIndex, colScan);
+                    if (headerCell != null && headerCell.getStringValue() != null) {
+                        String headerValue = headerCell.getStringValue().trim();
+                        if (headerValue.toUpperCase().contains("SUPPLIER") && 
+                            headerValue.toUpperCase().contains("NOTE")) {
+                            supplierNotesExportColIndex = colScan;
+                            logger.info("📝 PROCURESHIP EXPORT: Columna 'Supplier Notes' detectada en col {} ({})", 
+                                colScan, headerValue);
+                            break;
+                        }
+                    }
+                }
+            }
+            
             // ============================
             // GUARDAR FÓRMULA ORIGINAL DE TOTAL PRICE
             // ============================
@@ -2645,6 +2666,62 @@ private void cargarProductos() {
             }
             
             // ============================
+            // DETECTAR FILAS DE RESUMEN DE PROCURESHIP
+            // ============================
+            // ProcureShip tiene múltiples filas de resumen después del Subtotal:
+            // Subtotal, Transportation Cost, Subtotal (2do), Other (Taxes/Charges), Grand Total
+            // Estas filas deben preservarse durante la limpieza.
+            java.util.Set<Integer> filasResumenProcureship = new java.util.HashSet<>();
+            boolean esProcureship = formatoActual.getBrokerName() != null && 
+                formatoActual.getBrokerName().toUpperCase().contains("PROCURESHIP");
+            
+            if (esProcureship && filaSubtotalIndex >= 0) {
+                logger.info("🏛️ PROCURESHIP: Buscando filas de resumen después del subtotal (fila {})...", filaSubtotalIndex + 1);
+                
+                // Escanear desde filaSubtotalIndex hasta lastDataRow buscando filas de resumen
+                for (int searchRow = filaSubtotalIndex; searchRow <= lastDataRow; searchRow++) {
+                    for (int colCheck = 0; colCheck <= 20; colCheck++) {
+                        com.aspose.cells.Cell celdaCheck = cells.get(searchRow, colCheck);
+                        if (celdaCheck != null && celdaCheck.getValue() != null) {
+                            String valorCelda = "";
+                            try {
+                                valorCelda = celdaCheck.getStringValue().trim().toUpperCase();
+                            } catch (Exception e) {
+                                continue;
+                            }
+                            
+                            if (valorCelda.contains("SUBTOTAL") || valorCelda.contains("SUB TOTAL") ||
+                                valorCelda.contains("TRANSPORTATION") || valorCelda.contains("TRANSPORT") ||
+                                valorCelda.contains("GRAND TOTAL") || 
+                                valorCelda.contains("CHARGES") || valorCelda.contains("CUSTOMS") ||
+                                valorCelda.contains("TAXES") || valorCelda.contains("OTHER")) {
+                                
+                                filasResumenProcureship.add(searchRow);
+                                
+                                // Log de fórmula/valor en colTotal para esta fila
+                                String infoFormula = "";
+                                if (colTotal >= 0) {
+                                    com.aspose.cells.Cell celdaTotal = cells.get(searchRow, colTotal);
+                                    if (celdaTotal != null && celdaTotal.isFormula()) {
+                                        infoFormula = " [Fórmula: " + celdaTotal.getFormula() + "]";
+                                    } else if (celdaTotal != null && celdaTotal.getValue() != null) {
+                                        infoFormula = " [Valor: " + celdaTotal.getValue() + "]";
+                                    }
+                                }
+                                
+                                logger.info("🏛️ PROCURESHIP: Fila de resumen detectada: fila {} = '{}'{}" , 
+                                    searchRow + 1, valorCelda, infoFormula);
+                                break; // Ya encontramos la etiqueta en esta fila
+                            }
+                        }
+                    }
+                }
+                
+                logger.info("🏛️ PROCURESHIP: {} filas de resumen detectadas: {}", 
+                    filasResumenProcureship.size(), filasResumenProcureship);
+            }
+            
+            // ============================
             // LIMPIAR ESPECÍFICAMENTE LA CELDA DE SUBTOTAL
             // ============================
             // IMPORTANTE: Limpiar la celda del subtotal ANTES de escribir datos
@@ -2671,6 +2748,12 @@ private void cargarProductos() {
                 // Saltar la fila de subtotal (ya fue limpiada arriba específicamente)
                 if (filaSubtotalIndex >= 0 && rowIdx == filaSubtotalIndex) {
                     logger.debug("📊 Saltando fila de subtotal {} (ya limpiada)", filaSubtotalIndex + 1);
+                    continue;
+                }
+                
+                // Saltar filas de resumen de ProcureShip (Transportation, Charges, Grand Total, etc.)
+                if (!filasResumenProcureship.isEmpty() && filasResumenProcureship.contains(rowIdx)) {
+                    logger.info("🏛️ PROCURESHIP: Preservando fila de resumen {} sin limpiar", rowIdx + 1);
                     continue;
                 }
                 
@@ -2758,6 +2841,12 @@ private void cargarProductos() {
                     currentRow++;  // Saltar a la siguiente fila
                 }
                 
+                // Saltar filas de resumen de ProcureShip
+                while (!filasResumenProcureship.isEmpty() && filasResumenProcureship.contains(currentRow)) {
+                    logger.info("🏛️ PROCURESHIP: Saltando fila de resumen {} al escribir datos", currentRow + 1);
+                    currentRow++;
+                }
+                
                 for (FormatoColumna columna : formatoActual.getColumnas()) {
                     int colIdx = columna.getIndiceColumna();
                     String campoEstandar = columna.getCampoEstandar();
@@ -2815,6 +2904,15 @@ private void cargarProductos() {
                     }
                     
                     String valor = rowData.get(campoEstandar);
+                    
+                    // Si no se encontró valor con campoEstandar, buscar con nombre de columna original
+                    // Esto es necesario para campos como Supplier Notes, Supplier Comments, etc.
+                    if (valor == null || valor.isEmpty()) {
+                        String nombreColumnaOriginal = columna.getNombreColumnaOriginal();
+                        if (nombreColumnaOriginal != null && !nombreColumnaOriginal.isEmpty()) {
+                            valor = rowData.get(nombreColumnaOriginal);
+                        }
+                    }
                     
                     if (valor == null || valor.isEmpty()) {
                         continue;
@@ -2908,6 +3006,19 @@ private void cargarProductos() {
                     }
                 }
                 
+                // 📝 PROCURESHIP: Escribir columna "Supplier Notes" (no está en formato BD)
+                if (supplierNotesExportColIndex >= 0) {
+                    String supplierNotesVal = rowData.get("SUPPLIER_NOTES");
+                    if (supplierNotesVal != null && !supplierNotesVal.isEmpty()) {
+                        com.aspose.cells.Cell supplierNotesCell = cells.get(currentRow, supplierNotesExportColIndex);
+                        supplierNotesCell.putValue(supplierNotesVal);
+                        if (primeraFila) {
+                            logger.info("📝 PROCURESHIP: Supplier Notes escrito en col {}: '{}'", 
+                                supplierNotesExportColIndex, supplierNotesVal);
+                        }
+                    }
+                }
+                
                 // ============================
                 // ESCRIBIR 0 EN COLUMNAS DE FÓRMULA QUE QUEDARON VACÍAS
                 // ============================
@@ -2952,6 +3063,58 @@ private void cargarProductos() {
                 
                 primeraFila = false;
                 currentRow++;
+            }
+            
+            // ============================
+            // PROCURESHIP: ASEGURAR QUE FILAS NO USADAS TENGAN VALORES NUMÉRICOS
+            // ============================
+            // Para ProcureShip, las filas entre el último producto escrito y el subtotal
+            // quedaron con putValue("") (texto). Las fórmulas del TOTAL en esas filas
+            // referencian QUANTITY y UNIT_PRICE que contienen "" (texto), causando #VALOR!.
+            // Solución: escribir 0.0 en las columnas numéricas de esas filas vacías.
+            if (esProcureship && filaSubtotalIndex >= 0) {
+                int filaLimite = filaSubtotalIndex;
+                // Si hay filas de resumen antes del subtotal, ajustar el límite
+                for (int resumenRow : filasResumenProcureship) {
+                    if (resumenRow < filaLimite) {
+                        filaLimite = resumenRow;
+                    }
+                }
+                
+                logger.info("🏛️ PROCURESHIP: Limpiando filas no usadas entre {} y {} con valores numéricos...", 
+                    currentRow + 1, filaLimite);
+                
+                for (int emptyRow = currentRow; emptyRow < filaLimite; emptyRow++) {
+                    // Saltar filas especiales
+                    if (filaEspecialIndex >= 0 && emptyRow == filaEspecialIndex) continue;
+                    if (filasResumenProcureship.contains(emptyRow)) continue;
+                    
+                    // Escribir 0.0 en columnas numéricas que las fórmulas referencian
+                    if (colQuantityFormula >= 0) {
+                        com.aspose.cells.Cell c = cells.get(emptyRow, colQuantityFormula);
+                        if (c != null) c.putValue(0.0);
+                    }
+                    if (colUnitPriceFormula >= 0) {
+                        com.aspose.cells.Cell c = cells.get(emptyRow, colUnitPriceFormula);
+                        if (c != null) c.putValue(0.0);
+                    }
+                    if (colDiscountFormula >= 0) {
+                        com.aspose.cells.Cell c = cells.get(emptyRow, colDiscountFormula);
+                        if (c != null) c.putValue(0.0);
+                    }
+                    if (colVatFormula >= 0) {
+                        com.aspose.cells.Cell c = cells.get(emptyRow, colVatFormula);
+                        if (c != null) c.putValue(0.0);
+                    }
+                    // También limpiar la columna TOTAL con 0.0 en lugar de texto
+                    if (colTotal >= 0) {
+                        com.aspose.cells.Cell c = cells.get(emptyRow, colTotal);
+                        if (c != null) c.putValue(0.0);
+                    }
+                }
+                
+                logger.info("🏛️ PROCURESHIP: {} filas no usadas limpiadas con valores numéricos", 
+                    Math.max(0, filaLimite - currentRow));
             }
             
             // ============================
@@ -5025,6 +5188,30 @@ private void leerExcelConAspose(File archivo) {
         
         logger.info("📖 Leyendo datos desde fila {} hasta {}", startRow + 1, lastRow + 1);
         
+        // 📝 PROCURESHIP: Detectar columna "Supplier Notes" que no está en el formato BD
+        int supplierNotesColIndex = -1;
+        boolean esProcureshipLoad = formatoActual.getBrokerName() != null && 
+            formatoActual.getBrokerName().toUpperCase().contains("PROCURE");
+        if (esProcureshipLoad) {
+            int maxCol = cells.getMaxDataColumn();
+            for (int col = 0; col <= maxCol; col++) {
+                com.aspose.cells.Cell headerCell = cells.get(formatoActual.getHeaderRow(), col);
+                if (headerCell != null && headerCell.getStringValue() != null) {
+                    String headerValue = headerCell.getStringValue().trim();
+                    if (headerValue.toUpperCase().contains("SUPPLIER") && 
+                        headerValue.toUpperCase().contains("NOTE")) {
+                        supplierNotesColIndex = col;
+                        logger.info("📝 PROCURESHIP: Columna 'Supplier Notes' detectada en columna {} ({})", 
+                            col, headerValue);
+                        break;
+                    }
+                }
+            }
+            if (supplierNotesColIndex < 0) {
+                logger.warn("⚠️ PROCURESHIP: No se encontró columna 'Supplier Notes' en el header");
+            }
+        }
+        
         for (int i = startRow; i <= lastRow; i++) {
             RowData rowData = new RowData();
             boolean filaVacia = true;
@@ -5061,6 +5248,22 @@ private void leerExcelConAspose(File archivo) {
                 }
                 
                 rowData.set(col.getCampoEstandar(), valor);
+            }
+            
+            // 📝 PROCURESHIP: Leer columna "Supplier Notes" adicional (no está en formato BD)
+            if (supplierNotesColIndex >= 0) {
+                com.aspose.cells.Cell supplierNotesCell = cells.get(i, supplierNotesColIndex);
+                String supplierNotesValue = "";
+                if (supplierNotesCell != null) {
+                    try {
+                        supplierNotesValue = supplierNotesCell.getStringValue();
+                    } catch (Exception e) {
+                        supplierNotesValue = "";
+                    }
+                }
+                if (supplierNotesValue != null && !supplierNotesValue.trim().isEmpty()) {
+                    rowData.set("SUPPLIER_NOTES", supplierNotesValue);
+                }
             }
             
             // 💰 Inicializar columna PRECIO_VSS con 0.0 si existe en el formato
@@ -5249,10 +5452,14 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         "UOM", "UNIT", "UNIDAD", "UNIT_OF_MEASURE");
     
     // Extraer Vendor Remarks si existe
+    // IMPORTANTE: Los campos SUPPLIER tienen prioridad sobre COMMENTS genérico
     String vendorRemarks = obtenerValorDeCampo(rowData,
         "VENDOR_REMARKS", "VENDOR_REMARK", "VENDOR_NOTES", "VENDOR_NOTE", 
-        "VENDOR_COMMENTS", "VENDOR_COMMENT", "REMARKS", "COMMENTS",
-        "SUPPLIER_COMMENTS", "SUPPLIER_COMMENT", "SUPPLIER COMMENTS");
+        "VENDOR_COMMENTS", "VENDOR_COMMENT",
+        "SUPPLIER_COMMENTS", "SUPPLIER_COMMENT", "SUPPLIER COMMENTS",
+        "Supplier Commnets", "Supplier Comments", "SUPPLIER COMMNETS",
+        "SUPPLIER_NOTES", "SUPPLIER NOTES", "Supplier Notes",
+        "REMARKS", "COMMENTS");
     
     // Extraer Notes para Garret
     String notesGarret = obtenerValorDeCampo(rowData, "NOTES", "Notes");
@@ -5284,16 +5491,18 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
     
     // ============================
-    // PANEL VENDOR REMARKS (Para BSM CATERING, CMA CGM y MCTC MARINE)
+    // PANEL VENDOR REMARKS (Para BSM, CMA CGM, MCTC, OCEANIC, PROCURESHIP)
     // ============================
     VBox panelVendorRemarks = null;
     TextField txtVendorRemarks = null;
     
-    // Verificar si es BSM CATERING, CMA CGM o MCTC MARINE
+    // Verificar si es BSM CATERING, CMA CGM, MCTC MARINE, OCEANIC CATERING o PROCURESHIP
     boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBrokerName() != null && 
                             (formatoActual.getBrokerName().toUpperCase().contains("BSM") ||
                              formatoActual.getBrokerName().toUpperCase().contains("CMA") ||
-                             formatoActual.getBrokerName().toUpperCase().contains("MCTC"));
+                             formatoActual.getBrokerName().toUpperCase().contains("MCTC") ||
+                             formatoActual.getBrokerName().toUpperCase().contains("OCEANIC") ||
+                             formatoActual.getBrokerName().toUpperCase().contains("PROCURE"));
     
     if (permitirVendorRemarks) {
         panelVendorRemarks = new VBox(8);
@@ -5525,7 +5734,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         boolean notasGuardadas = false;
         StringBuilder mensajeNotas = new StringBuilder();
         
-        // Guardar Vendor Remarks (BSM, CMA CGM, MCTC)
+        // Guardar Vendor Remarks (BSM, CMA CGM, MCTC, OCEANIC, PROCURESHIP)
         if (txtVendorRemarksBtnRef != null) {
             String nuevoValorRemarks = txtVendorRemarksBtnRef.getText();
             String campoVendorRemarks = null;
@@ -5537,8 +5746,9 @@ private void abrirPopupEdicionProducto(RowData rowData) {
                     campoVendorRemarks = key;
                     break;
                 }
-                // Buscar SUPPLIER_COMMENTS (MCTC Marine)
-                if (keyUpper.contains("SUPPLIER") && keyUpper.contains("COMMENT")) {
+                // Buscar SUPPLIER_COMMENTS, SUPPLIER COMMNETS, SUPPLIER NOTES (MCTC, Oceanic, ProcureShip)
+                if (keyUpper.contains("SUPPLIER") && 
+                    (keyUpper.contains("COMMENT") || keyUpper.contains("COMMNET") || keyUpper.contains("NOTE"))) {
                     campoVendorRemarks = key;
                     break;
                 }
@@ -5658,7 +5868,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     VBox contenidoPrincipal = new VBox(15);
     contenidoPrincipal.getChildren().add(infoPanel);
     
-    // Agregar panel de Vendor Remarks si es BSM CATERING, CMA CGM o MCTC MARINE
+    // Agregar panel de Vendor Remarks si es BSM CATERING, CMA CGM, MCTC MARINE u OCEANIC CATERING
     if (panelVendorRemarks != null) {
         contenidoPrincipal.getChildren().add(panelVendorRemarks);
     }
@@ -5686,7 +5896,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     final TextField txtVendorRemarksFinal = txtVendorRemarks;
     final TextField txtNotesFinal = txtNotes;
     dialog.setOnCloseRequest(event -> {
-        // Guardar Vendor Remarks (BSM, CMA CGM, MCTC)
+        // Guardar Vendor Remarks (BSM, CMA CGM, MCTC, OCEANIC, PROCURESHIP)
         if (txtVendorRemarksFinal != null) {
             String nuevoValorRemarks = txtVendorRemarksFinal.getText();
             
@@ -5700,8 +5910,9 @@ private void abrirPopupEdicionProducto(RowData rowData) {
                     campoVendorRemarks = key;
                     break;
                 }
-                // Buscar SUPPLIER_COMMENTS (MCTC Marine)
-                if (keyUpper.contains("SUPPLIER") && keyUpper.contains("COMMENT")) {
+                // Buscar SUPPLIER_COMMENTS, SUPPLIER COMMNETS, SUPPLIER NOTES (MCTC, Oceanic, ProcureShip)
+                if (keyUpper.contains("SUPPLIER") && 
+                    (keyUpper.contains("COMMENT") || keyUpper.contains("COMMNET") || keyUpper.contains("NOTE"))) {
                     campoVendorRemarks = key;
                     break;
                 }
