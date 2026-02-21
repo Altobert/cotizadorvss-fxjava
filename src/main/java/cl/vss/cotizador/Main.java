@@ -5365,11 +5365,11 @@ private void leerExcelConAspose(File archivo) {
                         String.format("%,.2f", precioVSS));
 
                 } else {
-                    rowData.set("precio_vss_calculado", "0.0");
+                    //rowData.set("precio_vss_calculado", "0.0");
                     rowData.set("UNIT_PRICE", String.format("%.2f", 0.00));
                 }
             } else {
-                rowData.set("precio_vss_calculado", "0.0");
+                //rowData.set("precio_vss_calculado", "0.0");
                 rowData.set("UNIT_PRICE", String.format("%.2f", 0.00));
             }
             
