@@ -39,10 +39,12 @@ import cl.vss.cotizador.service.AsposeExcelService;
 import cl.vss.cotizador.service.CotizacionService;
 import cl.vss.cotizador.service.ParametrosDAO;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -82,6 +84,7 @@ import cl.vss.cotizador.util.DBConnection;
 import cl.vss.cotizador.util.Sesion;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import cl.vss.cotizador.view.CargaCotizacionProgressController;
 import cl.vss.cotizador.view.UserCrudView;
 
 
@@ -130,6 +133,8 @@ public class Main extends Application {
     // 👉 ComboBox para brokers en la pestaña Cotización
     private ComboBox<Broker> comboBrokers;
     private ObservableList<Broker> listaBrokers;
+    private Button btnCargarCotizacion;
+    private CargaCotizacionProgressController cargaProgressController;
     
     // 👉 Tabla dinámica para cotizaciones con formato de broker
     private final TableView<RowData> tablaDinamica = new TableView<>();
@@ -194,8 +199,8 @@ public class Main extends Application {
     BorderPane rootCotizador = new BorderPane();
     
     // 👉 Botón para cargar cotizaciones
-    Button btnSubir = new Button("📤 Cargar Cotización");
-    btnSubir.setOnAction(e -> cargarArchivo(stage));
+    btnCargarCotizacion = new Button("📤 Cargar Cotización");
+    btnCargarCotizacion.setOnAction(e -> cargarArchivo(stage));
     
     //Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
     //btnAnalizar.setDisable(true); // Deshabilitado inicialmente
@@ -223,20 +228,25 @@ public class Main extends Application {
     });
 
     // 👉 aplicar estilo corporativo VSS (azul con letras blancas)
-    btnSubir.getStyleClass().add("color-primario");
+    btnCargarCotizacion.getStyleClass().add("color-primario");
     //btnAnalizar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
     btnExportar.getStyleClass().add("color-primario");
 
+    cargaProgressController = new CargaCotizacionProgressController(btnCargarCotizacion, comboBrokers);
+    HBox estadoCarga = cargaProgressController.getVista();
+
     //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
     ToolBar barraCotizador = new ToolBar(
-        btnSubir,
+        btnCargarCotizacion,
         new Separator(), 
         btnLimpiar,
         new Separator(), 
         btnExportar,
         new Separator(),
-        new Label("Broker:"), comboBrokers
+        new Label("Broker:"), comboBrokers,
+        new Separator(),
+        estadoCarga
     );
     rootCotizador.setTop(barraCotizador);
     
@@ -1296,16 +1306,72 @@ private void cargarProductos() {
     }
 
     private void cargarArchivo(Stage stage) {
+    if (cargaProgressController != null && cargaProgressController.isEnCurso()) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Carga en proceso");
+        alert.setHeaderText("Ya hay una cotización cargándose");
+        alert.setContentText("Espera a que termine la carga actual para iniciar otra.");
+        alert.showAndWait();
+        return;
+    }
+
     FileChooser fileChooser = new FileChooser();
     fileChooser.setTitle("Seleccionar archivo Excel");
     fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx", "*.xlsm"));
     File archivo = fileChooser.showOpenDialog(stage);
 
-    if (archivo != null) {
-        // 👉 Usar el nuevo método con formato dinámico
-        leerExcelConFormato(archivo);
+    if (archivo == null) {
+        return;
     }
+
+    Task<Void> taskCarga = new Task<Void>() {
+        @Override
+        protected Void call() {
+            leerExcelConFormato(archivo);
+            return null;
+        }
+    };
+
+    taskCarga.setOnRunning(e -> {
+        if (cargaProgressController != null) {
+            cargaProgressController.iniciar("Procesando " + archivo.getName() + "...");
+        }
+    });
+
+    taskCarga.setOnSucceeded(e -> {
+        if (cargaProgressController != null) {
+            cargaProgressController.completar("Carga completada");
+        }
+    });
+
+    taskCarga.setOnFailed(e -> {
+        if (cargaProgressController != null) {
+            cargaProgressController.error("Error en la carga");
+        }
+
+        Throwable error = taskCarga.getException();
+        if (error != null) {
+            logger.error("Error no controlado en carga de cotización", error);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Error al cargar cotización");
+            alert.setContentText(error.getMessage() != null ? error.getMessage() : "Error desconocido.");
+            alert.showAndWait();
+        }
+    });
+
+    Thread hiloCarga = new Thread(taskCarga, "carga-cotizacion-thread");
+    hiloCarga.setDaemon(true);
+    hiloCarga.start();
 }
+
+    private void ejecutarEnHiloFX(Runnable accion) {
+        if (Platform.isFxApplicationThread()) {
+            accion.run();
+            return;
+        }
+        Platform.runLater(accion);
+    }
 
 
 
@@ -4933,11 +4999,13 @@ private void configurarTablaDinamica() {
 // ============================================================
 private void leerExcelConFormato(File archivo) {
     if (formatoActual == null) {
-        Alert alert = new Alert(Alert.AlertType.WARNING);
-        alert.setTitle("Formato no seleccionado");
-        alert.setHeaderText("Debe seleccionar un broker primero");
-        alert.setContentText("Por favor, seleccione un broker del combo box antes de cargar el archivo.");
-        alert.showAndWait();
+        ejecutarEnHiloFX(() -> {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Formato no seleccionado");
+            alert.setHeaderText("Debe seleccionar un broker primero");
+            alert.setContentText("Por favor, seleccione un broker del combo box antes de cargar el archivo.");
+            alert.showAndWait();
+        });
         return;
     }
     
@@ -5132,31 +5200,39 @@ private void leerExcelConFormato(File archivo) {
             }
         }
         
-        // Actualizar tabla
-        tablaDinamica.setItems(datos);
-        
         logger.info("Se cargaron {} filas con datos desde el Excel", datos.size());
         logger.info("Se filtraron {} filas vacías", filasVacias);
         logger.info("Se calcularon precios automáticamente para {} productos", productosConPrecio);
-        
-        Alert info = new Alert(Alert.AlertType.INFORMATION);
-        info.setTitle("Archivo cargado");
-        info.setHeaderText("Excel procesado exitosamente");
-        String mensajeFilasVacias = filasVacias > 0 ? "\n🗑️ Filas vacías filtradas: " + filasVacias : "";
-        info.setContentText("Se cargaron " + datos.size() + " filas con formato de " + 
-                          formatoActual.getBrokerName() + 
-                          mensajeFilasVacias +
-                          "\n\n✅ Precios VSS calculados automáticamente: " + productosConPrecio + 
-                          " de " + datos.size() + " productos");
-        info.showAndWait();
+        final int totalFilasCargadas = datos.size();
+        final int filasVaciasFinal = filasVacias;
+        final int productosConPrecioFinal = productosConPrecio;
+        final String brokerNombre = formatoActual != null ? formatoActual.getBrokerName() : "Broker";
+
+        ejecutarEnHiloFX(() -> {
+            tablaDinamica.setItems(datos);
+
+            Alert info = new Alert(Alert.AlertType.INFORMATION);
+            info.setTitle("Archivo cargado");
+            info.setHeaderText("Excel procesado exitosamente");
+            String mensajeFilasVacias = filasVaciasFinal > 0 ? "\n🗑️ Filas vacías filtradas: " + filasVaciasFinal : "";
+            info.setContentText("Se cargaron " + totalFilasCargadas + " filas con formato de " + 
+                              brokerNombre + 
+                              mensajeFilasVacias +
+                              "\n\n✅ Precios VSS calculados automáticamente: " + productosConPrecioFinal + 
+                              " de " + totalFilasCargadas + " productos");
+            info.showAndWait();
+        });
         
     } catch (Exception e) {
         logger.error("Error al leer Excel con formato", e);
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Error");
-        alert.setHeaderText("Error al procesar Excel");
-        alert.setContentText("Error al leer el archivo Excel: " + e.getMessage());
-        alert.showAndWait();
+        final String mensajeError = e.getMessage();
+        ejecutarEnHiloFX(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Error al procesar Excel");
+            alert.setContentText("Error al leer el archivo Excel: " + mensajeError);
+            alert.showAndWait();
+        });
     }
 }
 
@@ -5365,41 +5441,46 @@ private void leerExcelConAspose(File archivo) {
             }
         }
         
-        tablaDinamica.setItems(datos);
-        
         logger.info("✅ Se cargaron {} filas con Aspose (macros preservadas)", datos.size());
         logger.info("📎 Macros VBA: {}", workbook.getVbaProject() != null ? "✅ Detectadas" : "❌ No hay");
-        
-        // Mensaje de confirmación
-        Alert info = new Alert(Alert.AlertType.INFORMATION);
-        info.setTitle("Archivo cargado con Aspose");
-        info.setHeaderText("✅ Excel con macros procesado exitosamente");
-        
-        String infoMacros = "";
-        if (workbook.getVbaProject() != null) {
-            int modulosVba = workbook.getVbaProject().getModules().getCount();
-            infoMacros = "\n\n📌 Macros VBA: " + modulosVba + " módulos preservados";
-        }
-        
-        String mensajeFilasVacias = filasVacias > 0 ? "\n🗑️ Filas vacías filtradas: " + filasVacias : "";
-        info.setContentText("Se cargaron " + datos.size() + " filas con formato de " + 
-                          formatoActual.getBrokerName() + 
-                          mensajeFilasVacias +
-                          "\n\n✅ Precios VSS calculados: " + productosConPrecio + 
-                          " de " + datos.size() + " productos" +
-                          infoMacros +
-                          "\n\n💡 Al exportar, las macros se preservarán.");
-        info.showAndWait();
+        final int totalFilasCargadas = datos.size();
+        final int filasVaciasFinal = filasVacias;
+        final int productosConPrecioFinal = productosConPrecio;
+        final String brokerNombre = formatoActual != null ? formatoActual.getBrokerName() : "Broker";
+        final String infoMacros = workbook.getVbaProject() != null
+            ? "\n\n📌 Macros VBA: " + workbook.getVbaProject().getModules().getCount() + " módulos preservados"
+            : "";
+
+        ejecutarEnHiloFX(() -> {
+            tablaDinamica.setItems(datos);
+
+            Alert info = new Alert(Alert.AlertType.INFORMATION);
+            info.setTitle("Archivo cargado con Aspose");
+            info.setHeaderText("✅ Excel con macros procesado exitosamente");
+
+            String mensajeFilasVacias = filasVaciasFinal > 0 ? "\n🗑️ Filas vacías filtradas: " + filasVaciasFinal : "";
+            info.setContentText("Se cargaron " + totalFilasCargadas + " filas con formato de " + 
+                              brokerNombre + 
+                              mensajeFilasVacias +
+                              "\n\n✅ Precios VSS calculados: " + productosConPrecioFinal + 
+                              " de " + totalFilasCargadas + " productos" +
+                              infoMacros +
+                              "\n\n💡 Al exportar, las macros se preservarán.");
+            info.showAndWait();
+        });
         
     } catch (Exception e) {
         logger.error("❌ Error al leer Excel con Aspose", e);
         rutaArchivoConMacros = null;
-        
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Error");
-        alert.setHeaderText("Error al procesar Excel con Aspose");
-        alert.setContentText("Error: " + e.getMessage() + "\n\nIntentando con Apache POI...");
-        alert.showAndWait();
+        final String mensajeError = e.getMessage();
+
+        ejecutarEnHiloFX(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Error al procesar Excel con Aspose");
+            alert.setContentText("Error: " + mensajeError + "\n\nIntentando con Apache POI...");
+            alert.showAndWait();
+        });
         
         // Fallback a POI si Aspose falla
         // (no debería ocurrir, pero por seguridad)
