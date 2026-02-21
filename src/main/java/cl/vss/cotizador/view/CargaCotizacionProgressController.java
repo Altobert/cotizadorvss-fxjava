@@ -1,5 +1,6 @@
 package cl.vss.cotizador.view;
 
+import javafx.application.Platform;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -17,11 +18,20 @@ public class CargaCotizacionProgressController {
     private boolean enCurso;
 
     public CargaCotizacionProgressController(Button botonCargar, ComboBox<?> comboBrokers) {
+        this(botonCargar, comboBrokers, "Carga:", "Listo");
+    }
+
+    public CargaCotizacionProgressController(
+        Button botonCargar,
+        ComboBox<?> comboBrokers,
+        String etiqueta,
+        String estadoInicial
+    ) {
         this.botonCargar = botonCargar;
         this.comboBrokers = comboBrokers;
         this.progressBar = new ProgressBar();
-        this.lblEstado = new Label("Listo");
-        this.vista = new HBox(6, new Label("Carga:"), progressBar, lblEstado);
+        this.lblEstado = new Label(estadoInicial);
+        this.vista = new HBox(6, new Label(etiqueta), progressBar, lblEstado);
         this.enCurso = false;
 
         configurarControles();
@@ -32,9 +42,13 @@ public class CargaCotizacionProgressController {
         progressBar.setPrefHeight(20);
         progressBar.setMinHeight(20);
         progressBar.setMaxHeight(20);
+        progressBar.setMinWidth(240);
         progressBar.setProgress(0);
-        progressBar.setVisible(false);
-        progressBar.setManaged(false);
+        progressBar.setVisible(true);
+        progressBar.setManaged(true);
+        progressBar.setDisable(true);
+        progressBar.setStyle("-fx-accent: #9AA0A6;");
+        lblEstado.setStyle("-fx-text-fill: #555; -fx-font-size: 11px;");
         vista.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
     }
 
@@ -48,17 +62,25 @@ public class CargaCotizacionProgressController {
 
     public void iniciar(String mensaje) {
         enCurso = true;
-        aplicarEstado(true, mensaje);
+        ejecutarEnFx(() -> aplicarEstado(true, mensaje));
     }
 
     public void completar(String mensaje) {
         enCurso = false;
-        aplicarEstado(false, mensaje);
+        ejecutarEnFx(() -> aplicarEstado(false, mensaje));
     }
 
     public void error(String mensaje) {
         enCurso = false;
-        aplicarEstado(false, mensaje);
+        ejecutarEnFx(() -> aplicarEstado(false, mensaje));
+    }
+
+    private void ejecutarEnFx(Runnable accion) {
+        if (Platform.isFxApplicationThread()) {
+            accion.run();
+            return;
+        }
+        Platform.runLater(accion);
     }
 
     private void aplicarEstado(boolean enProceso, String mensaje) {
@@ -69,9 +91,12 @@ public class CargaCotizacionProgressController {
             comboBrokers.setDisable(enProceso);
         }
 
-        progressBar.setVisible(enProceso);
-        progressBar.setManaged(enProceso);
+        progressBar.setDisable(!enProceso);
         progressBar.setProgress(enProceso ? ProgressIndicator.INDETERMINATE_PROGRESS : 0);
+        progressBar.setStyle(enProceso ? "-fx-accent: #0A84FF;" : "-fx-accent: #9AA0A6;");
+        lblEstado.setStyle(enProceso
+            ? "-fx-text-fill: #0A84FF; -fx-font-size: 11px; -fx-font-weight: bold;"
+            : "-fx-text-fill: #555; -fx-font-size: 11px;");
         lblEstado.setText(mensaje);
     }
 }

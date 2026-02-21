@@ -134,7 +134,9 @@ public class Main extends Application {
     private ComboBox<Broker> comboBrokers;
     private ObservableList<Broker> listaBrokers;
     private Button btnCargarCotizacion;
+    private Button btnExportarCotizacion;
     private CargaCotizacionProgressController cargaProgressController;
+    private boolean exportacionEnCurso = false;
     
     // 👉 Tabla dinámica para cotizaciones con formato de broker
     private final TableView<RowData> tablaDinamica = new TableView<>();
@@ -209,8 +211,8 @@ public class Main extends Application {
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
     btnLimpiar.setOnAction(e -> limpiarTabla());
 
-    Button btnExportar = new Button("💾 Exportar Cotización");
-    btnExportar.setOnAction(e -> exportarCotizacion(stage));
+    btnExportarCotizacion = new Button("💾 Exportar Cotización");
+    btnExportarCotizacion.setOnAction(e -> exportarCotizacion(stage));
 
     // 👉 ComboBox de Brokers
     comboBrokers = new ComboBox<>();
@@ -231,7 +233,7 @@ public class Main extends Application {
     btnCargarCotizacion.getStyleClass().add("color-primario");
     //btnAnalizar.getStyleClass().add("color-primario");
     btnLimpiar.getStyleClass().add("color-primario");
-    btnExportar.getStyleClass().add("color-primario");
+    btnExportarCotizacion.getStyleClass().add("color-primario");
 
     cargaProgressController = new CargaCotizacionProgressController(btnCargarCotizacion, comboBrokers);
     HBox estadoCarga = cargaProgressController.getVista();
@@ -239,14 +241,14 @@ public class Main extends Application {
     //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
     ToolBar barraCotizador = new ToolBar(
         btnCargarCotizacion,
+        new Separator(),
+        estadoCarga,
         new Separator(), 
         btnLimpiar,
         new Separator(), 
-        btnExportar,
+        btnExportarCotizacion,
         new Separator(),
-        new Label("Broker:"), comboBrokers,
-        new Separator(),
-        estadoCarga
+        new Label("Broker:"), comboBrokers
     );
     rootCotizador.setTop(barraCotizador);
     
@@ -1324,6 +1326,10 @@ private void cargarProductos() {
         return;
     }
 
+    if (cargaProgressController != null) {
+        cargaProgressController.iniciar("Procesando " + archivo.getName() + "...");
+    }
+
     Task<Void> taskCarga = new Task<Void>() {
         @Override
         protected Void call() {
@@ -1331,12 +1337,6 @@ private void cargarProductos() {
             return null;
         }
     };
-
-    taskCarga.setOnRunning(e -> {
-        if (cargaProgressController != null) {
-            cargaProgressController.iniciar("Procesando " + archivo.getName() + "...");
-        }
-    });
 
     taskCarga.setOnSucceeded(e -> {
         if (cargaProgressController != null) {
@@ -1834,6 +1834,15 @@ private void cargarProductos() {
     }
 
            private void exportarCotizacion(Stage stage) {
+          if (exportacionEnCurso) {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Exportación en proceso");
+            alert.setHeaderText("Ya hay una exportación en curso");
+            alert.setContentText("Espera a que termine la exportación actual para iniciar otra.");
+            alert.showAndWait();
+            return;
+        }
+
         // Validar que hay datos para exportar
         if (tablaDinamica.getItems().isEmpty()) {
             Alert alert = new Alert(Alert.AlertType.WARNING);
@@ -1882,155 +1891,123 @@ private void cargarProductos() {
         if (archivo == null) {
             return; // Usuario canceló
         }
-        
-        // 🔷 Si hay workbook Aspose, exportar con Aspose (preserva macros del archivo original)
-        if (usarAspose) {
-            exportarConAspose(archivo);
-            return;
-        }
-        
-        // Si hay plantilla, usar el método de exportación con plantilla
-        if (usarPlantilla) {
-            exportarConPlantilla(archivo, rutaPlantilla);
-            return;
-        }
-        
-        // Flujo original sin plantilla
+        final List<RowData> datosExportar = new java.util.ArrayList<>(tablaDinamica.getItems());
+
+        Task<Void> taskExportacion = new Task<Void>() {
+            @Override
+            protected Void call() {
+                if (usarAspose) {
+                    exportarConAspose(archivo, datosExportar);
+                } else if (usarPlantilla) {
+                    exportarConPlantilla(archivo, rutaPlantilla, datosExportar);
+                } else {
+                    exportarSinPlantilla(archivo, datosExportar);
+                }
+                return null;
+            }
+        };
+
+        taskExportacion.setOnRunning(e -> {
+            exportacionEnCurso = true;
+            if (btnExportarCotizacion != null) {
+                btnExportarCotizacion.setDisable(true);
+            }
+        });
+
+        taskExportacion.setOnSucceeded(e -> {
+            exportacionEnCurso = false;
+            if (btnExportarCotizacion != null) {
+                btnExportarCotizacion.setDisable(false);
+            }
+        });
+
+        taskExportacion.setOnFailed(e -> {
+            exportacionEnCurso = false;
+            if (btnExportarCotizacion != null) {
+                btnExportarCotizacion.setDisable(false);
+            }
+            Throwable error = taskExportacion.getException();
+            logger.error("❌ Error no controlado al exportar cotización", error);
+            ejecutarEnHiloFX(() -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Error");
+                alert.setHeaderText("Error al exportar cotización");
+                alert.setContentText(error != null && error.getMessage() != null
+                    ? error.getMessage()
+                    : "Error desconocido.");
+                alert.showAndWait();
+            });
+        });
+
+        Thread hiloExportacion = new Thread(taskExportacion, "exportacion-cotizacion-thread");
+        hiloExportacion.setDaemon(true);
+        hiloExportacion.start();
+    }
+
+    private void exportarSinPlantilla(File archivo, List<RowData> datosExportar) {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             XSSFSheet sheet = workbook.createSheet("Cotización");
             
             logger.info("🚀 Exportando cotización con formato específico de {}", formatoActual.getBrokerName());
             
-            // ============================
-            // PASO 1: COLOCAR METADATA EN POSICIONES EXACTAS
-            // ============================
             if (metadataActual != null && !metadataActual.isEmpty()) {
                 logger.info("📋 Colocando {} secciones de metadata en posiciones específicas", metadataActual.size());
                 
                 for (Map.Entry<String, List<BrokerMetadata>> entry : metadataActual.entrySet()) {
                     for (BrokerMetadata metadata : entry.getValue()) {
-                        int filaExcel = metadata.getFilaOrigen() - 1; // Excel es 1-indexed, POI es 0-indexed
+                        int filaExcel = metadata.getFilaOrigen() - 1;
                         int colExcel = metadata.getColumnaOrigen();
-                        
-                        // Validar que la fila no sea negativa
                         if (filaExcel < 0) {
                             logger.warn("⚠️ Metadata con fila inválida ({}), saltando: {}", 
                                 metadata.getFilaOrigen(), metadata.getCampoNombre());
                             continue;
                         }
-                        
-                        // Crear fila si no existe
                         Row row = sheet.getRow(filaExcel);
                         if (row == null) {
                             row = sheet.createRow(filaExcel);
                         }
-                        
-                        // Crear celda y asignar valor en formato "nombreCampo=valor"
                         Cell cell = row.createCell(colExcel);
                         String campoNombre = metadata.getCampoNombre();
                         String valor = metadata.getCampoValor();
-                        
                         if (valor != null && !valor.isEmpty()) {
                             String valorFormateado = campoNombre + "=" + valor;
                             cell.setCellValue(valorFormateado);
                         }
-                        
-                        logger.debug("  └─ {} [{}]: '{}' → Fila {} Col {}", 
-                            metadata.getSeccion(), 
-                            metadata.getCampoNombre(), 
-                            valor, 
-                            filaExcel + 1, 
-                            metadata.getLetraColumna());
                     }
                 }
             }
-            
-            // ============================
-            // PASO 2: CREAR ENCABEZADOS EN header_row CON FORMATO ESPECÍFICO
-            // ============================
-            // Nota: getHeaderRow() puede ser 0-indexed (Aspose) o 1-indexed (original)
-            // Si es >= 1, asumimos 1-indexed y restamos 1
-            // Si es 0, lo usamos directamente
+
             int headerRowIndex = formatoActual.getHeaderRow();
-            if (headerRowIndex >= 1) {
-                // Verificar si parece ser 1-indexed (mayor que 0)
-                // Para la mayoría de brokers, headerRow es >= 10, así que asumimos 0-indexed
-                // Solo restamos 1 si parece ser 1-indexed (valor muy bajo como 1-5)
-                // Por seguridad, no restamos nada - getHeaderRow() ya debería ser 0-indexed
-            }
-            
-            // Validar que no sea negativo
             if (headerRowIndex < 0) {
                 headerRowIndex = 0;
                 logger.warn("⚠️ HeaderRow era negativo, usando fila 0");
             }
-            
-            logger.info("📊 HeaderRow para exportación POI: {} (0-indexed)", headerRowIndex);
-            
+
             Row headerRow = sheet.getRow(headerRowIndex);
             if (headerRow == null) {
                 headerRow = sheet.createRow(headerRowIndex);
             }
-            
-            logger.info("📊 Creando encabezados en fila {} con {} columnas", 
-                formatoActual.getHeaderRow(), formatoActual.getColumnas().size());
-            
-            // Determinar índice de columna PRECIO_VSS (siguiente a la última columna del formato)
-            int maxColIndex = 0;
-            for (FormatoColumna columna : formatoActual.getColumnas()) {
-                if (columna.getIndiceColumna() > maxColIndex) {
-                    maxColIndex = columna.getIndiceColumna();
-                }
-            }
-            int precioVssColIndex = maxColIndex + 1;
-            
-            // Crear cache de estilos para las columnas (mejor rendimiento)
+
             Map<Integer, CellStyle> estilosColumnas = new HashMap<>();
-            
             for (FormatoColumna columna : formatoActual.getColumnas()) {
                 int colIndex = columna.getIndiceColumna();
-                
-                // Crear celda de encabezado
                 Cell headerCell = headerRow.createCell(colIndex);
                 headerCell.setCellValue(columna.getNombreColumnaOriginal());
-                
-                // Crear estilo para esta columna
                 CellStyle estiloColumna = crearEstiloColumna(workbook, columna);
-                
                 headerCell.setCellStyle(estiloColumna);
                 estilosColumnas.put(colIndex, estiloColumna);
-                
-                logger.debug("  └─ Col {} [{}]: '{}' - Negrita:{} Color:{}", 
-                    columna.getLetraColumna(), 
-                    columna.getCampoEstandar(),
-                    columna.getNombreColumnaOriginal(),
-                    columna.getEsNegrita(),
-                    columna.getColorFondo());
             }
-            
-            // 💰 Agregar encabezado "Precio VSS" en la última columna
-            // COMENTADO: El usuario solicitó no incluir esta columna en la exportación
-            // Cell precioVssHeaderCell = headerRow.createCell(precioVssColIndex);
-            // precioVssHeaderCell.setCellValue("Precio VSS");
-            // logger.info("💰 Columna 'Precio VSS' agregada en índice {} (columna {})", 
-            //     precioVssColIndex, (char)('A' + precioVssColIndex));
-            
-            // ============================
-            // PASO 3: INSERTAR DATOS DE LA TABLA EN LAS POSICIONES CORRECTAS
-            // ============================
+
             int dataStartRow = headerRowIndex + 1;
             logger.info("📦 Insertando {} productos a partir de la fila {}", 
-                tablaDinamica.getItems().size(), dataStartRow + 1);
-            
-            // Crear cache de estilos para datos (reutilizables para evitar límite de POI)
+                datosExportar.size(), dataStartRow + 1);
+
             Map<Integer, CellStyle> estilosDatos = new HashMap<>();
             Map<Integer, CellStyle> estilosDatosDecimal = new HashMap<>();
             DataFormat formatoNumerico = workbook.createDataFormat();
-            
+
             for (FormatoColumna columna : formatoActual.getColumnas()) {
                 int colIndex = columna.getIndiceColumna();
-                
-                // Estilo básico para datos (solo bordes)
                 CellStyle estiloDatos = workbook.createCellStyle();
                 if (estilosColumnas.containsKey(colIndex)) {
                     CellStyle estiloOriginal = estilosColumnas.get(colIndex);
@@ -2040,8 +2017,7 @@ private void cargarProductos() {
                     estiloDatos.setBorderRight(estiloOriginal.getBorderRight());
                 }
                 estilosDatos.put(colIndex, estiloDatos);
-                
-                // Estilo para decimales (bordes + formato numérico)
+
                 if ("DECIMAL".equalsIgnoreCase(columna.getTipoDato())) {
                     CellStyle estiloDecimal = workbook.createCellStyle();
                     estiloDecimal.cloneStyleFrom(estiloDatos);
@@ -2049,40 +2025,30 @@ private void cargarProductos() {
                     estilosDatosDecimal.put(colIndex, estiloDecimal);
                 }
             }
-            
+
             int currentRow = dataStartRow;
-            for (RowData rowData : tablaDinamica.getItems()) {
+            for (RowData rowData : datosExportar) {
                 Row row = sheet.createRow(currentRow++);
-                
-                // Mapear cada columna de la tabla a su posición en el formato
                 for (FormatoColumna columna : formatoActual.getColumnas()) {
                     int colIndex = columna.getIndiceColumna();
                     String campoEstandar = columna.getCampoEstandar();
-                    
-                    // Buscar el valor en rowData
                     String valor = rowData.get(campoEstandar);
-                    
-                    // 💰 Caso especial: PRECIO_VSS usa el valor calculado
                     if ("PRECIO_VSS".equals(campoEstandar)) {
                         valor = rowData.get("precio_vss_calculado");
                         if (valor == null || valor.isEmpty()) {
                             valor = "0.0";
                         }
                     }
-                    
+
                     if (valor != null && !valor.isEmpty()) {
                         Cell cell = row.createCell(colIndex);
                         String valorStr = valor;
-                        
-                        // Intentar parsear como número según el tipo de dato
                         if ("DECIMAL".equalsIgnoreCase(columna.getTipoDato()) || 
                             "INTEGER".equalsIgnoreCase(columna.getTipoDato()) ||
                             "PRECIO_VSS".equals(campoEstandar)) {
                             try {
                                 double numValue = Double.parseDouble(valorStr.replace("$", "").replace(",", ""));
                                 cell.setCellValue(numValue);
-                                
-                                // Aplicar estilo decimal o datos según corresponda
                                 if (estilosDatosDecimal.containsKey(colIndex)) {
                                     cell.setCellStyle(estilosDatosDecimal.get(colIndex));
                                 } else if (estilosDatos.containsKey(colIndex)) {
@@ -2102,27 +2068,8 @@ private void cargarProductos() {
                         }
                     }
                 }
-                
-                // 💰 Agregar valor de Precio VSS (calculado en frontend)
-                // COMENTADO: El usuario solicitó no incluir esta columna en la exportación
-                // String precioVssValor = rowData.get("precio_vss_calculado");
-                // if (precioVssValor == null || precioVssValor.isEmpty()) {
-                //     precioVssValor = "0.0";
-                // }
-                // Cell precioVssCell = row.createCell(precioVssColIndex);
-                // try {
-                //     double precioVss = Double.parseDouble(
-                //         precioVssValor.replace("$", "").replace(",", "")
-                //     );
-                //     precioVssCell.setCellValue(precioVss);
-                // } catch (NumberFormatException e) {
-                //     precioVssCell.setCellValue(precioVssValor);
-                // }
             }
-            
-            // ============================
-            // PASO 4: AJUSTAR ANCHOS DE COLUMNA
-            // ============================
+
             final int MAX_COLUMN_WIDTH = 255 * 256;
             for (FormatoColumna columna : formatoActual.getColumnas()) {
                 try {
@@ -2135,34 +2082,44 @@ private void cargarProductos() {
                     sheet.setColumnWidth(columna.getIndiceColumna(), 8000);
                 }
             }
-            
-            // Guardar archivo
+
             try (FileOutputStream outputStream = new FileOutputStream(archivo)) {
                 workbook.write(outputStream);
             }
-            
+
             logger.info("✅ Cotización exportada exitosamente con formato de {}: {}", 
                 formatoActual.getBrokerName(), archivo.getAbsolutePath());
-            
-            // Mensaje de confirmación
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Exportación Exitosa");
-            alert.setHeaderText("Cotización exportada en formato " + formatoActual.getBrokerName());
-            alert.setContentText("Archivo guardado en:\n" + archivo.getAbsolutePath() + 
-                "\n\n✓ Broker: " + formatoActual.getBrokerName() +
-                "\n✓ Formato ID: " + formatoActual.getFormatoId() +
-                "\n✓ Columnas: " + formatoActual.getColumnas().size() +
-                "\n✓ Productos: " + tablaDinamica.getItems().size() +
-                (metadataActual != null ? "\n✓ Metadata: " + contarMetadataTotal() + " campos" : ""));
-            alert.showAndWait();
-            
+
+            final String ruta = archivo.getAbsolutePath();
+            final String broker = formatoActual.getBrokerName();
+            final int formatoId = formatoActual.getFormatoId();
+            final int totalCols = formatoActual.getColumnas().size();
+            final int totalItems = datosExportar.size();
+            final String metadataInfo = metadataActual != null ? "\n✓ Metadata: " + contarMetadataTotal() + " campos" : "";
+
+            ejecutarEnHiloFX(() -> {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Exportación Exitosa");
+                alert.setHeaderText("Cotización exportada en formato " + broker);
+                alert.setContentText("Archivo guardado en:\n" + ruta + 
+                    "\n\n✓ Broker: " + broker +
+                    "\n✓ Formato ID: " + formatoId +
+                    "\n✓ Columnas: " + totalCols +
+                    "\n✓ Productos: " + totalItems +
+                    metadataInfo);
+                alert.showAndWait();
+            });
+
         } catch (Exception e) {
             logger.error("❌ Error al exportar cotización", e);
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Error");
-            alert.setHeaderText("Error al exportar cotización");
-            alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
-            alert.showAndWait();
+            final String mensaje = e.getMessage();
+            ejecutarEnHiloFX(() -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Error");
+                alert.setHeaderText("Error al exportar cotización");
+                alert.setContentText("No se pudo exportar el archivo:\n" + mensaje);
+                alert.showAndWait();
+            });
         }
     }
     
@@ -2174,7 +2131,7 @@ private void cargarProductos() {
      * @param archivoDestino Archivo donde guardar la exportación
      * @param rutaPlantilla Ruta del recurso de la plantilla
      */
-    private void exportarConPlantilla(File archivoDestino, String rutaPlantilla) {
+    private void exportarConPlantilla(File archivoDestino, String rutaPlantilla, List<RowData> datosExportar) {
         logger.info("📄 Exportando con plantilla: {}", rutaPlantilla);
         
         try (InputStream plantillaStream = getClass().getResourceAsStream(rutaPlantilla)) {
@@ -2191,7 +2148,7 @@ private void cargarProductos() {
                 int dataStartRow = headerRowIndex + 1;
                 
                 logger.info("📦 Insertando {} productos a partir de la fila {} (preservando formato original)", 
-                    tablaDinamica.getItems().size(), dataStartRow + 1);
+                    datosExportar.size(), dataStartRow + 1);
                 
                 // Limpiar filas de datos existentes en la plantilla (si las hay)
                 int lastRowNum = sheet.getLastRowNum();
@@ -2306,7 +2263,7 @@ private void cargarProductos() {
                 // Insertar datos de tablaDinámica
                 int currentRowNum = dataStartRow;
                 int filasConPrecioVss = 0;
-                for (RowData rowData : tablaDinamica.getItems()) {
+                for (RowData rowData : datosExportar) {
                     Row row = sheet.createRow(currentRowNum++);
                     
                     // Mapear cada columna según el formato
@@ -2397,25 +2354,33 @@ private void cargarProductos() {
                     archivoDestino.getAbsolutePath());
                 
                 // Mensaje de confirmación
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Exportación Exitosa");
-                alert.setHeaderText("Cotización exportada con formato " + formatoActual.getBrokerName());
-                alert.setContentText("Archivo guardado en:\n" + archivoDestino.getAbsolutePath() + 
-                    "\n\n✓ Broker: " + formatoActual.getBrokerName() +
-                    "\n✓ Plantilla: SÍ (formato original preservado)" +
-                    "\n✓ Logo: Preservado" +
-                    "\n✓ Macros: Preservadas" +
-                    "\n✓ Productos: " + tablaDinamica.getItems().size());
-                alert.showAndWait();
+                final String brokerNombre = formatoActual.getBrokerName();
+                final String rutaDestino = archivoDestino.getAbsolutePath();
+                final int totalProductos = datosExportar.size();
+                ejecutarEnHiloFX(() -> {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Exportación Exitosa");
+                    alert.setHeaderText("Cotización exportada con formato " + brokerNombre);
+                    alert.setContentText("Archivo guardado en:\n" + rutaDestino + 
+                        "\n\n✓ Broker: " + brokerNombre +
+                        "\n✓ Plantilla: SÍ (formato original preservado)" +
+                        "\n✓ Logo: Preservado" +
+                        "\n✓ Macros: Preservadas" +
+                        "\n✓ Productos: " + totalProductos);
+                    alert.showAndWait();
+                });
             }
             
         } catch (Exception e) {
             logger.error("❌ Error al exportar con plantilla", e);
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Error");
-            alert.setHeaderText("Error al exportar con plantilla");
-            alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
-            alert.showAndWait();
+            final String mensajeError = e.getMessage();
+            ejecutarEnHiloFX(() -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Error");
+                alert.setHeaderText("Error al exportar con plantilla");
+                alert.setContentText("No se pudo exportar el archivo:\n" + mensajeError);
+                alert.showAndWait();
+            });
         }
     }
     
@@ -2429,7 +2394,7 @@ private void cargarProductos() {
      * 
      * @param archivoDestino Archivo donde guardar la exportación
      */
-    private void exportarConAspose(File archivoDestino) {
+    private void exportarConAspose(File archivoDestino, List<RowData> datosExportar) {
         logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
         
         try {
@@ -2511,7 +2476,7 @@ private void cargarProductos() {
             logger.info("📊 Header row del formato: {} (Excel) -> {} (Aspose 0-indexed)", 
                 formatoActual.getHeaderRow(), headerRowIndex);
             logger.info("📦 Escribiendo {} productos a partir de la fila {} (preservando macros)", 
-                tablaDinamica.getItems().size(), dataStartRow + 1);
+                datosExportar.size(), dataStartRow + 1);
             
             // ============================
             // ENCONTRAR ÍNDICES DE COLUMNAS PARA FÓRMULAS
@@ -2894,7 +2859,7 @@ private void cargarProductos() {
             
             int currentRow = dataStartRow;
             boolean primeraFila = true;
-            for (RowData rowData : tablaDinamica.getItems()) {
+            for (RowData rowData : datosExportar) {
                 // IMPORTANTE: Saltar la fila de subtotal al escribir datos
                 if (filaSubtotalIndex >= 0 && currentRow == filaSubtotalIndex) {
                     logger.info("🚫 Saltando fila de subtotal {} al escribir datos", filaSubtotalIndex + 1);
@@ -3323,24 +3288,33 @@ private void cargarProductos() {
             logger.info("✅ Cotización exportada exitosamente con Aspose: {}", rutaDestino);
             
             // Mensaje de confirmación
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Exportación Exitosa (Aspose)");
-            alert.setHeaderText("✅ Cotización exportada con macros preservadas");
-            alert.setContentText("Archivo guardado en:\n" + rutaDestino + 
-                "\n\n✔ Broker: " + formatoActual.getBrokerName() +
-                "\n✔ Motor: Aspose.Cells (preserva macros)" +
-                "\n✔ Productos: " + tablaDinamica.getItems().size() +
-                infoMacros +
-                "\n\n💡 Las macros VBA del archivo original están intactas.");
-            alert.showAndWait();
+            final String brokerNombre = formatoActual.getBrokerName();
+            final String rutaFinal = rutaDestino;
+            final String infoMacrosFinal = infoMacros;
+            final int totalProductos = datosExportar.size();
+            ejecutarEnHiloFX(() -> {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Exportación Exitosa (Aspose)");
+                alert.setHeaderText("✅ Cotización exportada con macros preservadas");
+                alert.setContentText("Archivo guardado en:\n" + rutaFinal + 
+                    "\n\n✔ Broker: " + brokerNombre +
+                    "\n✔ Motor: Aspose.Cells (preserva macros)" +
+                    "\n✔ Productos: " + totalProductos +
+                    infoMacrosFinal +
+                    "\n\n💡 Las macros VBA del archivo original están intactas.");
+                alert.showAndWait();
+            });
             
         } catch (Exception e) {
             logger.error("❌ Error al exportar con Aspose", e);
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Error");
-            alert.setHeaderText("Error al exportar con Aspose");
-            alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
-            alert.showAndWait();
+            final String mensajeError = e.getMessage();
+            ejecutarEnHiloFX(() -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Error");
+                alert.setHeaderText("Error al exportar con Aspose");
+                alert.setContentText("No se pudo exportar el archivo:\n" + mensajeError);
+                alert.showAndWait();
+            });
         }
     }
     
