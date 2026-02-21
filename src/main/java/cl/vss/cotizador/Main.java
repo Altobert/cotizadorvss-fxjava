@@ -5550,70 +5550,120 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     lblPrecio.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
     
     infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
-    
+
     // ============================
-    // PANEL VENDOR REMARKS (Para BSM, CMA CGM, MCTC, OCEANIC, PROCURESHIP)
-    // ============================
-    VBox panelVendorRemarks = null;
-    TextField txtVendorRemarks = null;
+// PANEL MOTIVO COMERCIAL
+// ============================
+VBox panelMotivo = new VBox(8);
+panelMotivo.setStyle("-fx-padding: 10; -fx-background-color: #FFF3CD; -fx-border-color: #CC9A06; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
+
+Label lblMotivo = new Label("🟡 Motivo comercial:");
+lblMotivo.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #8A6D3B;");
+
+ComboBox<String> comboMotivo = new ComboBox<>();
+comboMotivo.getItems().addAll("NOT AVAILABLE", "OUT OF SEASON");
+comboMotivo.setPromptText("Seleccione motivo...");
+comboMotivo.setPrefWidth(300);
+
+// Prellenar si existe
+String motivoPrevio = rowData.get("COMENTARIOS");
+if (motivoPrevio != null && !motivoPrevio.isEmpty()) {
+    comboMotivo.setValue(motivoPrevio);
+}
+
+panelMotivo.getChildren().addAll(lblMotivo, comboMotivo);
+
+
+// ============================
+// PANEL VENDOR REMARKS (Para BSM, CMA CGM, MCTC, OCEANIC, PROCURESHIP)
+// ============================
+VBox panelVendorRemarks = null;
+TextField txtVendorRemarks = null;
+
+boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBrokerName() != null && 
+                        (formatoActual.getBrokerName().toUpperCase().contains("BSM") ||
+                         formatoActual.getBrokerName().toUpperCase().contains("CMA") ||
+                         formatoActual.getBrokerName().toUpperCase().contains("MCTC") ||
+                         formatoActual.getBrokerName().toUpperCase().contains("OCEANIC") ||
+                         formatoActual.getBrokerName().toUpperCase().contains("PROCURE"));
+
+if (permitirVendorRemarks) {
+    panelVendorRemarks = new VBox(8);
+    panelVendorRemarks.setStyle("-fx-padding: 10; -fx-background-color: #FFF9E6; -fx-border-color: #FFA500; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
     
-    // Verificar si es BSM CATERING, CMA CGM, MCTC MARINE, OCEANIC CATERING o PROCURESHIP
-    boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBrokerName() != null && 
-                            (formatoActual.getBrokerName().toUpperCase().contains("BSM") ||
-                             formatoActual.getBrokerName().toUpperCase().contains("CMA") ||
-                             formatoActual.getBrokerName().toUpperCase().contains("MCTC") ||
-                             formatoActual.getBrokerName().toUpperCase().contains("OCEANIC") ||
-                             formatoActual.getBrokerName().toUpperCase().contains("PROCURE"));
+    Label lblRemarksTitle = new Label("📝 Vendor Remarks");
+    lblRemarksTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #CC6600;");
     
-    if (permitirVendorRemarks) {
-        panelVendorRemarks = new VBox(8);
-        panelVendorRemarks.setStyle("-fx-padding: 10; -fx-background-color: #FFF9E6; -fx-border-color: #FFA500; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
-        
-        Label lblRemarksTitle = new Label("📝 Vendor Remarks");
-        lblRemarksTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #CC6600;");
-        
-        txtVendorRemarks = new TextField();
-        txtVendorRemarks.setPromptText("Ingrese notas o comentarios para el vendor...");
-        txtVendorRemarks.setPrefWidth(800);
-        if (vendorRemarks != null && !vendorRemarks.isEmpty()) {
-            txtVendorRemarks.setText(vendorRemarks);
-        }
-        
-        Label lblRemarksHelp = new Label("💡 Estas notas se guardarán en la columna Vendor Remarks");
-        lblRemarksHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666; -fx-font-style: italic;");
-        
-        panelVendorRemarks.getChildren().addAll(lblRemarksTitle, txtVendorRemarks, lblRemarksHelp);
+    txtVendorRemarks = new TextField();
+    txtVendorRemarks.setPromptText("Ingrese notas o comentarios para el vendor...");
+    txtVendorRemarks.setPrefWidth(800);
+    if (vendorRemarks != null && !vendorRemarks.isEmpty()) {
+        txtVendorRemarks.setText(vendorRemarks);
     }
     
-    // ============================
-    // PANEL NOTES (Para GARRETS)
-    // ============================
-    VBox panelNotes = null;
-    TextField txtNotes = null;
+    Label lblRemarksHelp = new Label("💡 Estas notas se guardarán en la columna Vendor Remarks");
+    lblRemarksHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666; -fx-font-style: italic;");
     
-    // Verificar si es GARRETS
-    boolean esGarrets = formatoActual != null && formatoActual.getBrokerName() != null && 
-                        formatoActual.getBrokerName().toUpperCase().contains("GARRET");
+    panelVendorRemarks.getChildren().addAll(lblRemarksTitle, txtVendorRemarks, lblRemarksHelp);
+}
+
+
+// ============================
+// PANEL NOTES (Para GARRETS)
+// ============================
+VBox panelNotes = null;
+TextField txtNotes = null;
+
+boolean esGarrets = formatoActual != null && formatoActual.getBrokerName() != null && 
+                    formatoActual.getBrokerName().toUpperCase().contains("GARRET");
+
+if (esGarrets) {
+    panelNotes = new VBox(8);
+    panelNotes.setStyle("-fx-padding: 10; -fx-background-color: #E8F5E9; -fx-border-color: #4CAF50; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
     
-    if (esGarrets) {
-        panelNotes = new VBox(8);
-        panelNotes.setStyle("-fx-padding: 10; -fx-background-color: #E8F5E9; -fx-border-color: #4CAF50; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
-        
-        Label lblNotesTitle = new Label("📝 Notes");
-        lblNotesTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #2E7D32;");
-        
-        txtNotes = new TextField();
-        txtNotes.setPromptText("Ingrese notas para este producto...");
-        txtNotes.setPrefWidth(800);
-        if (notesGarret != null && !notesGarret.isEmpty()) {
-            txtNotes.setText(notesGarret);
-        }
-        
-        Label lblNotesHelp = new Label("💡 Estas notas se guardarán en la columna Notes");
-        lblNotesHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666; -fx-font-style: italic;");
-        
-        panelNotes.getChildren().addAll(lblNotesTitle, txtNotes, lblNotesHelp);
+    Label lblNotesTitle = new Label("📝 Notes");
+    lblNotesTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #2E7D32;");
+    
+    txtNotes = new TextField();
+    txtNotes.setPromptText("Ingrese notas para este producto...");
+    txtNotes.setPrefWidth(800);
+    if (notesGarret != null && !notesGarret.isEmpty()) {
+        txtNotes.setText(notesGarret);
     }
+    
+    Label lblNotesHelp = new Label("💡 Estas notas se guardarán en la columna Notes");
+    lblNotesHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666; -fx-font-style: italic;");
+    
+    panelNotes.getChildren().addAll(lblNotesTitle, txtNotes, lblNotesHelp);
+}
+
+
+// ============================
+// LISTENER DEL COMBOBOX 
+// ============================
+TextField finalTxtVendorRemarks = txtVendorRemarks;
+TextField finalTxtNotes = txtNotes;
+
+comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
+    if (newVal != null) {
+
+        // Guardar en COMENTARIOS
+        rowData.set("COMENTARIOS", newVal);
+
+        // Reflejar visualmente
+        if (finalTxtVendorRemarks != null) {
+            finalTxtVendorRemarks.setText(newVal);
+        }
+
+        if (finalTxtNotes != null) {
+            finalTxtNotes.setText(newVal);
+        }
+
+        logger.info("📝 Motivo guardado en COMENTARIOS: {}", newVal);
+    }
+});
+
+                        
     
     // ============================
     // TABLA DE PRODUCTOS SIMILARES
@@ -5927,7 +5977,12 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // LAYOUT PRINCIPAL
     // ============================
     VBox contenidoPrincipal = new VBox(15);
-    contenidoPrincipal.getChildren().add(infoPanel);
+    contenidoPrincipal.getChildren().addAll(
+    infoPanel,
+    panelMotivo   // AHORA SÍ APARECE EL COMBO 
+);
+
+   
     
     // Agregar panel de Vendor Remarks si es BSM CATERING, CMA CGM, MCTC MARINE u OCEANIC CATERING
     if (panelVendorRemarks != null) {
