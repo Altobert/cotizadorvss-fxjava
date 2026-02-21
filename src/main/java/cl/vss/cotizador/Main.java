@@ -5352,8 +5352,9 @@ private void leerExcelConAspose(File archivo) {
                         cantidad = 1.0;
                     }
                     
+                    
                     double precioVentaNeto = producto.getPrecioVentaNeto();
-                    double precioVentaNetoDolares = producto.getPrecioVentaNetoDolares();
+                    double precioVentaNetoDolares = producto.getPrecioVentaNetoDolares();                    
                     double precioVSS = precioVentaNeto * cantidad;
                     
                     rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
@@ -5362,11 +5363,14 @@ private void leerExcelConAspose(File archivo) {
                     logger.debug("Producto encontrado: {} - Precio VSS: ${}", 
                         descripcion.substring(0, Math.min(30, descripcion.length())), 
                         String.format("%,.2f", precioVSS));
+
                 } else {
                     rowData.set("precio_vss_calculado", "0.0");
+                    rowData.set("UNIT_PRICE", String.format("%.2f", 0.00));
                 }
             } else {
                 rowData.set("precio_vss_calculado", "0.0");
+                rowData.set("UNIT_PRICE", String.format("%.2f", 0.00));
             }
             
             // 🚠 Filtrar filas que son títulos/encabezados adicionales
