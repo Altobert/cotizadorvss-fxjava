@@ -1308,14 +1308,15 @@ private void cargarProductos() {
     }
 
     private void cargarArchivo(Stage stage) {
-    if (cargaProgressController != null && cargaProgressController.isEnCurso()) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Carga en proceso");
-        alert.setHeaderText("Ya hay una cotización cargándose");
-        alert.setContentText("Espera a que termine la carga actual para iniciar otra.");
-        alert.showAndWait();
-        return;
-    }
+
+        if (cargaProgressController != null && cargaProgressController.isEnCurso()) {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Carga en proceso");
+            alert.setHeaderText("Ya hay una cotización cargándose");
+            alert.setContentText("Espera a que termine la carga actual para iniciar otra.");
+            alert.showAndWait();
+            return;
+        }
 
     FileChooser fileChooser = new FileChooser();
     fileChooser.setTitle("Seleccionar archivo Excel");
@@ -1833,15 +1834,16 @@ private void cargarProductos() {
         alert.showAndWait();
     }
 
-           private void exportarCotizacion(Stage stage) {
+        private void exportarCotizacion(Stage stage) {
+
           if (exportacionEnCurso) {
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Exportación en proceso");
-            alert.setHeaderText("Ya hay una exportación en curso");
-            alert.setContentText("Espera a que termine la exportación actual para iniciar otra.");
-            alert.showAndWait();
-            return;
-        }
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Exportación en proceso");
+                alert.setHeaderText("Ya hay una exportación en curso");
+                alert.setContentText("Espera a que termine la exportación actual para iniciar otra.");
+                alert.showAndWait();
+                return;
+          }
 
         // Validar que hay datos para exportar
         if (tablaDinamica.getItems().isEmpty()) {
@@ -5429,7 +5431,7 @@ private void leerExcelConAspose(File archivo) {
             tablaDinamica.setItems(datos);
 
             Alert info = new Alert(Alert.AlertType.INFORMATION);
-            info.setTitle("Archivo cargado con Aspose");
+            info.setTitle("Archivo cargado");
             info.setHeaderText("✅ Excel con macros procesado exitosamente");
 
             String mensajeFilasVacias = filasVaciasFinal > 0 ? "\n🗑️ Filas vacías filtradas: " + filasVaciasFinal : "";

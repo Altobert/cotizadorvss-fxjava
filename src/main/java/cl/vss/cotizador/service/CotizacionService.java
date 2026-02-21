@@ -1909,12 +1909,13 @@ public List<ProductoSimilar> buscarMatchLoMasExactoPosible(String descripcion) {
         try (ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
                 double score = rs.getDouble("score_similitud");
+                double precioVentaNeto = rs.getDouble("precio_venta_neto");
                 productos.add(new ProductoSimilar(
                     rs.getString("descripcion_es"),
                     rs.getString("descripcion_en"),
                     rs.getString("unidad_medida"),
-                    rs.getDouble("precio_venta_neto"),
-                    score,
+                    precioVentaNeto,
+                    precioVentaNeto,  // ← Usar precio_venta_neto en lugar de score
                     rs.getDouble("valor_pesos")
                 ));
             }
