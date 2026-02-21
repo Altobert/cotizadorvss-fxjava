@@ -241,14 +241,14 @@ public class Main extends Application {
     //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
     ToolBar barraCotizador = new ToolBar(
         btnCargarCotizacion,
-        new Separator(),
-        estadoCarga,
-        new Separator(), 
+        new Separator(),        
         btnLimpiar,
         new Separator(), 
         btnExportarCotizacion,
-        new Separator(),
-        new Label("Broker:"), comboBrokers
+        new Separator(),        
+        new Label("Broker:"), comboBrokers,
+        estadoCarga,
+        new Separator() 
     );
     rootCotizador.setTop(barraCotizador);
     
