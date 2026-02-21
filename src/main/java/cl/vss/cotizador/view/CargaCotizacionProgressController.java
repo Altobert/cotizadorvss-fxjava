@@ -49,7 +49,7 @@ public class CargaCotizacionProgressController {
         progressBar.setDisable(true);
         progressBar.setStyle("-fx-accent: #9AA0A6;");
         lblEstado.setStyle("-fx-text-fill: #555; -fx-font-size: 11px;");
-        vista.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        vista.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
     }
 
     public HBox getVista() {
