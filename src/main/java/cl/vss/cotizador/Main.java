@@ -1834,16 +1834,16 @@ private void cargarProductos() {
         alert.showAndWait();
     }
 
-        private void exportarCotizacion(Stage stage) {
+    private void exportarCotizacion(Stage stage) {
 
-          if (exportacionEnCurso) {
+        if (exportacionEnCurso) {
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setTitle("Exportación en proceso");
                 alert.setHeaderText("Ya hay una exportación en curso");
                 alert.setContentText("Espera a que termine la exportación actual para iniciar otra.");
                 alert.showAndWait();
                 return;
-          }
+        }
 
         // Validar que hay datos para exportar
         if (tablaDinamica.getItems().isEmpty()) {
@@ -4906,55 +4906,6 @@ private void configurarTablaDinamica() {
         
         tablaDinamica.getColumns().add(column);
     }
-    
-    // 💰 Agregar columna calculada "Precio VSS"
-    // COMENTADO: El usuario solicitó no mostrar esta columna en el frontend
-    // TableColumn<RowData, String> colPrecioVSS = new TableColumn<>("Precio VSS");
-    // colPrecioVSS.setPrefWidth(120);
-    // colPrecioVSS.setCellValueFactory(cellData -> {
-    //     RowData rowData = cellData.getValue();
-    //     
-    //     // Obtener cantidad (puede estar en QUANTITY o QTY)
-    //     String cantidadStr = obtenerValorDeCampo(rowData, "QUANTITY", "QTY", "CANTIDAD");
-    //     double cantidad = 0;
-    //     try {
-    //         if (cantidadStr != null && !cantidadStr.trim().isEmpty()) {
-    //             cantidad = Double.parseDouble(cantidadStr.trim());
-    //         }
-    //     } catch (NumberFormatException e) {
-    //         cantidad = 0;
-    //     }
-    //     
-    //     // Obtener precio VSS calculado (guardado previamente desde la BD)
-    //     String precioVSSStr = rowData.get("precio_vss_calculado");
-    //     double precioVSS = 0;
-    //     try {
-    //         if (precioVSSStr != null && !precioVSSStr.trim().isEmpty()) {
-    //             precioVSS = Double.parseDouble(precioVSSStr.trim());
-    //         }
-    //     } catch (NumberFormatException e) {
-    //         precioVSS = 0;
-    //     }
-    //     
-    //     return new SimpleStringProperty(String.format("$%,.2f", precioVSS));
-    // });
-    // 
-    // colPrecioVSS.setCellFactory(tc -> new TableCell<RowData, String>() {
-    //     @Override
-    //     protected void updateItem(String item, boolean empty) {
-    //         super.updateItem(item, empty);
-    //         
-    //         if (empty || item == null) {
-    //             setText(null);
-    //             setStyle("");
-    //         } else {
-    //             setText(item);
-    //             setStyle("-fx-alignment: CENTER; -fx-font-weight: bold; -fx-text-fill: #0A3D91;");
-    //         }
-    //     }
-    // });
-    // 
-    // tablaDinamica.getColumns().add(colPrecioVSS);
     
     // �👆 Agregar listener de doble clic para editar producto
     tablaDinamica.setRowFactory(tv -> {
