@@ -36,6 +36,7 @@ import cl.vss.cotizador.service.BrokerMetadataDAO;
 import cl.vss.cotizador.service.FormatoDAO;
 import cl.vss.cotizador.service.AuditoriaRegistro;
 import cl.vss.cotizador.service.AsposeExcelService;
+import cl.vss.cotizador.service.BrokerValidator;
 import cl.vss.cotizador.service.CotizacionService;
 import cl.vss.cotizador.service.ParametrosDAO;
 import javafx.application.Application;
@@ -162,6 +163,7 @@ public class Main extends Application {
     
     // 🔷 Aspose: Servicio para manejo de Excel con macros
     private final AsposeExcelService asposeService = AsposeExcelService.getInstance();
+    private final BrokerValidator brokerValidator = new BrokerValidator();
     private String rutaArchivoConMacros = null; // Ruta del archivo .xlsm cargado
 
     // 🔷 CMA CGM: filas especiales detectadas durante la carga (fila 0-based → fórmula original)
@@ -5549,6 +5551,31 @@ private void leerExcelConAspose(File archivo) {
         rutaArchivoConMacros = archivo.getAbsolutePath();
         
         com.aspose.cells.Workbook workbook = asposeService.getWorkbookActual();
+        
+        // 🔒 Validar que el broker del archivo coincida con el seleccionado
+        String brokerSeleccionado = formatoActual.getBrokerName();
+        BrokerValidator.ResultadoValidacion resultado = brokerValidator.validar(workbook, brokerSeleccionado);
+        
+        if (!resultado.isValido()) {
+            logger.warn("❌ Validación de broker fallida: {}", resultado.getMensaje());
+            asposeService.limpiarWorkbook();
+            rutaArchivoConMacros = null;
+            final String mensajeValidacion = resultado.getMensaje();
+            ejecutarEnHiloFX(() -> {
+                Alert alertValidacion = new Alert(Alert.AlertType.WARNING);
+                alertValidacion.setTitle("Broker no coincide");
+                alertValidacion.setHeaderText("⚠️ El archivo no corresponde al broker seleccionado");
+                alertValidacion.setContentText(mensajeValidacion);
+                alertValidacion.showAndWait();
+                tablaDinamica.getItems().clear();
+            });
+            return;
+        }
+        
+        if (resultado.getBrokerDetectado() != null) {
+            logger.info("✅ Broker validado: {}", resultado.getBrokerDetectado());
+        }
+        
         com.aspose.cells.Worksheet sheet = workbook.getWorksheets().get(0);
         com.aspose.cells.Cells cells = sheet.getCells();
         
