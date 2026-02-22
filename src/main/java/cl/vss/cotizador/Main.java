@@ -204,9 +204,7 @@ public class Main extends Application {
     btnCargarCotizacion = new Button("📤 Cargar Cotización");
     btnCargarCotizacion.setOnAction(e -> cargarArchivo(stage));
     
-    //Button btnAnalizar = new Button("🔍 Analizar Estructura Excel");
-    //btnAnalizar.setDisable(true); // Deshabilitado inicialmente
-    //btnAnalizar.setOnAction(e -> analizarEstructuraExcel(stage));
+    
 
     Button btnLimpiar = new Button("🗑️ Limpiar Tabla");
     btnLimpiar.setOnAction(e -> limpiarTabla());
@@ -817,7 +815,6 @@ try {
         }
     }
 
-
     
     private void configurarTablaProductos() {
 
@@ -933,8 +930,8 @@ try {
         colUnidad,
         colValor,
         colPrecioUSD,
-        colPrecioUtil,
-        colPrecioFinalCLP
+        colPrecioUtil
+       //colPrecioFinalCLP
     );
 
     // 👉 Estilos opcionales
