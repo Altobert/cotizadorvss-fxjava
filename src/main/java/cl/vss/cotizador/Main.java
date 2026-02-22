@@ -164,6 +164,10 @@ public class Main extends Application {
     private final AsposeExcelService asposeService = AsposeExcelService.getInstance();
     private String rutaArchivoConMacros = null; // Ruta del archivo .xlsm cargado
 
+    // 🔷 CMA CGM: filas especiales detectadas durante la carga (fila 0-based → fórmula original)
+    // Contiene TODAS las filas "Item Sub Total", "Total Price" y "Grand Total" con sus fórmulas
+    private java.util.TreeMap<Integer, String> cmaCgmSpecialRows = new java.util.TreeMap<>();
+
     @Override
     public void start(Stage stage) {
         // 👉 Si no hay sesión activa, abrir login 
@@ -2694,6 +2698,15 @@ private void cargarProductos() {
                 if (esFilaSubtotal) break;
             }
             
+            // CMA CGM: usar primera fila especial detectada en carga como subtotal
+            if (formatoActual.getBrokerName() != null) {
+                String brokerUpper = formatoActual.getBrokerName().toUpperCase();
+                if (brokerUpper.contains("CMA") && brokerUpper.contains("CGM") && !cmaCgmSpecialRows.isEmpty()) {
+                    filaSubtotalIndex = cmaCgmSpecialRows.firstKey(); // Primera fila especial (más alta)
+                    logger.info("📌 CMA CGM: Usando primera fila especial detectada en carga: {}", filaSubtotalIndex + 1);
+                }
+            }
+            
             if (filaSubtotalIndex < 0) {
                 logger.warn("⚠️ NO SE DETECTÓ FILA DE SUBTOTAL. Se buscará en el archivo original...");
             }
@@ -2781,6 +2794,12 @@ private void cargarProductos() {
                 // Saltar la fila de subtotal (ya fue limpiada arriba específicamente)
                 if (filaSubtotalIndex >= 0 && rowIdx == filaSubtotalIndex) {
                     logger.debug("📊 Saltando fila de subtotal {} (ya limpiada)", filaSubtotalIndex + 1);
+                    continue;
+                }
+
+                // CMA CGM: preservar TODAS las filas especiales (Item Sub Total, Total Price, Grand Total)
+                if (!cmaCgmSpecialRows.isEmpty() && cmaCgmSpecialRows.containsKey(rowIdx)) {
+                    logger.debug("📊 CMA CGM: Preservando fila especial {} sin limpiar", rowIdx + 1);
                     continue;
                 }
                 
@@ -2872,6 +2891,12 @@ private void cargarProductos() {
                 if (filaEspecialIndex >= 0 && currentRow == filaEspecialIndex) {
                     logger.info("🚫 Saltando fila especial {} al escribir datos", filaEspecialIndex + 1);
                     currentRow++;  // Saltar a la siguiente fila
+                }
+
+                // CMA CGM: Saltar TODAS las filas especiales al escribir datos
+                while (!cmaCgmSpecialRows.isEmpty() && cmaCgmSpecialRows.containsKey(currentRow)) {
+                    logger.info("🚫 CMA CGM: Saltando fila especial {} al escribir datos", currentRow + 1);
+                    currentRow++;
                 }
                 
                 // Saltar filas de resumen de ProcureShip
@@ -3237,12 +3262,28 @@ private void cargarProductos() {
                 }
             }
             
+            // CMA CGM: aplicar fórmulas detectadas en carga (Grand Total) y asegurar 'Item Sub Total'
+            aplicarFormulasCMACGMDespuesDeEscritura(cells, dataStartRow, currentRow, colTotal, letraTotal);
+
             // ============================
             // RECALCULAR FÓRMULAS
             // ============================
             logger.info("📊 Recalculando fórmulas...");
             workbook.calculateFormula();
             logger.info("✅ Fórmulas recalculadas");
+
+            // CMA CGM: Verificar que las fórmulas sobrevivieron el recálculo
+            if (!cmaCgmSpecialRows.isEmpty() && colTotal >= 0) {
+                for (java.util.Map.Entry<Integer, String> entry : cmaCgmSpecialRows.entrySet()) {
+                    int specialRow = entry.getKey();
+                    com.aspose.cells.Cell cVerif = cells.get(specialRow, colTotal);
+                    logger.info("✨ VERIF POST-CALC fila especial {}: isFormula={}, formula={}, value={}",
+                        specialRow + 1,
+                        cVerif != null && cVerif.isFormula(),
+                        cVerif != null && cVerif.isFormula() ? cVerif.getFormula() : "N/A",
+                        cVerif != null ? cVerif.getValue() : "NULL");
+                }
+            }
             
             // ============================
             // VERIFICAR SUBTOTAL DESPUÉS DEL RECÁLCULO
@@ -3764,7 +3805,166 @@ private void cargarProductos() {
         }
         return indice - 1; // Convertir a 0-indexed
     }
-    
+
+    // ============================
+    // CMA CGM: Detección de TODAS las filas especiales durante la carga
+    // ============================
+    private void detectarTotalesCMACGMEnCarga(com.aspose.cells.Cells cells) {
+        try {
+            logger.info("🔎 CMA CGM (carga): iniciando detección de totales");
+
+            if (formatoActual == null || formatoActual.getBrokerName() == null) {
+                logger.debug("CMA CGM (carga): formatoActual o brokerName es null, se omite detección");
+                return;
+            }
+
+            String brokerUpper = formatoActual.getBrokerName().toUpperCase();
+            if (!(brokerUpper.contains("CMA") && brokerUpper.contains("CGM"))) {
+                logger.debug("CMA CGM (carga): broker '{}' no corresponde a CMA CGM, se omite", formatoActual.getBrokerName());
+                return;
+            }
+
+            logger.info("CMA CGM (carga): broker detectado='{}'", formatoActual.getBrokerName());
+
+            // Reset estado previo
+            cmaCgmSpecialRows.clear();
+
+            int headerRowIndex = formatoActual.getHeaderRow();
+            int dataStartRow = headerRowIndex + 1;
+
+            // Detectar columna TOTAL según formato
+            int colTotal = -1;
+            String letraTotal = "";
+            for (FormatoColumna columna : formatoActual.getColumnas()) {
+                String campo = columna.getCampoEstandar() != null ? columna.getCampoEstandar().toUpperCase() : "";
+                String nombreCol = columna.getNombreColumnaOriginal() != null ? columna.getNombreColumnaOriginal().toUpperCase() : "";
+                if (campo.contains("TOTAL") || campo.equals("AMOUNT") || nombreCol.contains("TOTAL PRICE") || nombreCol.contains("TOTAL")) {
+                    colTotal = columna.getIndiceColumna();
+                    letraTotal = columna.getLetraColumna();
+                    break;
+                }
+            }
+
+            if (colTotal >= 0) {
+                logger.info("CMA CGM (carga): columna TOTAL detectada en {} (índice {})", letraTotal, colTotal);
+            } else {
+                logger.warn("CMA CGM (carga): no se detectó columna TOTAL en el formato");
+            }
+
+            int lastDataRow = cells.getMaxDataRow();
+            logger.info("CMA CGM (carga): escaneando filas {}..{} (1-based)", dataStartRow + 1, lastDataRow + 1);
+
+            // Escanear de arriba a abajo para capturar TODAS las filas especiales
+            for (int searchRow = dataStartRow; searchRow <= lastDataRow; searchRow++) {
+                for (int colCheck = 0; colCheck <= 20; colCheck++) {
+                    com.aspose.cells.Cell celdaCheck = cells.get(searchRow, colCheck);
+                    if (celdaCheck == null || celdaCheck.getValue() == null) continue;
+                    String valor = "";
+                    try { valor = celdaCheck.getStringValue().trim().toUpperCase(); } catch (Exception e) { continue; }
+
+                    boolean esItemSubTotal = valor.equals("ITEM SUB TOTAL") ||
+                                             (valor.contains("ITEM") && valor.contains("SUB") && valor.contains("TOTAL")) ||
+                                             valor.equals("SUB TOTAL") || valor.equals("SUBTOTAL");
+                    boolean esGrandTotal = valor.contains("GRAND") && valor.contains("TOTAL");
+                    boolean esTotalPrice = !esGrandTotal && valor.contains("TOTAL") && valor.contains("PRICE");
+
+                    if (esItemSubTotal || esGrandTotal || esTotalPrice) {
+                        // Capturar fórmula original de la columna TOTAL
+                        String formula = null;
+                        if (colTotal >= 0) {
+                            com.aspose.cells.Cell c = cells.get(searchRow, colTotal);
+                            if (c != null && c.isFormula()) {
+                                formula = c.getFormula();
+                            }
+                        }
+                        cmaCgmSpecialRows.put(searchRow, formula != null ? formula : "");
+
+                        String tipo = esItemSubTotal ? "Item Sub Total" : (esGrandTotal ? "Grand Total" : "Total Price");
+                        logger.info("CMA CGM (carga): detectado '{}' en fila {} (col {}), fórmula='{}'",
+                            tipo, searchRow + 1, colCheck + 1, formula);
+
+                        // Para Item Sub Total: también registrar la fila siguiente como Total Price
+                        // si aún no ha sido detectada explícitamente
+                        if (esItemSubTotal) {
+                            int totalPriceRow = searchRow + 1;
+                            if (totalPriceRow <= lastDataRow && !cmaCgmSpecialRows.containsKey(totalPriceRow)) {
+                                String formulaTP = null;
+                                if (colTotal >= 0) {
+                                    com.aspose.cells.Cell cTP = cells.get(totalPriceRow, colTotal);
+                                    if (cTP != null && cTP.isFormula()) {
+                                        formulaTP = cTP.getFormula();
+                                    }
+                                }
+                                // Si no tiene fórmula, construir una referenciando el subtotal
+                                if (formulaTP == null || formulaTP.isEmpty()) {
+                                    formulaTP = "=SUM(" + letraTotal + (searchRow + 1) + ")";
+                                }
+                                cmaCgmSpecialRows.put(totalPriceRow, formulaTP);
+                                logger.info("CMA CGM (carga): Total Price implícito en fila {}, fórmula='{}'",
+                                    totalPriceRow + 1, formulaTP);
+                            }
+                        }
+                        break; // Ya encontramos etiqueta en esta fila
+                    }
+                }
+            }
+
+            logger.info("CMA CGM (carga): {} filas especiales detectadas: {}",
+                cmaCgmSpecialRows.size(), cmaCgmSpecialRows.keySet());
+            for (java.util.Map.Entry<Integer, String> entry : cmaCgmSpecialRows.entrySet()) {
+                logger.info("  fila {} (1-based): fórmula='{}'", entry.getKey() + 1, entry.getValue());
+            }
+        } catch (Exception e) {
+            logger.warn("CMA CGM: error al detectar totales en carga", e);
+        }
+    }
+
+    /**
+     * Reaplica fórmulas de CMA CGM usando lo detectado en carga.
+     * Itera sobre TODAS las filas especiales del mapa cmaCgmSpecialRows.
+     */
+    private void aplicarFormulasCMACGMDespuesDeEscritura(com.aspose.cells.Cells cells, int dataStartRow, int currentRow, int colTotal, String letraTotal) {
+        try {
+            logger.info("✨ CMA CGM aplicarFormulas ENTRADA: broker={}, specialRows={}, colTotal={}, letraTotal='{}', dataStartRow={}",
+                formatoActual != null ? formatoActual.getBrokerName() : "null",
+                cmaCgmSpecialRows.size(), colTotal, letraTotal, dataStartRow);
+
+            if (cmaCgmSpecialRows.isEmpty()) {
+                logger.warn("✨ CMA CGM aplicarFormulas: SALIDA TEMPRANA - no hay filas especiales detectadas");
+                return;
+            }
+            if (colTotal < 0) {
+                logger.warn("✨ CMA CGM aplicarFormulas: SALIDA TEMPRANA - colTotal={}", colTotal);
+                return;
+            }
+
+            // Iterar sobre TODAS las filas especiales y aplicar sus fórmulas originales
+            for (java.util.Map.Entry<Integer, String> entry : cmaCgmSpecialRows.entrySet()) {
+                int specialRow = entry.getKey();
+                String formula = entry.getValue();
+
+                com.aspose.cells.Cell celda = cells.get(specialRow, colTotal);
+                if (celda == null) {
+                    logger.warn("✨ CMA CGM export: celda NULL en fila {}, col {}", specialRow + 1, colTotal);
+                    continue;
+                }
+
+                if (formula != null && !formula.isEmpty()) {
+                    celda.setFormula(formula);
+                    com.aspose.cells.Style st = celda.getStyle();
+                    st.setNumber(2);
+                    celda.setStyle(st);
+                    logger.info("✨ CMA CGM export: fila {} fórmula='{}' [isFormula={}]",
+                        specialRow + 1, formula, celda.isFormula());
+                } else {
+                    logger.warn("✨ CMA CGM export: fila {} sin fórmula capturada, se omite", specialRow + 1);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("✨ CMA CGM: EXCEPCIÓN al aplicar fórmulas después de escritura", e);
+        }
+    }
+
     /**
      * Crea un estilo de celda para una columna específica del formato
      */
@@ -5190,6 +5390,9 @@ private void leerExcelConAspose(File archivo) {
         int lastRow = cells.getMaxDataRow();
         
         logger.info("📖 Leyendo datos desde fila {} hasta {}", startRow + 1, lastRow + 1);
+
+        // CMA CGM: Detectar 'Item Sub Total' y 'Grand Total' durante la carga
+        detectarTotalesCMACGMEnCarga(cells);
         
         // 📝 PROCURESHIP: Detectar columna "Supplier Notes" que no está en el formato BD
         int supplierNotesColIndex = -1;
@@ -5216,6 +5419,10 @@ private void leerExcelConAspose(File archivo) {
         }
         
         for (int i = startRow; i <= lastRow; i++) {
+            // Omitir filas especiales CMA CGM para no tratarlas como productos
+            if (!cmaCgmSpecialRows.isEmpty() && cmaCgmSpecialRows.containsKey(i)) {
+                continue;
+            }
             RowData rowData = new RowData();
             boolean filaVacia = true;
             int camposConDatos = 0;
