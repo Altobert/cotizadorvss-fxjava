@@ -2928,8 +2928,9 @@ private void cargarProductos() {
                     String nombreColUpper = columna.getNombreColumnaOriginal() != null ? 
                                            columna.getNombreColumnaOriginal().toUpperCase() : "";
                     
-                    boolean esColumnaTOTAL = campoUpper.contains("TOTAL") || campoUpper.equals("AMOUNT") ||
-                                            nombreColUpper.contains("TOTAL") || nombreColUpper.contains("AMOUNT");
+                    boolean esColumnaTOTAL = !campoUpper.equals("UNIT_PRICE") &&
+                                            (campoUpper.contains("TOTAL") || campoUpper.equals("AMOUNT") ||
+                                            nombreColUpper.contains("TOTAL") || nombreColUpper.contains("AMOUNT"));
                     
                     if (esColumnaTOTAL && formulaOriginalTotal != null && filaFormulaOriginal >= 0) {
                         // Copiar la fórmula original ajustando las referencias de fila
