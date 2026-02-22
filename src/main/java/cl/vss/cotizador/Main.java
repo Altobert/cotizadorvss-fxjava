@@ -3381,6 +3381,14 @@ private void cargarProductos() {
                 }
                 logger.info("✅ UNIT_PRICE forzado en {} filas ({} fórmulas limpiadas)", 
                     unitPricesPorFila.size(), reparados);
+                
+                // Recalcular fórmulas DESPUÉS del force-write para que TOTAL (O) use el nuevo UNIT_PRICE (L)
+                // Necesario cuando colUnitPriceFormula != colUnitPrice (ej: CMA CGM: mapeo=K, fórmula=L)
+                if (dosColumnas) {
+                    logger.info("📊 Recalculando fórmulas post force-write (UNIT_PRICE en col {} actualizado)...", colUnitPriceFormula);
+                    workbook.calculateFormula();
+                    logger.info("✅ Fórmulas recalculadas con UNIT_PRICE correcto");
+                }
             }
 
             // CMA CGM: Verificar que las fórmulas sobrevivieron el recálculo
