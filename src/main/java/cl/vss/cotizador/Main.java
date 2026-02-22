@@ -1899,11 +1899,27 @@ private void cargarProductos() {
         }
         final List<RowData> datosExportar = new java.util.ArrayList<>(tablaDinamica.getItems());
 
+        // Capturar UNIT_PRICE en el hilo FX (garantiza visibilidad de memoria entre hilos)
+        // SimpleStringProperty no es volatile; el background thread podría ver valores stale.
+        final java.util.List<String> unitPriceSnapshotFX = new java.util.ArrayList<>();
+        for (RowData rd : datosExportar) {
+            unitPriceSnapshotFX.add(rd.get("UNIT_PRICE"));
+        }
+        // 🔍 DIAGNÓSTICO: Mostrar primeros 5 valores capturados del snapshot
+        logger.info("🔍 SNAPSHOT UNIT_PRICE capturado en hilo FX ({} items):", unitPriceSnapshotFX.size());
+        for (int i = 0; i < Math.min(5, unitPriceSnapshotFX.size()); i++) {
+            RowData rd = datosExportar.get(i);
+            String desc = rd.get("ITEM_NAME") != null ? rd.get("ITEM_NAME") : rd.get("DESCRIPTION");
+            if (desc == null) desc = rd.get("ITEM_DESCRIPTION");
+            logger.info("  [{}] UNIT_PRICE='{}' desc='{}'", i, unitPriceSnapshotFX.get(i), 
+                desc != null ? desc.substring(0, Math.min(40, desc.length())) : "NULL");
+        }
+
         Task<Void> taskExportacion = new Task<Void>() {
             @Override
             protected Void call() {
                 if (usarAspose) {
-                    exportarConAspose(archivo, datosExportar);
+                    exportarConAspose(archivo, datosExportar, unitPriceSnapshotFX);
                 } else if (usarPlantilla) {
                     exportarConPlantilla(archivo, rutaPlantilla, datosExportar);
                 } else {
@@ -2400,7 +2416,7 @@ private void cargarProductos() {
      * 
      * @param archivoDestino Archivo donde guardar la exportación
      */
-    private void exportarConAspose(File archivoDestino, List<RowData> datosExportar) {
+    private void exportarConAspose(File archivoDestino, List<RowData> datosExportar, java.util.List<String> unitPriceSnapshotFX) {
         logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
         
         try {
@@ -2878,8 +2894,17 @@ private void cargarProductos() {
             logger.info("  QUANTITY en col {}, UNIT_PRICE en col {}, DISCOUNT en col {}, VAT en col {}",
                 colQuantityFormula, colUnitPriceFormula, colDiscountFormula, colVatFormula);
             
+            // Mapa para guardar valores UNIT_PRICE escritos por fila (snapshot del hilo FX)
+            // Se usa para forzar escritura después de calculateFormula() y justo antes de guardar
+            java.util.Map<Integer, String> unitPricesPorFila = new java.util.LinkedHashMap<>();
+            
+            // 🔍 DIAGNÓSTICO: Verificar colUnitPrice vs colUnitPriceFormula
+            logger.info("🔍 DIAG UNIT_PRICE: colUnitPrice(mapeo)={}, colUnitPriceFormula(fórmula)={}", 
+                colUnitPrice, colUnitPriceFormula);
+            
             int currentRow = dataStartRow;
             boolean primeraFila = true;
+            int idxRowData = 0;
             for (RowData rowData : datosExportar) {
                 // IMPORTANTE: Saltar la fila de subtotal al escribir datos
                 if (filaSubtotalIndex >= 0 && currentRow == filaSubtotalIndex) {
@@ -2964,6 +2989,22 @@ private void cargarProductos() {
                     
                     String valor = rowData.get(campoEstandar);
                     
+                    // Para UNIT_PRICE: usar snapshot capturado en hilo FX (thread-safe)
+                    if ("UNIT_PRICE".equals(campoEstandar) && unitPriceSnapshotFX != null && idxRowData < unitPriceSnapshotFX.size()) {
+                        String valorFX = unitPriceSnapshotFX.get(idxRowData);
+                        // 🔍 DIAGNÓSTICO: Log para CADA fila de UNIT_PRICE
+                        if (idxRowData < 5) {
+                            logger.info("🔍 DIAG fila {} idx {}: campoEstandar='{}', RowData.get='{}', snapshot='{}', colIdx={}",
+                                currentRow + 1, idxRowData, campoEstandar, valor, valorFX, colIdx);
+                        }
+                        if (valorFX != null && !valorFX.isEmpty()) {
+                            if (!valorFX.equals(valor)) {
+                                logger.warn("⚠️ UNIT_PRICE discrepancia hilo: RowData='{}', SnapshotFX='{}' - usando snapshot", valor, valorFX);
+                            }
+                            valor = valorFX;
+                        }
+                    }
+                    
                     // Si no se encontró valor con campoEstandar, buscar con nombre de columna original
                     // Esto es necesario para campos como Supplier Notes, Supplier Comments, etc.
                     if (valor == null || valor.isEmpty()) {
@@ -2975,6 +3016,11 @@ private void cargarProductos() {
                     
                     if (valor == null || valor.isEmpty()) {
                         continue;
+                    }
+                    
+                    // Guardar valor de UNIT_PRICE (del snapshot FX) para forzar escritura post-cálculo
+                    if ("UNIT_PRICE".equals(campoEstandar) && colUnitPrice >= 0) {
+                        unitPricesPorFila.put(currentRow, valor);
                     }
                     
                     // Log detallado para primera fila
@@ -3122,6 +3168,7 @@ private void cargarProductos() {
                 
                 primeraFila = false;
                 currentRow++;
+                idxRowData++;
             }
             
             // ============================
@@ -3272,6 +3319,69 @@ private void cargarProductos() {
             logger.info("📊 Recalculando fórmulas...");
             workbook.calculateFormula();
             logger.info("✅ Fórmulas recalculadas");
+            
+            // ============================
+            // FORZAR UNIT_PRICE DESPUÉS DE calculateFormula()
+            // ============================
+            // calculateFormula() y save() pueden restaurar fórmulas originales del template.
+            // Forzamos la escritura limpiando fórmulas y estableciendo formato numérico.
+            // IMPORTANTE: Escribir en AMBAS columnas (mapeo BD y fórmula) porque pueden diferir
+            // Ej: CMA CGM mapea UNIT_PRICE a K(10) pero la fórmula TOTAL usa L(11) para Unit Price.
+            if (colUnitPrice >= 0 && !unitPricesPorFila.isEmpty()) {
+                boolean dosColumnas = colUnitPriceFormula >= 0 && colUnitPriceFormula != colUnitPrice;
+                logger.info("🔧 Forzando {} valores de UNIT_PRICE en col {} (mapeo){}", 
+                    unitPricesPorFila.size(), colUnitPrice,
+                    dosColumnas ? " + col " + colUnitPriceFormula + " (fórmula)" : "");
+                int reparados = 0;
+                for (java.util.Map.Entry<Integer, String> entry : unitPricesPorFila.entrySet()) {
+                    int fila = entry.getKey();
+                    String val = entry.getValue();
+                    
+                    try {
+                        String valorLimpio = val.replace(" ", "").replace("$", "").replace("€", "").trim();
+                        if (valorLimpio.contains(",") && !valorLimpio.contains(".")) {
+                            valorLimpio = valorLimpio.replace(",", ".");
+                        } else {
+                            valorLimpio = valorLimpio.replace(",", "");
+                        }
+                        double numVal = Double.parseDouble(valorLimpio);
+                        
+                        // Escribir en columna del mapeo BD
+                        com.aspose.cells.Cell cellUP = cells.get(fila, colUnitPrice);
+                        if (cellUP.isFormula()) {
+                            try { cellUP.setFormula(null); } catch (Exception ex) { /* ignore */ }
+                            reparados++;
+                        }
+                        cellUP.putValue(numVal);
+                        com.aspose.cells.Style st = cellUP.getStyle();
+                        st.setNumber(2);
+                        cellUP.setStyle(st);
+                        
+                        // Escribir TAMBIÉN en columna de fórmula si es diferente
+                        // (ej: CMA CGM: mapeo=K, fórmula=L)
+                        if (dosColumnas) {
+                            com.aspose.cells.Cell cellFormula = cells.get(fila, colUnitPriceFormula);
+                            if (cellFormula.isFormula()) {
+                                try { cellFormula.setFormula(null); } catch (Exception ex) { /* ignore */ }
+                                reparados++;
+                            }
+                            cellFormula.putValue(numVal);
+                            com.aspose.cells.Style stF = cellFormula.getStyle();
+                            stF.setNumber(2);
+                            cellFormula.setStyle(stF);
+                        }
+                    } catch (NumberFormatException e) {
+                        com.aspose.cells.Cell cellUP = cells.get(fila, colUnitPrice);
+                        cellUP.putValue(val);
+                        if (dosColumnas) {
+                            com.aspose.cells.Cell cellFormula = cells.get(fila, colUnitPriceFormula);
+                            cellFormula.putValue(val);
+                        }
+                    }
+                }
+                logger.info("✅ UNIT_PRICE forzado en {} filas ({} fórmulas limpiadas)", 
+                    unitPricesPorFila.size(), reparados);
+            }
 
             // CMA CGM: Verificar que las fórmulas sobrevivieron el recálculo
             if (!cmaCgmSpecialRows.isEmpty() && colTotal >= 0) {
@@ -3308,6 +3418,25 @@ private void cargarProductos() {
                             logger.error("   Debería ser: =SUMA({}{}:{}{})", letraTotal, dataStartRow + 1, letraTotal, filaSubtotalIndex);
                         }
                     }
+                }
+            }
+            
+            // 🔍 DIAGNÓSTICO PRE-SAVE: Verificar UNIT_PRICE justo antes de guardar
+            if (colUnitPrice >= 0 && !unitPricesPorFila.isEmpty()) {
+                logger.info("🔍 PRE-SAVE: Verificando UNIT_PRICE en col {} para {} filas...", colUnitPrice, unitPricesPorFila.size());
+                int filasDiag = 0;
+                for (java.util.Map.Entry<Integer, String> entry : unitPricesPorFila.entrySet()) {
+                    if (filasDiag >= 5) break;
+                    int fila = entry.getKey();
+                    String valEsperado = entry.getValue();
+                    com.aspose.cells.Cell cellVerif = cells.get(fila, colUnitPrice);
+                    logger.info("🔍 PRE-SAVE fila {}: esperado='{}', isFormula={}, type={}, value='{}', stringValue='{}'",
+                        fila + 1, valEsperado,
+                        cellVerif.isFormula(),
+                        cellVerif.getType(),
+                        cellVerif.getValue(),
+                        cellVerif.getStringValue());
+                    filasDiag++;
                 }
             }
             
