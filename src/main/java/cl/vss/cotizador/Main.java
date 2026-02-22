@@ -3938,6 +3938,37 @@ private void cargarProductos() {
                 return;
             }
 
+            // Rellenar con 0.0 celdas vacías en colTotal dentro de rangos SUM
+            // para evitar #VALUE! cuando la fórmula referencia celdas con string vacío
+            for (java.util.Map.Entry<Integer, String> entry : cmaCgmSpecialRows.entrySet()) {
+                String f = entry.getValue();
+                if (f == null || f.isEmpty()) continue;
+                String fUpper = f.toUpperCase();
+                if (fUpper.contains("SUM")) {
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("([A-Z]+)(\\d+):([A-Z]+)(\\d+)").matcher(fUpper);
+                    if (m.find()) {
+                        int rangeStart = Integer.parseInt(m.group(2)) - 1; // a 0-based
+                        int rangeEnd = Integer.parseInt(m.group(4)) - 1;
+                        for (int r = rangeStart; r <= rangeEnd; r++) {
+                            if (cmaCgmSpecialRows.containsKey(r)) continue; // no tocar filas especiales
+                            com.aspose.cells.Cell c = cells.get(r, colTotal);
+                            if (c != null) {
+                                boolean vacia = false;
+                                try {
+                                    Object val = c.getValue();
+                                    if (val == null) vacia = true;
+                                    else if (val instanceof String && ((String) val).trim().isEmpty()) vacia = true;
+                                } catch (Exception ex) { vacia = true; }
+                                if (vacia) {
+                                    c.putValue(0.0);
+                                    logger.debug("✨ CMA CGM: celda vacía {}{} rellenada con 0.0", letraTotal, r + 1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Iterar sobre TODAS las filas especiales y aplicar sus fórmulas originales
             for (java.util.Map.Entry<Integer, String> entry : cmaCgmSpecialRows.entrySet()) {
                 int specialRow = entry.getKey();
