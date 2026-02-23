@@ -243,18 +243,29 @@ public class Main extends Application {
     HBox estadoCarga = cargaProgressController.getVista();
 
     //ToolBar barraCotizador = new ToolBar(btnCargar, btnAnalizar, new Separator(), btnLimpiar, btnExportar);
-    ToolBar barraCotizador = new ToolBar(
-        btnCargarCotizacion,
-        new Separator(),        
-        btnLimpiar,
-        new Separator(), 
-        btnExportarCotizacion,
-        new Separator(),        
-        new Label("Broker:"), comboBrokers,
-        estadoCarga,
-        new Separator() 
-    );
+
+
+    Button btnZoomIn = new Button("🔍 Zoom +");
+    Button btnZoomOut = new Button("🔎 Zoom –");
+    Button btnResetZoom = new Button("🎯 Reset");
+
+   ToolBar barraCotizador = new ToolBar(
+    btnCargarCotizacion,
+    new Separator(),        
+    btnLimpiar,
+    new Separator(), 
+    btnExportarCotizacion,
+    new Separator(),
+    btnZoomIn,
+    btnZoomOut,
+    btnResetZoom,
+    new Separator(),
+    new Label("Broker:"), comboBrokers,
+    estadoCarga,
+    new Separator()
+);
     rootCotizador.setTop(barraCotizador);
+
     
     // TODO: Descomentar cuando se necesite usar el panel de metadata
     /*
@@ -276,12 +287,42 @@ public class Main extends Application {
     */
     
     // Panel simplificado solo con la tabla dinámica
-    VBox panelConMetadata = new VBox(10);
-    panelConMetadata.getChildren().add(tablaDinamica);
-    VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
-    panelConMetadata.setStyle("-fx-padding: 10;");
-    
-    rootCotizador.setCenter(panelConMetadata);
+VBox panelConMetadata = new VBox(10);
+panelConMetadata.getChildren().add(tablaDinamica);
+VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
+panelConMetadata.setStyle("-fx-padding: 10;");
+
+rootCotizador.setCenter(panelConMetadata);
+
+// ===============================
+// 🔍 ZOOM SUAVE CON SCROLL DEL MOUSE
+// ===============================
+tablaDinamica.setOnScroll(event -> {
+    double zoomFactor = 1.05; // velocidad del zoom
+
+    if (event.getDeltaY() > 0) {
+        // Zoom IN
+        tablaDinamica.setScaleX(tablaDinamica.getScaleX() * zoomFactor);
+        tablaDinamica.setScaleY(tablaDinamica.getScaleY() * zoomFactor);
+    } else {
+        // Zoom OUT
+        tablaDinamica.setScaleX(tablaDinamica.getScaleX() / zoomFactor);
+        tablaDinamica.setScaleY(tablaDinamica.getScaleY() / zoomFactor);
+    }
+});
+        btnZoomIn.setOnAction(e -> {
+        tablaDinamica.setScaleX(tablaDinamica.getScaleX() * 1.1);
+        tablaDinamica.setScaleY(tablaDinamica.getScaleY() * 1.1);
+});
+        btnZoomOut.setOnAction(e -> {
+        tablaDinamica.setScaleX(tablaDinamica.getScaleX() / 1.1);
+        tablaDinamica.setScaleY(tablaDinamica.getScaleY() / 1.1);
+});
+        btnResetZoom.setOnAction(e -> {
+        tablaDinamica.setScaleX(1.0);
+        tablaDinamica.setScaleY(1.0);
+});
+
 
 
     // Tab Productos
@@ -5912,7 +5953,7 @@ Label lblMotivo = new Label("🟡 Motivo comercial:");
 lblMotivo.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #8A6D3B;");
 
 ComboBox<String> comboMotivo = new ComboBox<>();
-comboMotivo.getItems().addAll("NOT AVAILABLE", "OUT OF SEASON");
+comboMotivo.getItems().addAll("not available", "out of season");
 comboMotivo.setPromptText("Seleccione motivo...");
 comboMotivo.setPrefWidth(300);
 
