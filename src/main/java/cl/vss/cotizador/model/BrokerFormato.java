@@ -117,4 +117,18 @@ public class BrokerFormato {
                 ", columnas=" + columnas.size() +
                 '}';
     }
+
+    public int getColumnaCodigo() {
+    for (FormatoColumna col : columnas) {
+        String nombre = col.getNombreColumnaOriginal();
+        if (nombre != null && nombre.toUpperCase().contains("CODE")) {
+            return col.getIndiceColumna();
+        }
+    }
+    throw new IllegalStateException("No se encontró columna de código de producto en el formato del broker");
+}
+
+
+
+
 }

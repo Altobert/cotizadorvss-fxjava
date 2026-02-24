@@ -8,6 +8,9 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import com.aspose.cells.Worksheet;
+
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.ss.usermodel.BorderStyle;
@@ -17,11 +20,7 @@ import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
-
 import javafx.stage.FileChooser;
-
-
-
 import cl.vss.cotizador.demo.LoginController;
 import cl.vss.cotizador.model.Broker;
 import cl.vss.cotizador.model.BrokerFormato;
@@ -138,6 +137,11 @@ public class Main extends Application {
     private Button btnExportarCotizacion;
     private CargaCotizacionProgressController cargaProgressController;
     private boolean exportacionEnCurso = false;
+
+
+   
+
+
     
     // 👉 Tabla dinámica para cotizaciones con formato de broker
     private final TableView<RowData> tablaDinamica = new TableView<>();
@@ -2456,60 +2460,52 @@ private void cargarProductos() {
      * 
      * @param archivoDestino Archivo donde guardar la exportación
      */
-    private void exportarConAspose(File archivoDestino, List<RowData> datosExportar, java.util.List<String> unitPriceSnapshotFX) {
-        logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
-        
-        try {
-            com.aspose.cells.Workbook workbook = asposeService.getWorkbookActual();
-            if (workbook == null) {
-                throw new IllegalStateException("No hay workbook Aspose cargado");
-            }
-            
-           
-            
-           
-        //BLOQUE WENO
+    private void exportarConAspose(File archivoDestino, List<RowData> datosExportar, List<String> unitPriceSnapshotFX) {
+    logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
 
+    try {
 
-       // 1) Determinar fila donde empiezan los datos
-int headerRowIndex = formatoActual.getHeaderRow();   // ya viene 0-indexed
-int dataStartRow = headerRowIndex + 1;
+        // 1) Clonar la hoja original (sheetIndex = 0)
+        Worksheet hoja = asposeService.clonarHoja(0);
 
-logger.info("📊 HeaderRow = {}, dataStartRow = {}", headerRowIndex, dataStartRow);
+        // 2) Escribir los datos en la hoja clonada
+        //    - NO rompe estructura
+        //    - NO pisa filas amarillas
+        //    - NO mueve secciones
+        //    - AHORA SÍ copia la fórmula TOTAL PRICE
+        asposeService.escribirDatosEnHojaClonada(
+                hoja,
+                datosExportar,
+                formatoActual.getHeaderRow() + 1,   // ← este valor SIEMPRE funcionó
+                formatoActual
+        );
 
-// 2) Clonar la hoja completa (preserva TODO)
-com.aspose.cells.Worksheet hoja = asposeService.clonarHoja(0);
+        // 3) Guardar el archivo final
+        asposeService.guardarWorkbook(archivoDestino.getAbsolutePath());
 
-// 3) Escribir SOLO los productos en la hoja clonada
-asposeService.escribirDatosEnHojaClonada(hoja, datosExportar, dataStartRow, formatoActual);
+        // 4) Mostrar alerta de éxito
+        ejecutarEnHiloFX(() -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Exportación Exitosa");
+            alert.setHeaderText("Cotización exportada con Aspose");
+            alert.setContentText("Archivo guardado en:\n" + archivoDestino.getAbsolutePath());
+            alert.showAndWait();
+        });
 
-// 4) Guardar archivo final
-asposeService.guardarWorkbook(archivoDestino.getAbsolutePath());
+    } catch (Exception e) {
+        logger.error("❌ Error al exportar con Aspose", e);
 
-logger.info("✅ Exportación Aspose completada: {}", archivoDestino.getAbsolutePath());
-
-ejecutarEnHiloFX(() -> {
-    Alert alert = new Alert(Alert.AlertType.INFORMATION);
-    alert.setTitle("Exportación Exitosa");
-    alert.setHeaderText("Cotización exportada con Aspose");
-    alert.setContentText("Archivo guardado en:\n" + archivoDestino.getAbsolutePath());
-    alert.showAndWait();
-});
-
-            
-        } catch (Exception e) {
-            logger.error("❌ Error al exportar con Aspose", e);
-            final String mensajeError = e.getMessage();
-            ejecutarEnHiloFX(() -> {
-                Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("Error");
-                alert.setHeaderText("Error al exportar con Aspose");
-                alert.setContentText("No se pudo exportar el archivo:\n" + mensajeError);
-                alert.showAndWait();
-            });
-        }
+        ejecutarEnHiloFX(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Error al exportar con Aspose");
+            alert.setContentText("No se pudo exportar el archivo:\n" + e.getMessage());
+            alert.showAndWait();
+        });
     }
-    
+}
+
+
     // ============================================================
     // 🏛️ MÉTODOS ESPECÍFICOS POR BROKER
     // ============================================================

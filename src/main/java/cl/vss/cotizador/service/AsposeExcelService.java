@@ -109,7 +109,19 @@ public class AsposeExcelService {
     }
 
     // ============================================================
-    // 🟩 ESCRIBIR SOLO LOS PRODUCTOS (sin borrar nada)
+    // 🟩 DETECTAR COLUMNA TOTAL PRICE
+    // ============================================================
+    private int detectarColumnaTotalPrice(BrokerFormato formato) {
+        for (FormatoColumna col : formato.getColumnas()) {
+            if (col.getNombreColumnaOriginal().toUpperCase().contains("TOTAL")) {
+                return col.getIndiceColumna();
+            }
+        }
+        return -1;
+    }
+
+    // ============================================================
+    // 🟩 ESCRIBIR PRODUCTOS + FÓRMULA SIN ROMPER NADA
     // ============================================================
     public void escribirDatosEnHojaClonada(
             Worksheet hoja,
@@ -119,16 +131,35 @@ public class AsposeExcelService {
     ) throws Exception {
 
         Cells cells = hoja.getCells();
-        int row = startRow;   // ✔ CORREGIDO (antes tenía -1)
+        int row = startRow;
+
+        // Detectar columna TOTAL PRICE
+        int colTotal = detectarColumnaTotalPrice(formato);
+
+        // Obtener fórmula original desde la fila de inicio
+        String formulaOriginal = null;
+        if (colTotal != -1) {
+            Cell celdaOriginal = cells.get(startRow, colTotal);
+            if (celdaOriginal != null && celdaOriginal.isFormula()) {
+                formulaOriginal = celdaOriginal.getFormula();
+            }
+        }
 
         for (RowData rowData : datos) {
             for (FormatoColumna columna : formato.getColumnas()) {
 
                 int colIdx = columna.getIndiceColumna();
+                Cell cell = cells.get(row, colIdx);
+
+                // 👉 SI ES TOTAL PRICE → PEGAR FÓRMULA ORIGINAL
+                if (colIdx == colTotal && formulaOriginal != null) {
+                    cell.setFormula(formulaOriginal);
+                    continue;
+                }
+
+                // 👉 SI NO, ESCRIBIR VALOR NORMAL
                 String valor = rowData.get(columna.getCampoEstandar());
                 if (valor == null) valor = "";
-
-                Cell cell = cells.get(row, colIdx);
 
                 if (esNumerico(valor) && esColumnaNumérica(columna)) {
                     try {
@@ -144,7 +175,7 @@ public class AsposeExcelService {
             row++;
         }
 
-        logger.info("✅ Datos escritos sin alterar estructura");
+        logger.info("✅ Datos escritos sin alterar estructura (con fórmula TOTAL PRICE)");
     }
 
     // ============================================================
