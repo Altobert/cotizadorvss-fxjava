@@ -1323,7 +1323,7 @@ private void cargarProductos() {
     private void analizarEstructuraExcel(Stage stage) {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Seleccionar archivo Excel para analizar");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx", "*.xlsm"));
+fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx", "*.xlsm", "*.xls"));
         File archivo = fileChooser.showOpenDialog(stage);
 
         if (archivo != null) {
@@ -1364,7 +1364,7 @@ private void cargarProductos() {
 
     FileChooser fileChooser = new FileChooser();
     fileChooser.setTitle("Seleccionar archivo Excel");
-    fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx", "*.xlsm"));
+fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos Excel", "*.xlsx", "*.xlsm", "*.xls"));
     File archivo = fileChooser.showOpenDialog(stage);
 
     if (archivo == null) {

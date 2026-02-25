@@ -48,6 +48,7 @@ public class BrokerValidator {
         { "GARRETS",     "GARRETS", "GARRETS INTERNATIONAL" },
         { "PROCURESHIP", "PROCURESHIP" },
         { "BSM",         "BSM", "BSM CATERING" },
+        { "IFS",         "IFS", "IFS APPLICATIONS" },
     };
 
     /**
