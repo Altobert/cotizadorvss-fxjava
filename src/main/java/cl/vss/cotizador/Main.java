@@ -2464,26 +2464,24 @@ private void cargarProductos() {
     logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
 
     try {
-
-        // 1) Clonar la hoja original (sheetIndex = 0)
+        // 🔵 1) Clonar la hoja original (sheetIndex = 0)
         Worksheet hoja = asposeService.clonarHoja(0);
 
-        // 2) Escribir los datos en la hoja clonada
-        //    - NO rompe estructura
-        //    - NO pisa filas amarillas
-        //    - NO mueve secciones
-        //    - AHORA SÍ copia la fórmula TOTAL PRICE
+        // 🔵 2) Fila REAL donde empiezan los productos en la plantilla
+        int filaInicioProductos = 21;  // ← ESTA ES LA CLAVE
+
+        // 🔵 3) Escribir los datos en la hoja clonada
         asposeService.escribirDatosEnHojaClonada(
                 hoja,
                 datosExportar,
-                formatoActual.getHeaderRow() + 1,   // ← este valor SIEMPRE funcionó
+                filaInicioProductos,
                 formatoActual
         );
 
-        // 3) Guardar el archivo final
+        // 🔵 4) Guardar el archivo final
         asposeService.guardarWorkbook(archivoDestino.getAbsolutePath());
 
-        // 4) Mostrar alerta de éxito
+        // 🔵 5) Mostrar alerta de éxito
         ejecutarEnHiloFX(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Exportación Exitosa");
@@ -2504,6 +2502,7 @@ private void cargarProductos() {
         });
     }
 }
+
 
 
     // ============================================================

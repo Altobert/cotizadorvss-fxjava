@@ -9,7 +9,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.regex.Matcher;
+import java.util.regex.Pattern; 
 public class AsposeExcelService {
 
     private static final Logger logger = LogManager.getLogger(AsposeExcelService.class);
@@ -64,7 +65,7 @@ public class AsposeExcelService {
     }
 
     // ============================================================
-    // 🔵 LECTURA DE DATOS (esto estaba bien)
+    // 🔵 LECTURA DE DATOS
     // ============================================================
     public List<RowData> leerDatos(int sheetIndex, int headerRow, BrokerFormato formato) throws Exception {
         if (workbookActual == null) throw new IllegalStateException("No hay workbook cargado");
@@ -73,7 +74,7 @@ public class AsposeExcelService {
         Worksheet sheet = workbookActual.getWorksheets().get(sheetIndex);
         Cells cells = sheet.getCells();
 
-        int headerRowIndex = headerRow - 1;   // ✔ convertir 1-index → 0-index
+        int headerRowIndex = headerRow - 1;
         int lastRow = cells.getMaxDataRow();
 
         for (int rowIdx = headerRowIndex + 1; rowIdx <= lastRow; rowIdx++) {
@@ -121,62 +122,85 @@ public class AsposeExcelService {
     }
 
     // ============================================================
-    // 🟩 ESCRIBIR PRODUCTOS + FÓRMULA SIN ROMPER NADA
+    // 🟩 ESCRIBIR PRODUCTOS (FÓRMULA DINÁMICA + SIN CORRIMIENTOS)
     // ============================================================
-    public void escribirDatosEnHojaClonada(
-            Worksheet hoja,
-            List<RowData> datos,
-            int startRow,
-            BrokerFormato formato
-    ) throws Exception {
+   public void escribirDatosEnHojaClonada(
+        Worksheet hoja,
+        List<RowData> datos,
+        int startRow,
+        BrokerFormato formato
+) throws Exception {
 
-        Cells cells = hoja.getCells();
-        int row = startRow;
+    Cells cells = hoja.getCells();
 
-        // Detectar columna TOTAL PRICE
-        int colTotal = detectarColumnaTotalPrice(formato);
+    // Detectar columna TOTAL PRICE
+    int colTotal = detectarColumnaTotalPrice(formato);
 
-        // Obtener fórmula original desde la fila de inicio
-        String formulaOriginal = null;
-        if (colTotal != -1) {
-            Cell celdaOriginal = cells.get(startRow, colTotal);
-            if (celdaOriginal != null && celdaOriginal.isFormula()) {
-                formulaOriginal = celdaOriginal.getFormula();
+    // Obtener fórmula original desde la plantilla
+    String formulaOriginal = null;
+    int filaOriginal = -1;
+
+    if (colTotal != -1) {
+        Cell celdaOriginal = cells.get(startRow, colTotal);
+        if (celdaOriginal != null && celdaOriginal.isFormula()) {
+            formulaOriginal = celdaOriginal.getFormula();
+
+            // Detectar automáticamente el número de fila original dentro de la fórmula
+            Pattern p = Pattern.compile("[A-Z]+(\\d+)");
+            Matcher m = p.matcher(formulaOriginal);
+            if (m.find()) {
+                filaOriginal = Integer.parseInt(m.group(1));
             }
         }
+    }
 
-        for (RowData rowData : datos) {
-            for (FormatoColumna columna : formato.getColumnas()) {
+    // Loop SOLO sobre productos
+    for (int i = 0; i < datos.size(); i++) {
 
-                int colIdx = columna.getIndiceColumna();
-                Cell cell = cells.get(row, colIdx);
+        RowData rowData = datos.get(i);
 
-                // 👉 SI ES TOTAL PRICE → PEGAR FÓRMULA ORIGINAL
-                if (colIdx == colTotal && formulaOriginal != null) {
-                    cell.setFormula(formulaOriginal);
-                    continue;
-                }
+        // Fila REAL en Excel (Aspose es 0-based)
+        int filaExcel = startRow + i;
+        int fila1 = filaExcel + 1; // Para fórmula (1-based)
 
-                // 👉 SI NO, ESCRIBIR VALOR NORMAL
-                String valor = rowData.get(columna.getCampoEstandar());
-                if (valor == null) valor = "";
+        for (FormatoColumna columna : formato.getColumnas()) {
 
-                if (esNumerico(valor) && esColumnaNumérica(columna)) {
-                    try {
-                        double num = Double.parseDouble(valor.replace(",", "").replace("$", ""));
-                        cell.putValue(num);
-                    } catch (Exception ex) {
-                        cell.putValue(valor);
-                    }
-                } else {
+            int colIdx = columna.getIndiceColumna();
+            Cell cell = cells.get(filaExcel, colIdx);
+
+            // 👉 SI ES TOTAL PRICE → FÓRMULA DINÁMICA BASADA EN LA ORIGINAL
+            if (colIdx == colTotal && formulaOriginal != null && filaOriginal != -1) {
+
+                // Reemplazar SOLO el número de fila original por el actual
+                String formulaDinamica = formulaOriginal.replaceAll(
+                        "(?<=\\D)" + filaOriginal + "(?=\\D|$)",
+                        String.valueOf(fila1)
+                );
+
+                cell.setFormula(formulaDinamica);
+                continue;
+            }
+
+            // 👉 SI NO, ESCRIBIR VALOR NORMAL
+            String valor = rowData.get(columna.getCampoEstandar());
+            if (valor == null) valor = "";
+
+            if (esNumerico(valor) && esColumnaNumérica(columna)) {
+                try {
+                    double num = Double.parseDouble(valor.replace(",", "").replace("$", ""));
+                    cell.putValue(num);
+                } catch (Exception ex) {
                     cell.putValue(valor);
                 }
+            } else {
+                cell.putValue(valor);
             }
-            row++;
         }
-
-        logger.info("✅ Datos escritos sin alterar estructura (con fórmula TOTAL PRICE)");
     }
+
+    logger.info("✅ Datos escritos sin corrimientos y con fórmula dinámica basada en la plantilla");
+}
+
 
     // ============================================================
     // 🔵 GUARDAR
