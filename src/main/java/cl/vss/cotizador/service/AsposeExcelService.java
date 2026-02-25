@@ -10,7 +10,8 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern; 
+import java.util.regex.Pattern;
+
 public class AsposeExcelService {
 
     private static final Logger logger = LogManager.getLogger(AsposeExcelService.class);
@@ -114,7 +115,8 @@ public class AsposeExcelService {
     // ============================================================
     private int detectarColumnaTotalPrice(BrokerFormato formato) {
         for (FormatoColumna col : formato.getColumnas()) {
-            if (col.getNombreColumnaOriginal().toUpperCase().contains("TOTAL")) {
+            if (col.getNombreColumnaOriginal() != null &&
+                col.getNombreColumnaOriginal().toUpperCase().contains("TOTAL")) {
                 return col.getIndiceColumna();
             }
         }
@@ -122,85 +124,138 @@ public class AsposeExcelService {
     }
 
     // ============================================================
-    // 🟩 ESCRIBIR PRODUCTOS (FÓRMULA DINÁMICA + SIN CORRIMIENTOS)
+    // 🟩 ESCRIBIR PRODUCTOS (CORRIMIENTO + FÓRMULA + PROTECCIÓN SUBTOTAL PROVISIONS)
     // ============================================================
-   public void escribirDatosEnHojaClonada(
-        Worksheet hoja,
-        List<RowData> datos,
-        int startRow,
-        BrokerFormato formato
-) throws Exception {
+    public void escribirDatosEnHojaClonada(
+            Worksheet hoja,
+            List<RowData> datos,
+            int startRow,
+            BrokerFormato formato
+    ) throws Exception {
 
-    Cells cells = hoja.getCells();
+        Cells cells = hoja.getCells();
 
-    // Detectar columna TOTAL PRICE
-    int colTotal = detectarColumnaTotalPrice(formato);
+        // ============================================================
+        // 🔍 DETECTAR FILA DONDE EMPIEZA BOND (DINÁMICO EN TODAS LAS COLUMNAS)
+        // ============================================================
+        int filaBondAspose = -1;
 
-    // Obtener fórmula original desde la plantilla
-    String formulaOriginal = null;
-    int filaOriginal = -1;
+        for (int r = 0; r <= cells.getMaxDataRow(); r++) {
+            for (int c = 0; c <= cells.getMaxDataColumn(); c++) {
+                Cell celda = cells.get(r, c);
+                if (celda != null && celda.getStringValue() != null) {
+                    String texto = celda.getStringValue().trim().toUpperCase();
+                    if ("BOND".equals(texto)) {
+                        filaBondAspose = r;
+                        logger.info("📌 Fila de BOND detectada dinámicamente en: {}", filaBondAspose + 1);
+                        break;
+                    }
+                }
+            }
+            if (filaBondAspose != -1) break;
+        }
 
-    if (colTotal != -1) {
-        Cell celdaOriginal = cells.get(startRow, colTotal);
-        if (celdaOriginal != null && celdaOriginal.isFormula()) {
-            formulaOriginal = celdaOriginal.getFormula();
+        // Si encontramos BOND, asumimos que el subtotal de PROVISIONS está justo arriba
+        int filaSubtotalProvisions = (filaBondAspose != -1) ? filaBondAspose - 1 : -1;
 
-            // Detectar automáticamente el número de fila original dentro de la fórmula
-            Pattern p = Pattern.compile("[A-Z]+(\\d+)");
-            Matcher m = p.matcher(formulaOriginal);
-            if (m.find()) {
-                filaOriginal = Integer.parseInt(m.group(1));
+        // ============================================================
+        // 🔍 DETECTAR COLUMNA TOTAL PRICE Y FÓRMULA ORIGINAL
+        // ============================================================
+        int colTotal = detectarColumnaTotalPrice(formato);
+
+        String formulaOriginal = null;
+        int filaOriginal = -1;
+
+        if (colTotal != -1) {
+            Cell celdaOriginal = cells.get(startRow, colTotal);
+            if (celdaOriginal != null && celdaOriginal.isFormula()) {
+                formulaOriginal = celdaOriginal.getFormula();
+
+                Pattern p = Pattern.compile("[A-Z]+(\\d+)");
+                Matcher m = p.matcher(formulaOriginal);
+                if (m.find()) {
+                    filaOriginal = Integer.parseInt(m.group(1));
+                }
             }
         }
-    }
 
-    // Loop SOLO sobre productos
-    for (int i = 0; i < datos.size(); i++) {
+        // ============================================================
+        // 🟩 CORRECCIÓN DEL CORRIMIENTO (filaOriginal → Aspose)
+        // ============================================================
+        if (filaOriginal != -1) {
+            startRow = filaOriginal - 1; // Aspose es 0-based
+        }
 
-        RowData rowData = datos.get(i);
+        // ============================================================
+        // 🟩 LOOP DE ESCRITURA DE PRODUCTOS
+        // ============================================================
+        for (int i = 0; i < datos.size(); i++) {
 
-        // Fila REAL en Excel (Aspose es 0-based)
-        int filaExcel = startRow + i;
-        int fila1 = filaExcel + 1; // Para fórmula (1-based)
+            int filaExcel = startRow + i;
 
-        for (FormatoColumna columna : formato.getColumnas()) {
+            // 🟩 PROTECCIÓN: si hay BOND y subtotal de PROVISIONS definido,
+            // aseguramos que NUNCA pisemos el subtotal.
+            if (filaBondAspose != -1 && filaSubtotalProvisions != -1) {
+                // Mientras la fila donde queremos escribir alcance o supere
+                // la fila del subtotal, insertamos filas en el subtotal
+                while (filaExcel >= filaSubtotalProvisions) {
+                    logger.info("↕ Insertando fila antes del subtotal PROVISIONS en fila {}", filaSubtotalProvisions + 1);
+                    cells.insertRows(filaSubtotalProvisions, 1);
 
-            int colIdx = columna.getIndiceColumna();
-            Cell cell = cells.get(filaExcel, colIdx);
-
-            // 👉 SI ES TOTAL PRICE → FÓRMULA DINÁMICA BASADA EN LA ORIGINAL
-            if (colIdx == colTotal && formulaOriginal != null && filaOriginal != -1) {
-
-                // Reemplazar SOLO el número de fila original por el actual
-                String formulaDinamica = formulaOriginal.replaceAll(
-                        "(?<=\\D)" + filaOriginal + "(?=\\D|$)",
-                        String.valueOf(fila1)
-                );
-
-                cell.setFormula(formulaDinamica);
-                continue;
+                    // Al insertar:
+                    // - el subtotal baja una fila
+                    // - BOND baja una fila
+                    filaSubtotalProvisions++;
+                    filaBondAspose++;
+                    filaExcel++;
+                }
             }
 
-            // 👉 SI NO, ESCRIBIR VALOR NORMAL
-            String valor = rowData.get(columna.getCampoEstandar());
-            if (valor == null) valor = "";
+            // 🛑 Seguridad extra: si por alguna razón alcanzamos BOND, cortamos
+            if (filaBondAspose != -1 && filaExcel >= filaBondAspose) {
+                logger.info("⛔ Corte dinámico: alcanzamos la fila de BOND en {}", filaBondAspose + 1);
+                break;
+            }
 
-            if (esNumerico(valor) && esColumnaNumérica(columna)) {
-                try {
-                    double num = Double.parseDouble(valor.replace(",", "").replace("$", ""));
-                    cell.putValue(num);
-                } catch (Exception ex) {
+            RowData rowData = datos.get(i);
+            int fila1 = filaExcel + 1; // Para fórmula (1-based)
+
+            for (FormatoColumna columna : formato.getColumnas()) {
+
+                int colIdx = columna.getIndiceColumna();
+                Cell cell = cells.get(filaExcel, colIdx);
+
+                // 👉 FÓRMULA DINÁMICA
+                if (colIdx == colTotal && formulaOriginal != null && filaOriginal != -1) {
+
+                    String formulaDinamica = formulaOriginal.replaceAll(
+                            "(?<=\\D)" + filaOriginal + "(?=\\D|$)",
+                            String.valueOf(fila1)
+                    );
+
+                    cell.setFormula(formulaDinamica);
+                    continue;
+                }
+
+                // 👉 VALORES NORMALES
+                String valor = rowData.get(columna.getCampoEstandar());
+                if (valor == null) valor = "";
+
+                if (esNumerico(valor) && esColumnaNumérica(columna)) {
+                    try {
+                        double num = Double.parseDouble(valor.replace(",", "").replace("$", ""));
+                        cell.putValue(num);
+                    } catch (Exception ex) {
+                        cell.putValue(valor);
+                    }
+                } else {
                     cell.putValue(valor);
                 }
-            } else {
-                cell.putValue(valor);
             }
         }
+
+        logger.info("✅ Datos escritos sin pisar subtotal de PROVISIONS, sin invadir BOND y con fórmula dinámica");
     }
-
-    logger.info("✅ Datos escritos sin corrimientos y con fórmula dinámica basada en la plantilla");
-}
-
 
     // ============================================================
     // 🔵 GUARDAR
@@ -252,4 +307,51 @@ public class AsposeExcelService {
                 || tipo.equalsIgnoreCase("INTEGER")
                 || tipo.equalsIgnoreCase("NUMERIC");
     }
+
+public void escribirUnitPriceYRemarks(
+        List<RowData> datos,
+        BrokerFormato formato
+) throws Exception {
+
+    if (workbookActual == null) {
+        throw new IllegalStateException("No hay workbook cargado");
+    }
+
+    Worksheet sheet = workbookActual.getWorksheets().get(0);
+    Cells cells = sheet.getCells();
+
+    // Obtener columnas desde BD
+    int colUnitPrice = formato.getColumnas().stream()
+            .filter(c -> "UNIT_PRICE".equalsIgnoreCase(c.getCampoEstandar()))
+            .findFirst().get().getIndiceColumna();
+
+    int colRemark = formato.getColumnas().stream()
+            .filter(c -> "VENDOR_REMARKS".equalsIgnoreCase(c.getCampoEstandar()))
+            .findFirst().get().getIndiceColumna();
+
+    // Fila donde empiezan los headers (1-based en BD → 0-based en Aspose)
+    int headerRow = formato.getHeaderRow() - 1;
+
+    // Primera fila de productos
+    int row = headerRow + 1;
+
+    for (RowData dato : datos) {
+
+        // UNIT PRICE
+        Cell cPrice = cells.get(row, colUnitPrice);
+        cPrice.putValue(dato.get("UNIT_PRICE"));
+
+        // REMARK
+        Cell cRemark = cells.get(row, colRemark);
+        cRemark.putValue(dato.get("VENDOR_REMARKS"));
+
+        row++;
+    }
+}
+
+
+
+
+
+
 }

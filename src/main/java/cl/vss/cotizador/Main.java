@@ -2460,28 +2460,26 @@ private void cargarProductos() {
      * 
      * @param archivoDestino Archivo donde guardar la exportación
      */
-    private void exportarConAspose(File archivoDestino, List<RowData> datosExportar, List<String> unitPriceSnapshotFX) {
+    private void exportarConAspose(File archivoDestino,
+                               List<RowData> datosExportar,
+                               List<String> unitPriceSnapshotFX) {
+
     logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
 
     try {
-        // 🔵 1) Clonar la hoja original (sheetIndex = 0)
+        // 1) Clonar la hoja original
         Worksheet hoja = asposeService.clonarHoja(0);
 
-        // 🔵 2) Fila REAL donde empiezan los productos en la plantilla
-        int filaInicioProductos = 21;  // ← ESTA ES LA CLAVE
-
-        // 🔵 3) Escribir los datos en la hoja clonada
-        asposeService.escribirDatosEnHojaClonada(
-                hoja,
+        // 2) Usar el método nuevo que NO mueve filas ni toca subtotales
+        asposeService.escribirUnitPriceYRemarks(
                 datosExportar,
-                filaInicioProductos,
                 formatoActual
         );
 
-        // 🔵 4) Guardar el archivo final
+        // 3) Guardar el archivo final
         asposeService.guardarWorkbook(archivoDestino.getAbsolutePath());
 
-        // 🔵 5) Mostrar alerta de éxito
+        // 4) Mostrar alerta de éxito
         ejecutarEnHiloFX(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Exportación Exitosa");
@@ -2502,6 +2500,7 @@ private void cargarProductos() {
         });
     }
 }
+
 
 
 
