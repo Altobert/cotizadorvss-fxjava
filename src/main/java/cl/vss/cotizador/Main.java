@@ -10,6 +10,7 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import com.aspose.cells.Worksheet;
+import javafx.scene.layout.Priority;
 
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
@@ -54,6 +55,7 @@ import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.util.converter.DoubleStringConverter;
 import javafx.util.converter.IntegerStringConverter;
 import javafx.util.Callback;
@@ -76,6 +78,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
+import javafx.scene.Group;
 
 import cl.vss.cotizador.model.Producto;
 import cl.vss.cotizador.service.ProductoService;
@@ -253,6 +256,32 @@ public class Main extends Application {
     Button btnZoomOut = new Button("🔎 Zoom –");
     Button btnResetZoom = new Button("🎯 Reset");
 
+// ⬇⬇⬇ AQUÍ VA EL BLOQUE DE ZOOM ⬇⬇⬇
+
+   final double[] zoom = {1.0};
+    double minZoom = 0.75;
+    double maxZoom = 1.5;
+
+    // Zoom IN
+    btnZoomIn.setOnAction(e -> {
+        zoom[0] = Math.min(maxZoom, zoom[0] * 1.1);
+        aplicarZoomTabla(tablaDinamica, zoom[0]);
+    });
+
+    // Zoom OUT
+    btnZoomOut.setOnAction(e -> {
+        zoom[0] = Math.max(minZoom, zoom[0] / 1.1);
+        aplicarZoomTabla(tablaDinamica, zoom[0]);
+    });
+
+    // Reset
+    btnResetZoom.setOnAction(e -> {
+        zoom[0] = 1.0;
+        aplicarZoomTabla(tablaDinamica, zoom[0]);
+    });
+
+
+
    ToolBar barraCotizador = new ToolBar(
     btnCargarCotizacion,
     new Separator(),        
@@ -290,42 +319,11 @@ public class Main extends Application {
     rootCotizador.setCenter(panelConMetadata);
     */
     
-    // Panel simplificado solo con la tabla dinámica
-VBox panelConMetadata = new VBox(10);
-panelConMetadata.getChildren().add(tablaDinamica);
-VBox.setVgrow(tablaDinamica, javafx.scene.layout.Priority.ALWAYS);
-panelConMetadata.setStyle("-fx-padding: 10;");
+    VBox panelConMetadata = new VBox(10, tablaDinamica);
+    VBox.setVgrow(tablaDinamica, Priority.ALWAYS);
+    panelConMetadata.setStyle("-fx-padding: 10;");
 
-rootCotizador.setCenter(panelConMetadata);
-
-// ===============================
-// 🔍 ZOOM SUAVE CON SCROLL DEL MOUSE
-// ===============================
-tablaDinamica.setOnScroll(event -> {
-    double zoomFactor = 1.05; // velocidad del zoom
-
-    if (event.getDeltaY() > 0) {
-        // Zoom IN
-        tablaDinamica.setScaleX(tablaDinamica.getScaleX() * zoomFactor);
-        tablaDinamica.setScaleY(tablaDinamica.getScaleY() * zoomFactor);
-    } else {
-        // Zoom OUT
-        tablaDinamica.setScaleX(tablaDinamica.getScaleX() / zoomFactor);
-        tablaDinamica.setScaleY(tablaDinamica.getScaleY() / zoomFactor);
-    }
-});
-        btnZoomIn.setOnAction(e -> {
-        tablaDinamica.setScaleX(tablaDinamica.getScaleX() * 1.1);
-        tablaDinamica.setScaleY(tablaDinamica.getScaleY() * 1.1);
-});
-        btnZoomOut.setOnAction(e -> {
-        tablaDinamica.setScaleX(tablaDinamica.getScaleX() / 1.1);
-        tablaDinamica.setScaleY(tablaDinamica.getScaleY() / 1.1);
-});
-        btnResetZoom.setOnAction(e -> {
-        tablaDinamica.setScaleX(1.0);
-        tablaDinamica.setScaleY(1.0);
-});
+    rootCotizador.setCenter(panelConMetadata);
 
 
 
@@ -865,6 +863,20 @@ try {
             System.err.println("⚠️ No se pudo configurar el icono del sistema: " + e.getMessage());
         }
     }
+
+    private void aplicarZoomTabla(TableView<?> tabla, double factorZoom) {
+    double fontSizeBase = 12;
+    double rowHeightBase = 24;
+
+    double fontSize = fontSizeBase * factorZoom;
+    double rowHeight = rowHeightBase * factorZoom;
+
+    tabla.setStyle("-fx-font-size: " + fontSize + "px;");
+    tabla.setFixedCellSize(rowHeight);
+}
+
+
+
 
     
     private void configurarTablaProductos() {
