@@ -320,23 +320,36 @@ public void escribirUnitPriceYRemarks(
     Worksheet sheet = workbookActual.getWorksheets().get(0);
     Cells cells = sheet.getCells();
 
+    // ============================================================
+    // 🔵 UNIT PRICE
+    // ============================================================
     int colUnitPrice = formato.getColumnas().stream()
             .filter(c -> "UNIT_PRICE".equalsIgnoreCase(c.getCampoEstandar()))
-            .findFirst().get()
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("UNIT_PRICE no encontrado"))
             .getIndiceColumna();
 
-    int colRemark = formato.getColumnas().stream()
+    // ============================================================
+    // 🔵 REMARKS (3 opciones: VENDOR_REMARKS, NOTES, SUPPLIER_COMMENTS)
+    // ============================================================
+    FormatoColumna colRemarkObj = formato.getColumnas().stream()
             .filter(c ->
                     "VENDOR_REMARKS".equalsIgnoreCase(c.getCampoEstandar()) ||
-                    "NOTES".equalsIgnoreCase(c.getCampoEstandar())
+                    "NOTES".equalsIgnoreCase(c.getCampoEstandar()) ||
+                    "SUPPLIER_COMMENTS".equalsIgnoreCase(c.getCampoEstandar())
             )
-            .findFirst().get()
-            .getIndiceColumna();
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("No se encontró columna de remarks"));
+    
+    int colRemark = colRemarkObj.getIndiceColumna();
+    String campoRemark = colRemarkObj.getCampoEstandar(); // Para leer el valor correcto del RowData
 
+    // ============================================================
+    // 🔵 DETECTAR FILA DE INICIO (Line Items o headerRow)
+    // ============================================================
     int headerRow = formato.getHeaderRow() - 1;
     int row = headerRow + 1;
 
-    // Buscar "Line Items" en todas las columnas
     int filaLineItems = -1;
 
     for (int r = 0; r <= cells.getMaxDataRow(); r++) {
@@ -355,7 +368,9 @@ public void escribirUnitPriceYRemarks(
         row = filaLineItems + 1;
     }
 
-    // Escribir solo mientras existan productos reales
+    // ============================================================
+    // 🔵 LOOP DE ESCRITURA
+    // ============================================================
     int indexDato = 0;
 
     while (indexDato < datos.size()) {
@@ -371,15 +386,14 @@ public void escribirUnitPriceYRemarks(
         // UNIT PRICE
         cells.get(row, colUnitPrice).putValue(dato.get("UNIT_PRICE"));
 
-        // REMARKS / NOTES
-        cells.get(row, colRemark).putValue(dato.get("VENDOR_REMARKS"));
+        // REMARKS dinámico según broker
+        String valorRemark = dato.get(campoRemark);
+        cells.get(row, colRemark).putValue(valorRemark != null ? valorRemark : "");
 
         row++;
         indexDato++;
     }
 }
-
-
 
 
 
