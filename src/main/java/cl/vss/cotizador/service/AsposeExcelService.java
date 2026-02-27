@@ -320,32 +320,62 @@ public void escribirUnitPriceYRemarks(
     Worksheet sheet = workbookActual.getWorksheets().get(0);
     Cells cells = sheet.getCells();
 
-    // Obtener columnas desde BD
     int colUnitPrice = formato.getColumnas().stream()
             .filter(c -> "UNIT_PRICE".equalsIgnoreCase(c.getCampoEstandar()))
-            .findFirst().get().getIndiceColumna();
+            .findFirst().get()
+            .getIndiceColumna();
 
     int colRemark = formato.getColumnas().stream()
-            .filter(c -> "VENDOR_REMARKS".equalsIgnoreCase(c.getCampoEstandar()))
-            .findFirst().get().getIndiceColumna();
+            .filter(c ->
+                    "VENDOR_REMARKS".equalsIgnoreCase(c.getCampoEstandar()) ||
+                    "NOTES".equalsIgnoreCase(c.getCampoEstandar())
+            )
+            .findFirst().get()
+            .getIndiceColumna();
 
-    // Fila donde empiezan los headers (1-based en BD → 0-based en Aspose)
     int headerRow = formato.getHeaderRow() - 1;
-
-    // Primera fila de productos
     int row = headerRow + 1;
 
-    for (RowData dato : datos) {
+    // Buscar "Line Items" en todas las columnas
+    int filaLineItems = -1;
+
+    for (int r = 0; r <= cells.getMaxDataRow(); r++) {
+        for (int c = 0; c <= cells.getMaxDataColumn(); c++) {
+            Cell celda = cells.get(r, c);
+            if (celda != null && celda.getStringValue() != null &&
+                celda.getStringValue().trim().equalsIgnoreCase("Line Items")) {
+                filaLineItems = r;
+                break;
+            }
+        }
+        if (filaLineItems != -1) break;
+    }
+
+    if (filaLineItems != -1) {
+        row = filaLineItems + 1;
+    }
+
+    // Escribir solo mientras existan productos reales
+    int indexDato = 0;
+
+    while (indexDato < datos.size()) {
+
+        // Detectar si la fila tiene un producto real
+        Cell celdaPart = cells.get(row, 1); // columna Part#
+        if (celdaPart == null || celdaPart.getStringValue().trim().isEmpty()) {
+            break; // no hay más productos
+        }
+
+        RowData dato = datos.get(indexDato);
 
         // UNIT PRICE
-        Cell cPrice = cells.get(row, colUnitPrice);
-        cPrice.putValue(dato.get("UNIT_PRICE"));
+        cells.get(row, colUnitPrice).putValue(dato.get("UNIT_PRICE"));
 
-        // REMARK
-        Cell cRemark = cells.get(row, colRemark);
-        cRemark.putValue(dato.get("VENDOR_REMARKS"));
+        // REMARKS / NOTES
+        cells.get(row, colRemark).putValue(dato.get("VENDOR_REMARKS"));
 
         row++;
+        indexDato++;
     }
 }
 
