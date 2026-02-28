@@ -331,7 +331,7 @@ public class AsposeExcelService {
             .getIndiceColumna();
 
     // ============================================================
-    // 🔵 REMARKS (VENDOR_REMARKS / NOTES / SUPPLIER_COMMENTS)
+    // 🔵 REMARKS
     // ============================================================
     FormatoColumna colRemarkObj = formato.getColumnas().stream()
             .filter(c ->
@@ -346,25 +346,19 @@ public class AsposeExcelService {
     String campoRemark = colRemarkObj.getCampoEstandar();
 
     // ============================================================
-    // 🔵 Fila REAL donde empiezan los productos
+    // 🔵 Fila REAL donde empiezan los productos (CORREGIDO)
     // ============================================================
-    int row = formato.getHeaderRow(); // fila del header (1-based)
-    row++; // primera fila de datos reales
+    int row = formato.getHeaderRow()-1; // 1-based
+    logger.info("Fila de inicio para UNIT_PRICE y REMARKS (1-based): {}", row);
+    //row = row - 1; // Aspose usa 0-based → esta es la fila correcta del primer producto
+    row++;
 
     // ============================================================
-    // 🔵 LOOP DE ESCRITURA
+    // 🔵 LOOP DE ESCRITURA (SIN CORTE POR PART#)
     // ============================================================
-    int indexDato = 0;
+    for (int i = 0; i < datos.size(); i++) {
 
-    while (indexDato < datos.size()) {
-
-        // Detectar si la fila tiene un producto real (columna Part#)
-        Cell celdaPart = cells.get(row, 1); // Columna B (Part#)
-        if (celdaPart == null || celdaPart.getStringValue().trim().isEmpty()) {
-            break; // No hay más productos en el Excel original
-        }
-
-        RowData dato = datos.get(indexDato);
+        RowData dato = datos.get(i);
 
         // UNIT PRICE
         cells.get(row, colUnitPrice).putValue(dato.get("UNIT_PRICE"));
@@ -374,7 +368,6 @@ public class AsposeExcelService {
         cells.get(row, colRemark).putValue(valorRemark != null ? valorRemark : "");
 
         row++;
-        indexDato++;
     }
 }
 
