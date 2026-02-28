@@ -2479,9 +2479,7 @@ private void cargarProductos() {
     logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
 
     try {
-        // 1) Clonar la hoja original
-        Worksheet hoja = asposeService.clonarHoja(0);
-
+        
         // 2) Usar el método nuevo que NO mueve filas ni toca subtotales
         asposeService.escribirUnitPriceYRemarks(
                 datosExportar,
@@ -4704,8 +4702,7 @@ private void leerExcelConAspose(File archivo) {
                 "ITEM_DESCRIPTION", "DESCRIPTION", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
             
             if (descripcion != null && !descripcion.trim().isEmpty()) {
-                List<cl.vss.cotizador.model.ProductoSimilar> productos =     
-                    cotizacionService.buscarMatchLoMasExactoPosible(descripcion);
+                List<cl.vss.cotizador.model.ProductoSimilar> productos = cotizacionService.buscarMatchLoMasExactoPosible(descripcion);
                 
                 if (!productos.isEmpty()) {
                     cl.vss.cotizador.model.ProductoSimilar producto = productos.get(0);
@@ -4729,7 +4726,7 @@ private void leerExcelConAspose(File archivo) {
                     rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
                     rowData.set("UNIT_PRICE", String.format("%.2f", precioVentaNetoDolares));
                     
-                    logger.debug("Producto encontrado: {} - Precio VSS: ${}", 
+                    logger.info("Producto encontrado: {} - Precio VSS: ${}", 
                         descripcion.substring(0, Math.min(30, descripcion.length())), 
                         String.format("%,.2f", precioVSS));
 

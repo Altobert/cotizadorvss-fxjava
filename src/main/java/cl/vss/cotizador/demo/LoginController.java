@@ -25,12 +25,12 @@ public class LoginController {
         TextField txtCorreo = new TextField();
         txtCorreo.setPromptText("Correo electrónico");
         // 👨‍💻 Credenciales por defecto para desarrollo
-        //txtCorreo.setText("albertocarloss@gmail.com");
+        txtCorreo.setText("claudio@vss.cl");
 
         PasswordField txtPassword = new PasswordField();
         txtPassword.setPromptText("Contraseña");
         // 👨‍💻 Credenciales por defecto para desarrollo
-        //txtPassword.setText("Asm*031244");
+        txtPassword.setText("1234");
 
         Button btnLogin = new Button("Ingresar");
         Label lblMensaje = new Label();

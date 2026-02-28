@@ -308,7 +308,8 @@ public class AsposeExcelService {
                 || tipo.equalsIgnoreCase("NUMERIC");
     }
 
-public void escribirUnitPriceYRemarks(
+   
+    public void escribirUnitPriceYRemarks(
         List<RowData> datos,
         BrokerFormato formato
 ) throws Exception {
@@ -330,7 +331,7 @@ public void escribirUnitPriceYRemarks(
             .getIndiceColumna();
 
     // ============================================================
-    // 🔵 REMARKS (3 opciones: VENDOR_REMARKS, NOTES, SUPPLIER_COMMENTS)
+    // 🔵 REMARKS (VENDOR_REMARKS / NOTES / SUPPLIER_COMMENTS)
     // ============================================================
     FormatoColumna colRemarkObj = formato.getColumnas().stream()
             .filter(c ->
@@ -340,33 +341,15 @@ public void escribirUnitPriceYRemarks(
             )
             .findFirst()
             .orElseThrow(() -> new RuntimeException("No se encontró columna de remarks"));
-    
+
     int colRemark = colRemarkObj.getIndiceColumna();
-    String campoRemark = colRemarkObj.getCampoEstandar(); // Para leer el valor correcto del RowData
+    String campoRemark = colRemarkObj.getCampoEstandar();
 
     // ============================================================
-    // 🔵 DETECTAR FILA DE INICIO (Line Items o headerRow)
+    // 🔵 Fila REAL donde empiezan los productos
     // ============================================================
-    int headerRow = formato.getHeaderRow() - 1;
-    int row = headerRow + 1;
-
-    int filaLineItems = -1;
-
-    for (int r = 0; r <= cells.getMaxDataRow(); r++) {
-        for (int c = 0; c <= cells.getMaxDataColumn(); c++) {
-            Cell celda = cells.get(r, c);
-            if (celda != null && celda.getStringValue() != null &&
-                celda.getStringValue().trim().equalsIgnoreCase("Line Items")) {
-                filaLineItems = r;
-                break;
-            }
-        }
-        if (filaLineItems != -1) break;
-    }
-
-    if (filaLineItems != -1) {
-        row = filaLineItems + 1;
-    }
+    int row = formato.getHeaderRow(); // fila del header (1-based)
+    row++; // primera fila de datos reales
 
     // ============================================================
     // 🔵 LOOP DE ESCRITURA
@@ -375,10 +358,10 @@ public void escribirUnitPriceYRemarks(
 
     while (indexDato < datos.size()) {
 
-        // Detectar si la fila tiene un producto real
-        Cell celdaPart = cells.get(row, 1); // columna Part#
+        // Detectar si la fila tiene un producto real (columna Part#)
+        Cell celdaPart = cells.get(row, 1); // Columna B (Part#)
         if (celdaPart == null || celdaPart.getStringValue().trim().isEmpty()) {
-            break; // no hay más productos
+            break; // No hay más productos en el Excel original
         }
 
         RowData dato = datos.get(indexDato);
@@ -386,7 +369,7 @@ public void escribirUnitPriceYRemarks(
         // UNIT PRICE
         cells.get(row, colUnitPrice).putValue(dato.get("UNIT_PRICE"));
 
-        // REMARKS dinámico según broker
+        // REMARKS
         String valorRemark = dato.get(campoRemark);
         cells.get(row, colRemark).putValue(valorRemark != null ? valorRemark : "");
 
@@ -394,6 +377,10 @@ public void escribirUnitPriceYRemarks(
         indexDato++;
     }
 }
+
+
+
+
 
 
 
