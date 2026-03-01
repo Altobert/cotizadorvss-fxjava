@@ -2507,12 +2507,11 @@ private void exportarConAspose(
         int startRow = formatoActual.getHeaderRow() - 1;
 
         // 5) Escribir TODOS los datos con el service final
-        asposeService.escribirDatosEnHojaClonada(
-                hoja,
-                datosExportar,
-                startRow,
-                formatoActual
-        );
+       asposeService.escribirUnitPriceYRemarks(
+        datosExportar,
+        formatoActual
+);
+
 
         // 6) Guardar archivo final
         asposeService.guardarWorkbook(archivoDestino.getAbsolutePath());
