@@ -89,7 +89,8 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import cl.vss.cotizador.view.CargaCotizacionProgressController;
 import cl.vss.cotizador.view.UserCrudView;
-
+import com.aspose.cells.Workbook; 
+import com.aspose.cells.Worksheet;
 
 public class Main extends Application {
     private static final Logger logger = LogManager.getLogger(Main.class);
@@ -1926,7 +1927,8 @@ private void cargarProductos() {
         }
         
         // 🔷 Verificar si hay workbook Aspose cargado (archivo con macros)
-        boolean usarAspose = asposeService.hayWorkbookCargado() && rutaArchivoConMacros != null;
+        boolean usarAspose = (asposeService.getWorkbookActual() != null) && rutaArchivoConMacros != null;
+
         
         // Verificar si hay plantilla disponible para este broker
         String rutaPlantilla = formatoActual.getRutaPlantilla();
@@ -2470,26 +2472,48 @@ private void cargarProductos() {
      * Preserva todas las macros VBA, fórmulas, formatos y estructura del archivo original.
      * Solo modifica las celdas de datos.
      * 
-     * @param archivoDestino Archivo donde guardar la exportación
-     */
-    private void exportarConAspose(File archivoDestino,
-                               List<RowData> datosExportar,
-                               List<String> unitPriceSnapshotFX) {
+     /**
+/**
+ * Exporta usando Aspose preservando macros, estilos, colores, merges y fórmulas.
+ * @param archivoDestino Archivo donde guardar la exportación
+ */
+private void exportarConAspose(
+        File archivoDestino,
+        List<RowData> datosExportar,
+        List<String> unitPriceSnapshotFX
+) {
 
-    logger.info("🔷 Exportando con Aspose (macros preservadas): {}", archivoDestino.getName());
+    logger.info("🔷 Exportando con Aspose (macros preservadas): {}", 
+                archivoDestino != null ? archivoDestino.getName() : "archivo null");
 
     try {
-        
-        // 2) Usar el método nuevo que NO mueve filas ni toca subtotales
-        asposeService.escribirUnitPriceYRemarks(
+
+        AsposeExcelService asposeService = AsposeExcelService.getInstance();
+
+        // 1) Validar workbook cargado
+        if (asposeService.getWorkbookActual() == null) {
+            mostrarError("No hay archivo Excel cargado.");
+            return;
+        }
+
+        // 2) Obtener workbook y hoja
+        Workbook workbook = asposeService.getWorkbookActual();
+        Worksheet hoja = workbook.getWorksheets().get(0);
+
+        // 3) Clonar hoja (mantiene colores, bordes, merges, fórmulas, macros)
+        hoja = asposeService.clonarHoja(0);
+
+        // 4) Escribir TODOS los datos usando el nuevo service modular
+        asposeService.escribirDatosEnHojaClonada(
+                hoja,
                 datosExportar,
                 formatoActual
         );
 
-        // 3) Guardar el archivo final
+        // 5) Guardar archivo final
         asposeService.guardarWorkbook(archivoDestino.getAbsolutePath());
 
-        // 4) Mostrar alerta de éxito
+        // 6) Mostrar alerta de éxito
         ejecutarEnHiloFX(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Exportación Exitosa");
@@ -2511,6 +2535,13 @@ private void cargarProductos() {
     }
 }
 
+        private void mostrarError(String mensaje) {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText(null);
+            alert.setContentText(mensaje);
+            alert.showAndWait();
+        }
 
 
 
