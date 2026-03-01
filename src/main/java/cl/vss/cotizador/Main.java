@@ -2503,17 +2503,21 @@ private void exportarConAspose(
         // 3) Clonar hoja (mantiene colores, bordes, merges, fórmulas, macros)
         hoja = asposeService.clonarHoja(0);
 
-        // 4) Escribir TODOS los datos usando el nuevo service modular
+        // 4) Calcular startRow desde la BD (Opción A)
+        int startRow = formatoActual.getHeaderRow() - 1;
+
+        // 5) Escribir TODOS los datos con el service final
         asposeService.escribirDatosEnHojaClonada(
                 hoja,
                 datosExportar,
+                startRow,
                 formatoActual
         );
 
-        // 5) Guardar archivo final
+        // 6) Guardar archivo final
         asposeService.guardarWorkbook(archivoDestino.getAbsolutePath());
 
-        // 6) Mostrar alerta de éxito
+        // 7) Mostrar alerta de éxito
         ejecutarEnHiloFX(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Exportación Exitosa");
@@ -2535,13 +2539,13 @@ private void exportarConAspose(
     }
 }
 
-        private void mostrarError(String mensaje) {
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Error");
-            alert.setHeaderText(null);
-            alert.setContentText(mensaje);
-            alert.showAndWait();
-        }
+private void mostrarError(String mensaje) {
+    Alert alert = new Alert(Alert.AlertType.ERROR);
+    alert.setTitle("Error");
+    alert.setHeaderText(null);
+    alert.setContentText(mensaje);
+    alert.showAndWait();
+}
 
 
 

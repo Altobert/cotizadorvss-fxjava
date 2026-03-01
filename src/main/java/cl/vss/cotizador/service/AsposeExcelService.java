@@ -7,8 +7,9 @@ import cl.vss.cotizador.model.BrokerFormato;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class AsposeExcelService {
 
@@ -57,104 +58,192 @@ public class AsposeExcelService {
     }
 
     // ============================================================
-    // 🟦 CLONAR HOJA COMPLETA (respeta colores, bordes, merges, fórmulas, macros)
+    // 🟦 CLONAR HOJA COMPLETA
     // ============================================================
     public Worksheet clonarHoja(int sheetIndex) throws Exception {
-    Workbook copiaWorkbook = new Workbook();
-    copiaWorkbook.copy(workbookActual);
+        Workbook copiaWorkbook = new Workbook();
+        copiaWorkbook.copy(workbookActual);
 
-    this.workbookActual = copiaWorkbook;
+        this.workbookActual = copiaWorkbook;
 
-    return workbookActual.getWorksheets().get(sheetIndex);
-}
+        return workbookActual.getWorksheets().get(sheetIndex);
+    }
 
-
-    
     // ============================================================
-    // 🔍 DETECTAR PRIMERA FILA REAL DE PRODUCTO
+    // 🔵 UTILIDADES
     // ============================================================
-    private int findFirstProductRow(Worksheet sheet, int headerRow) {
-        Cells cells = sheet.getCells();
-        int row = headerRow; // headerRow viene 1-based desde BD
+    private boolean esNumerico(String str) {
+        if (str == null || str.isEmpty()) return false;
+        try {
+            Double.parseDouble(str.replace(",", "").replace("$", ""));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
-        while (true) {
-            boolean hasRealData = false;
+    // ============================================================
+    // 🟩 ESCRIBIR PRODUCTOS + UNIT_PRICE + REMARKS (VERSIÓN FINAL)
+    // ============================================================
+   public void escribirDatosEnHojaClonada(
+        Worksheet hoja,
+        List<RowData> datos,
+        int startRow,
+        BrokerFormato formato
+) throws Exception {
 
-            for (int col = 0; col < 50; col++) {
-                Cell cell = cells.get(row, col);
+    Cells cells = hoja.getCells();
 
-                if (cell == null) continue;
+    // ============================================================
+    // 🔍 DETECTAR FILA DONDE EMPIEZA BOND
+    // ============================================================
+    int filaBondAspose = -1;
 
-                // Ignorar fórmulas decorativas (como L19)
-                if (cell.isFormula()) continue;
-
-                String val = cell.getDisplayStringValue();
-                if (val != null && !val.trim().isEmpty()) {
-                    hasRealData = true;
+    for (int r = 0; r <= cells.getMaxDataRow(); r++) {
+        for (int c = 0; c <= cells.getMaxDataColumn(); c++) {
+            Cell celda = cells.get(r, c);
+            if (celda != null && celda.getStringValue() != null) {
+                String texto = celda.getStringValue().trim().toUpperCase();
+                if ("BOND".equals(texto)) {
+                    filaBondAspose = r;
+                    logger.info("📌 Fila de BOND detectada dinámicamente en: {}", filaBondAspose + 1);
                     break;
                 }
             }
+        }
+        if (filaBondAspose != -1) break;
+    }
 
-            if (hasRealData) return row;
+    int filaSubtotalProvisions = (filaBondAspose != -1) ? filaBondAspose - 1 : -1;
 
-            row++;
+    // ============================================================
+    // 🔍 DETECTAR COLUMNA TOTAL PRICE Y FÓRMULA ORIGINAL
+    // ============================================================
+    int colTotal = -1;
+    for (FormatoColumna col : formato.getColumnas()) {
+        if (col.getNombreColumnaOriginal() != null &&
+            col.getNombreColumnaOriginal().toUpperCase().contains("TOTAL")) {
+            colTotal = col.getIndiceColumna();
+            break;
         }
     }
 
-    // ============================================================
-    // ✏ ESCRITURA SEGURA (MERGES + COLUMNAS OCULTAS)
-    // ============================================================
-    private void writeValue(Cells cells, int row, int colIndex, Object value) {
-        Cell cell = cells.get(row, colIndex);
+    String formulaOriginal = null;
+    int filaOriginal = -1;
 
-        if (cell.isMerged()) {
-            int r = cell.getMergedRange().getFirstRow();
-            int c = cell.getMergedRange().getFirstColumn();
-            cell = cells.get(r, c);
-        }
+    if (colTotal != -1) {
+        Cell celdaOriginal = cells.get(startRow, colTotal);
+        if (celdaOriginal != null && celdaOriginal.isFormula()) {
+            formulaOriginal = celdaOriginal.getFormula();
 
-        if (value instanceof Number) {
-            cell.putValue(((Number) value).doubleValue());
-        } else {
-            cell.putValue(value != null ? value.toString() : "");
+            Pattern p = Pattern.compile("[A-Z]+(\\d+)");
+            Matcher m = p.matcher(formulaOriginal);
+            if (m.find()) {
+                filaOriginal = Integer.parseInt(m.group(1));
+            }
         }
     }
 
+    if (filaOriginal != -1) {
+        startRow = filaOriginal - 1;
+    }
+
     // ============================================================
-    // 🟩 ESCRIBIR TODOS LOS PRODUCTOS (VERSIÓN FINAL)
+    // 🟩 LOOP PRINCIPAL
     // ============================================================
-    public void escribirDatosEnHojaClonada(
-            Worksheet hoja,
-            List<RowData> datos,
-            BrokerFormato formato
-    ) throws Exception {
+    for (int i = 0; i < datos.size(); i++) {
 
-        Cells cells = hoja.getCells();
+        int filaExcel = startRow + i;
 
-        // 1) Detectar fila real del primer producto
-        int startRow = findFirstProductRow(hoja, formato.getHeaderRow());
+        // 🟦 PROTECCIÓN: no pisar subtotal PROVISIONS
+       
+    if (filaBondAspose != -1 && filaSubtotalProvisions != -1) {
 
-        // 2) Obtener columnas desde BD (ya corregidas)
-        List<FormatoColumna> columnas = formato.getColumnas();
+    // Solo insertar si el producto cae EXACTAMENTE sobre el subtotal
+    if (filaExcel == filaSubtotalProvisions) {
 
-        // 3) Loop principal
-        int row = startRow;
+        logger.info("↕ Insertando fila antes del subtotal PROVISIONS en fila {}", filaSubtotalProvisions + 1);
 
-        for (RowData dato : datos) {
+        cells.insertRows(filaSubtotalProvisions, 1);
 
-            for (FormatoColumna col : columnas) {
+        filaSubtotalProvisions++;
+        filaBondAspose++;
+        filaExcel++;
+    }
+}
 
-                int colIndex = col.getIndiceColumna();
-                Object value = dato.get(col.getCampoEstandar());
 
-                writeValue(cells, row, colIndex, value);
+        // 🛑 No invadir BOND
+        if (filaBondAspose != -1 && filaExcel >= filaBondAspose) {
+            logger.info("⛔ Corte dinámico: alcanzamos la fila de BOND en {}", filaBondAspose + 1);
+            break;
+        }
+
+        RowData rowData = datos.get(i);
+        int fila1 = filaExcel + 1;
+
+        // ============================================================
+        // 🟩 ESCRITURA MODULAR POR COLUMNA
+        // ============================================================
+        for (FormatoColumna columna : formato.getColumnas()) {
+
+            int colIdx = columna.getIndiceColumna();
+            String campo = columna.getCampoEstandar();
+            Cell cell = cells.get(filaExcel, colIdx);
+
+            // 👉 FÓRMULA DINÁMICA TOTAL PRICE
+            if (colIdx == colTotal && formulaOriginal != null && filaOriginal != -1) {
+
+                String formulaDinamica = formulaOriginal.replaceAll(
+                        "(?<=\\D)" + filaOriginal + "(?=\\D|$)",
+                        String.valueOf(fila1)
+                );
+
+                cell.setFormula(formulaDinamica);
+                continue;
             }
 
-            row++;
-        }
+            // 👉 VALOR A ESCRIBIR (UNIT_PRICE, REMARKS, ETC.)
+            String valor = rowData.get(campo);
+            if (valor == null) valor = "";
 
-        logger.info("✔ Escritura completada sin interferir con merges, columnas ocultas ni fórmulas decorativas.");
+            // 👉 MERGES
+            if (cell.isMerged()) {
+                int r = cell.getMergedRange().getFirstRow();
+                int c = cell.getMergedRange().getFirstColumn();
+                cell = cells.get(r, c);
+            }
+
+            // ============================================================
+            // 🟩 NÚMEROS (con protección tipoDato null)
+            // ============================================================
+            String tipo = columna.getTipoDato();
+
+            boolean esNumero = tipo != null && (
+                    tipo.equalsIgnoreCase("DECIMAL") ||
+                    tipo.equalsIgnoreCase("INTEGER") ||
+                    tipo.equalsIgnoreCase("NUMERIC")
+            );
+
+            if (esNumerico(valor) && esNumero) {
+
+                try {
+                    double num = Double.parseDouble(valor.replace(",", "").replace("$", ""));
+                    cell.putValue(num);
+                } catch (Exception ex) {
+                    cell.putValue(valor);
+                }
+
+            } else {
+                // 👉 TEXTO (incluye REMARKS)
+                cell.putValue(valor);
+            }
+        }
     }
+
+    logger.info("✅ Datos escritos sin pisar subtotal de PROVISIONS, sin invadir BOND y con fórmula dinámica + UNIT_PRICE + REMARKS");
+}
+
 
     // ============================================================
     // 💾 GUARDAR ARCHIVO
@@ -171,5 +260,4 @@ public class AsposeExcelService {
 
         workbookActual.save(rutaDestino, formato);
     }
-
 }
