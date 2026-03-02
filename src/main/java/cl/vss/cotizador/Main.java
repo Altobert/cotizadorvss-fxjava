@@ -4933,7 +4933,8 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     logger.debug("🚨 DEBUG - Vendor Remarks extraído: '{}'", vendorRemarks);
     logger.debug("🚨 DEBUG - Notes (Garret) extraído: '{}'", notesGarret);
     
-    dialog.setHeaderText("Producto: " + (descripcion != null && !descripcion.isEmpty() ? descripcion : "[Sin descripción]"));
+    // se comenta para dar mas espacio
+    //dialog.setHeaderText("Producto: " + (descripcion != null && !descripcion.isEmpty() ? descripcion : "[Sin descripción]"));
     
     // ============================
     // PANEL DE INFORMACIÓN ACTUAL
@@ -5129,7 +5130,7 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     });
     
     tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecioUSD, colPrecioVentaNeto, colValorPesos);
-    tablaProductos.setPrefSize(800, 300);
+    tablaProductos.setPrefSize(920, 400);
     
     // ============================
     // BÚSQUEDA DE PRODUCTOS
@@ -5406,7 +5407,7 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     // Configurar diálogo
     dialog.getDialogPane().setContent(contenidoPrincipal);
     dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-    dialog.getDialogPane().setPrefSize(900, 750);
+    dialog.getDialogPane().setPrefSize(1020, 840);
     
     // Guardar Vendor Remarks y Notes al cerrar el diálogo
     final TextField txtVendorRemarksFinal = txtVendorRemarks;
