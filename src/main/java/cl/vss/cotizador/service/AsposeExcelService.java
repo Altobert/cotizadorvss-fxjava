@@ -117,7 +117,21 @@ public class AsposeExcelService {
         throw new IllegalStateException("No hay workbook cargado");
     }
 
-    Worksheet sheet = workbookActual.getWorksheets().get(0);
+    boolean esIfs = formato.getBrokerName() != null
+            && formato.getBrokerName().toUpperCase().contains("IFS");
+
+    Worksheet sheet;
+    if (esIfs) {
+        sheet = workbookActual.getWorksheets().get("PriceRequestDetail");
+        if (sheet == null) {
+            logger.warn("⚠️ IFS: no existe pestaña 'PriceRequestDetail'. Se usará hoja índice 0 como fallback.");
+            sheet = workbookActual.getWorksheets().get(0);
+        } else {
+            logger.info("📄 IFS detectado: escribiendo UNIT_PRICE/remarks en pestaña 'PriceRequestDetail'");
+        }
+    } else {
+        sheet = workbookActual.getWorksheets().get(0);
+    }
     Cells cells = sheet.getCells();
 
     // ============================
@@ -128,6 +142,13 @@ public class AsposeExcelService {
             .findFirst()
             .orElseThrow(() -> new RuntimeException("UNIT_PRICE no encontrado"))
             .getIndiceColumna();
+
+    if(esIfs){
+        logger.info("es IFS, buscando columna UNIT_PRICE en pestaña PriceRequestDetail");
+        logger.info("colUnitPrice: {}", colUnitPrice);
+    }
+
+    
 
     // ============================
     // COLUMNA REMARKS (dinámica)
@@ -148,13 +169,30 @@ public class AsposeExcelService {
     // ============================
     // COLUMNA PART NUMBER (con soporte CMA CGM)
     // ============================
-    FormatoColumna colPartObj;
+        FormatoColumna colPartObj;
 
-    if (formato.getFormatoId() == 3) { // CMA CGM
+        if (formato.getFormatoId() == 3) { // CMA CGM
         colPartObj = formato.getColumnas().stream()
                 .filter(c -> "DESCRIPTION".equalsIgnoreCase(c.getCampoEstandar()))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No se encontró DESCRIPTION para CMA CGM"));
+        } else if (esIfs) {
+        colPartObj = formato.getColumnas().stream()
+            .filter(c ->
+                "ITEM_NAME".equalsIgnoreCase(c.getCampoEstandar()) ||
+                "ITEM".equalsIgnoreCase(c.getCampoEstandar()) ||
+                "ITEM_DESCRIPTION".equalsIgnoreCase(c.getCampoEstandar()) ||
+                "DESCRIPTION".equalsIgnoreCase(c.getCampoEstandar()))
+            .findFirst()
+            .orElseGet(() -> formato.getColumnas().stream()
+                .filter(c ->
+                    c.getCampoEstandar().toUpperCase().contains("ITEM") ||
+                    c.getCampoEstandar().toUpperCase().contains("PART") ||
+                    c.getCampoEstandar().toUpperCase().contains("PRODUCT") ||
+                    c.getCampoEstandar().toUpperCase().contains("CODE")
+                )
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No se encontró columna de Part/Descripción para IFS")));
     } else {
         colPartObj = formato.getColumnas().stream()
                 .filter(c ->
@@ -179,22 +217,41 @@ public class AsposeExcelService {
     // ============================
     // LOOP PRINCIPAL
     // ============================
+    int filasSinMatch = 0;
+    int filasSinPart = 0;
+    int filasTituloOmitidasEnBusqueda = 0;
+    int unitPriceEscritos = 0;
+    int unitPriceOmitidosVacios = 0;
+    int unitPriceOmitidosNoNumericos = 0;
+
     for (RowData dato : datos) {
 
         String partNumber = dato.get(campoPartNumber);
-        if (partNumber == null || partNumber.trim().isEmpty()) continue;
+        if (partNumber == null || partNumber.trim().isEmpty()) {
+            if (esIfs) {
+                partNumber = primerNoVacio(
+                        dato,
+                        "ITEM_NAME", "ITEM", "ITEM_DESCRIPTION", "DESCRIPTION",
+                        "PRODUCT_NAME", "PRODUCT_CODE", "ITEM_CODE", "CODE"
+                );
+            }
+            if (partNumber == null || partNumber.trim().isEmpty()) {
+                filasSinPart++;
+                continue;
+            }
+        }
 
         // Normalización profunda
-        partNumber = partNumber
-                .replace("\u00A0", " ")
-                .replace("\r", "")
-                .replace("\n", "")
-                .replace("\t", "")
-                .trim();
+        partNumber = normalizarTextoComparacion(partNumber);
 
         int filaEncontrada = -1;
 
         for (int r = primeraFilaProducto; r <= cells.getMaxDataRow(); r++) {
+
+            if (esFilaTituloOEncabezado(cells, r, colPartExcel, colUnitPrice, esIfs)) {
+                filasTituloOmitidasEnBusqueda++;
+                continue;
+            }
 
             Cell celdaPart = cells.get(r, colPartExcel);
             if (celdaPart == null) continue;
@@ -202,12 +259,7 @@ public class AsposeExcelService {
             String valor = celdaPart.getStringValue();
             if (valor == null) valor = "";
 
-            valor = valor
-                    .replace("\u00A0", " ")
-                    .replace("\r", "")
-                    .replace("\n", "")
-                    .replace("\t", "")
-                    .trim();
+                valor = normalizarTextoComparacion(valor);
 
             if (valor.equalsIgnoreCase(partNumber)) {
                 filaEncontrada = r;
@@ -219,6 +271,7 @@ public class AsposeExcelService {
         // NO MATCH → NO ESCRIBIR NADA
         // ============================
         if (filaEncontrada == -1) {
+            filasSinMatch++;
             logger.warn("⚠ No se encontró Part# {} en el Excel, no se escribe nada", partNumber);
             continue;
         }
@@ -229,15 +282,23 @@ public class AsposeExcelService {
         String precioStr = dato.get("UNIT_PRICE");
 
         if (precioStr == null || precioStr.trim().isEmpty()) {
-            cells.get(filaEncontrada, colUnitPrice).putValue(0.0);
+            unitPriceOmitidosVacios++;
         } else {
-            precioStr = precioStr.replace(",", ".").trim();
+            precioStr = precioStr.trim();
+
+            if (precioStr.contains(",") && precioStr.contains(".")) {
+                precioStr = precioStr.replace(",", "");
+            } else if (precioStr.contains(",")) {
+                precioStr = precioStr.replace(",", ".");
+            }
 
             try {
                 double precio = Double.parseDouble(precioStr);
                 cells.get(filaEncontrada, colUnitPrice).putValue(precio);
+                unitPriceEscritos++;
             } catch (Exception e) {
-                cells.get(filaEncontrada, colUnitPrice).putValue(0.0);
+                unitPriceOmitidosNoNumericos++;
+                logger.debug("⚠ UNIT_PRICE no numérico para Part# {}: '{}' (se conserva valor Excel)", partNumber, dato.get("UNIT_PRICE"));
             }
         }
 
@@ -248,6 +309,14 @@ public class AsposeExcelService {
         cells.get(filaEncontrada, colRemark).putValue(valorRemark != null ? valorRemark : "");
     }
 
+        logger.info("🧭 DIAG EXPORT UNIT_PRICE | escritos={} omitidosVacios={} omitidosNoNumericos={} filasSinPart={} filasSinMatch={} filasTituloOmitidasEnBusqueda={}",
+            unitPriceEscritos,
+            unitPriceOmitidosVacios,
+            unitPriceOmitidosNoNumericos,
+            filasSinPart,
+            filasSinMatch,
+            filasTituloOmitidasEnBusqueda);
+
     // ============================
     // RECALCULO
     // ============================
@@ -255,6 +324,63 @@ public class AsposeExcelService {
     workbookActual.calculateFormula();
     workbookActual.getSettings().setRecalculateBeforeSave(true);
 }
+
+    private String primerNoVacio(RowData dato, String... keys) {
+        for (String key : keys) {
+            String valor = dato.get(key);
+            if (valor != null && !valor.trim().isEmpty()) {
+                return valor;
+            }
+        }
+        return "";
+    }
+
+    private String normalizarTextoComparacion(String valor) {
+        if (valor == null) {
+            return "";
+        }
+        return valor
+                .replace("\u00A0", " ")
+                .replace("\r", "")
+                .replace("\n", "")
+                .replace("\t", "")
+                .trim();
+    }
+
+    private boolean esFilaTituloOEncabezado(Cells cells, int fila, int colPartExcel, int colUnitPrice, boolean esIfs) {
+        String valorPart = "";
+        String valorUnit = "";
+
+        Cell celdaPart = cells.get(fila, colPartExcel);
+        if (celdaPart != null) {
+            valorPart = normalizarTextoComparacion(celdaPart.getStringValue()).toUpperCase();
+        }
+
+        Cell celdaUnit = cells.get(fila, colUnitPrice);
+        if (celdaUnit != null) {
+            valorUnit = normalizarTextoComparacion(celdaUnit.getStringValue()).toUpperCase();
+        }
+
+        if (valorPart.isEmpty() && valorUnit.isEmpty()) {
+            return true;
+        }
+
+        if (esIfs && "YOUR PRICE".equals(valorUnit)) {
+            return true;
+        }
+
+        return valorPart.equals("PROVISIONS")
+                || valorPart.equals("PROVISION")
+                || valorPart.equals("ITEMS")
+                || valorPart.equals("PRODUCTS")
+                || valorPart.equals("DESCRIPTION")
+                || valorPart.equals("ITEM DESCRIPTION")
+                || valorPart.equals("PRODUCT LIST")
+                || valorPart.equals("PRODUCT CODE")
+                || valorPart.equals("ITEM CODE")
+                || valorPart.startsWith("----")
+                || valorPart.startsWith("====");
+    }
 
     public void guardarWorkbook(String rutaSalida) throws Exception {
         if (workbookActual == null) {
