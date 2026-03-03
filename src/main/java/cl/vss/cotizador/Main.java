@@ -1957,27 +1957,11 @@ private void cargarProductos() {
         }
         final List<RowData> datosExportar = new java.util.ArrayList<>(tablaDinamica.getItems());
 
-        // Capturar UNIT_PRICE en el hilo FX (garantiza visibilidad de memoria entre hilos)
-        // SimpleStringProperty no es volatile; el background thread podría ver valores stale.
-        final java.util.List<String> unitPriceSnapshotFX = new java.util.ArrayList<>();
-        for (RowData rd : datosExportar) {
-            unitPriceSnapshotFX.add(rd.get("UNIT_PRICE"));
-        }
-        // 🔍 DIAGNÓSTICO: Mostrar primeros 5 valores capturados del snapshot
-        logger.info("🔍 SNAPSHOT UNIT_PRICE capturado en hilo FX ({} items):", unitPriceSnapshotFX.size());
-        for (int i = 0; i < Math.min(5, unitPriceSnapshotFX.size()); i++) {
-            RowData rd = datosExportar.get(i);
-            String desc = rd.get("ITEM_NAME") != null ? rd.get("ITEM_NAME") : rd.get("DESCRIPTION");
-            if (desc == null) desc = rd.get("ITEM_DESCRIPTION");
-            logger.info("  [{}] UNIT_PRICE='{}' desc='{}'", i, unitPriceSnapshotFX.get(i), 
-                desc != null ? desc.substring(0, Math.min(40, desc.length())) : "NULL");
-        }
-
         Task<Void> taskExportacion = new Task<Void>() {
             @Override
             protected Void call() {
                 if (usarAspose) {
-                    exportarConAspose(archivo, datosExportar, unitPriceSnapshotFX);
+                    exportarConAspose(archivo, datosExportar);
                 } else if (usarPlantilla) {
                     exportarConPlantilla(archivo, rutaPlantilla, datosExportar);
                 } else {
@@ -2479,8 +2463,7 @@ private void cargarProductos() {
  */
 private void exportarConAspose(
         File archivoDestino,
-        List<RowData> datosExportar,
-        List<String> unitPriceSnapshotFX
+    List<RowData> datosExportar
 ) {
 
     logger.info("🔷 Exportando con Aspose (macros preservadas): {}", 
@@ -2503,121 +2486,11 @@ private void exportarConAspose(
         // 3) Clonar hoja (mantiene colores, bordes, merges, fórmulas, macros)
         hoja = asposeService.clonarHoja(0);
 
-        // 4) Calcular startRow desde la BD (Opción A)
-        int startRow = Math.max(0, formatoActual.getHeaderRow() - 1);
-
-        boolean esIfsExport = formatoActual.getBrokerName() != null
-            && formatoActual.getBrokerName().toUpperCase().contains("IFS");
-
-        Worksheet hojaDiagnostico = esIfsExport
-            ? workbook.getWorksheets().get("PriceRequestDetail")
-            : workbook.getWorksheets().get(0);
-        if (hojaDiagnostico == null) {
-            logger.warn("⚠️ exportarConAspose: hoja PriceRequestDetail no existe en IFS, se usa índice 0 para diagnóstico");
-            hojaDiagnostico = workbook.getWorksheets().get(0);
-        }
-
-        com.aspose.cells.Cells celdasDiagnostico = hojaDiagnostico.getCells();
-
-        FormatoColumna colUnitPriceDef = formatoActual.getColumnas().stream()
-            .filter(c -> "UNIT_PRICE".equalsIgnoreCase(c.getCampoEstandar()))
-            .findFirst()
-            .orElse(null);
-
-        logger.info("🧭 DIAG exportarConAspose | broker='{}' formatoId={} hoja='{}' headerRow(0-based)={} filasExportar={} snapshotUnitPrice={}",
-            formatoActual.getBrokerName(),
-            formatoActual.getFormatoId(),
-            hojaDiagnostico.getName(),
-            startRow,
-            datosExportar != null ? datosExportar.size() : 0,
-            unitPriceSnapshotFX != null ? unitPriceSnapshotFX.size() : 0);
-
-        if (colUnitPriceDef == null) {
-            logger.warn("⚠️ DIAG exportarConAspose: no existe definición UNIT_PRICE en formato_columnas para formatoId={}",
-                formatoActual.getFormatoId());
-        } else {
-            int colUnitPriceIdx = colUnitPriceDef.getIndiceColumna();
-            String headerEnExcel = "";
-            try {
-                com.aspose.cells.Cell celdaHeader = celdasDiagnostico.get(startRow, colUnitPriceIdx);
-                if (celdaHeader != null) {
-                    headerEnExcel = celdaHeader.getStringValue();
-                }
-            } catch (Exception ex) {
-                logger.warn("⚠️ DIAG exportarConAspose: no se pudo leer encabezado UNIT_PRICE en Excel", ex);
-            }
-
-            logger.info("🧭 DIAG UNIT_PRICE def | campo='{}' nombreOriginal='{}' indice={} letra='{}' headerExcel='{}'",
-                colUnitPriceDef.getCampoEstandar(),
-                colUnitPriceDef.getNombreColumnaOriginal(),
-                colUnitPriceIdx,
-                colUnitPriceDef.getLetraColumna(),
-                headerEnExcel);
-
-            int muestra = Math.min(8, datosExportar.size());
-            for (int i = 0; i < muestra; i++) {
-                RowData fila = datosExportar.get(i);
-                String unitPriceFila = fila.get("UNIT_PRICE");
-                String unitPriceSnap = (unitPriceSnapshotFX != null && i < unitPriceSnapshotFX.size())
-                    ? unitPriceSnapshotFX.get(i)
-                    : "";
-                String itemRef = obtenerValorDeCampo(fila, "ITEM_NAME", "ITEM", "ITEM_DESCRIPTION", "DESCRIPTION", "PRODUCT_CODE", "ITEM_CODE");
-
-                logger.info("🧪 PRE [{}] item='{}' UNIT_PRICE_row='{}' UNIT_PRICE_snapshot='{}'",
-                    i,
-                    itemRef,
-                    unitPriceFila,
-                    unitPriceSnap);
-            }
-        }
-
         // 5) Escribir TODOS los datos con el service final
         asposeService.escribirUnitPriceYRemarks(
             datosExportar,
             formatoActual
         );
-
-        if (colUnitPriceDef != null) {
-            int colUnitPriceIdx = colUnitPriceDef.getIndiceColumna();
-            int inicioData = startRow + 1;
-            int finData = Math.min(inicioData + 60, celdasDiagnostico.getMaxDataRow());
-            int celdasConValor = 0;
-
-            for (int r = inicioData; r <= finData; r++) {
-                com.aspose.cells.Cell celda = celdasDiagnostico.get(r, colUnitPriceIdx);
-                if (celda == null) {
-                    continue;
-                }
-
-                String valorTexto = celda.getStringValue();
-                double valorNumero = 0.0;
-                try {
-                    valorNumero = celda.getDoubleValue();
-                } catch (Exception ignored) {
-                }
-
-                boolean tieneTexto = valorTexto != null && !valorTexto.trim().isEmpty();
-                boolean tieneNumero = Math.abs(valorNumero) > 0.0;
-
-                if (tieneTexto || tieneNumero) {
-                    celdasConValor++;
-                    if (celdasConValor <= 10) {
-                        logger.info("🧪 POST filaExcel={} col={} texto='{}' numero={} tipo={}",
-                            r + 1,
-                            colUnitPriceIdx,
-                            valorTexto,
-                            valorNumero,
-                            celda.getType());
-                    }
-                }
-            }
-
-            logger.info("🧭 DIAG POST UNIT_PRICE: celdas con valor en rango filas {}-{} (col {}): {}",
-                inicioData + 1,
-                finData + 1,
-                colUnitPriceIdx,
-                celdasConValor);
-        }
 
         // 6) Guardar archivo final
         asposeService.guardarWorkbook(archivoDestino.getAbsolutePath());
@@ -4795,30 +4668,6 @@ private void leerExcelConAspose(File archivo) {
             }
         }
 
-        FormatoColumna colUnitPriceFormato = formatoActual.getColumnas().stream()
-            .filter(c -> "UNIT_PRICE".equalsIgnoreCase(c.getCampoEstandar()))
-            .findFirst()
-            .orElse(null);
-
-        int diagUnitPriceOriginalConDato = 0;
-        int diagUnitPriceSetDesdeBD = 0;
-        int diagUnitPriceSetCeroSinMatch = 0;
-        int diagUnitPriceSetCeroSinDescripcion = 0;
-        int diagUnitPricePreservadoSinMatch = 0;
-        int diagUnitPricePreservadoSinDescripcion = 0;
-        int diagUnitPriceMuestrasPre = 0;
-        int diagUnitPriceMuestrasPost = 0;
-
-        logger.info("🧭 DIAG CARGA UNIT_PRICE | broker='{}' formatoId={} hoja='{}' headerRow(0-based)={} startRow(0-based)={} lastRow(0-based)={} colDef='{}' idxDef={}",
-            formatoActual.getBrokerName(),
-            formatoActual.getFormatoId(),
-            sheet.getName(),
-            Math.max(0, formatoActual.getHeaderRow() - 1),
-            startRow,
-            lastRow,
-            colUnitPriceFormato != null ? colUnitPriceFormato.getNombreColumnaOriginal() : "[SIN_DEF]",
-            colUnitPriceFormato != null ? colUnitPriceFormato.getIndiceColumna() : -1);
-        
         for (int i = startRow; i <= lastRow; i++) {
             // Omitir filas especiales CMA CGM para no tratarlas como productos
             if (!cmaCgmSpecialRows.isEmpty() && cmaCgmSpecialRows.containsKey(i)) {
@@ -4900,21 +4749,6 @@ private void leerExcelConAspose(File archivo) {
                 && !"0.0".equals(unitPriceOriginalExcel.trim())
                 && !"0.00".equals(unitPriceOriginalExcel.trim());
 
-            if (unitPriceOriginalConDato) {
-                diagUnitPriceOriginalConDato++;
-            }
-
-            if (diagUnitPriceMuestrasPre < 12) {
-                String itemRefPre = descripcion != null && !descripcion.isEmpty()
-                    ? descripcion.substring(0, Math.min(40, descripcion.length()))
-                    : "[SIN_DESCRIPCION]";
-                logger.info("🧪 CARGA PRE filaExcel={} item='{}' UNIT_PRICE_excel='{}'",
-                    i + 1,
-                    itemRefPre,
-                    unitPriceOriginalExcel);
-                diagUnitPriceMuestrasPre++;
-            }
-            
             if (descripcion != null && !descripcion.trim().isEmpty()) {
                 List<cl.vss.cotizador.model.ProductoSimilar> productos = cotizacionService.buscarMatchLoMasExactoPosible(descripcion);
                 
@@ -4939,14 +4773,6 @@ private void leerExcelConAspose(File archivo) {
                     
                     rowData.set("precio_vss_calculado", String.valueOf(precioVSS));
                     rowData.set("UNIT_PRICE", String.format("%.2f", precioVentaNetoDolares));
-                    diagUnitPriceSetDesdeBD++;
-
-                    if (diagUnitPriceMuestrasPost < 12) {
-                        logger.info("🧪 CARGA POST filaExcel={} motivo='MATCH_BD' UNIT_PRICE_final='{}'",
-                            i + 1,
-                            rowData.get("UNIT_PRICE"));
-                        diagUnitPriceMuestrasPost++;
-                    }
                     
                     logger.info("Producto encontrado: {} - Precio VSS: ${}", 
                         descripcion.substring(0, Math.min(30, descripcion.length())), 
@@ -4955,33 +4781,11 @@ private void leerExcelConAspose(File archivo) {
                 } else {
                     if (!unitPriceOriginalConDato) {
                         rowData.set("UNIT_PRICE", String.format("%.2f", 0.00));
-                        diagUnitPriceSetCeroSinMatch++;
-                    } else {
-                        diagUnitPricePreservadoSinMatch++;
-                    }
-
-                    if (diagUnitPriceMuestrasPost < 12) {
-                        logger.info("🧪 CARGA POST filaExcel={} motivo='{}' UNIT_PRICE_final='{}'",
-                            i + 1,
-                            unitPriceOriginalConDato ? "SIN_MATCH_BD_PRESERVA_EXCEL" : "SIN_MATCH_BD_SET_CERO",
-                            rowData.get("UNIT_PRICE"));
-                        diagUnitPriceMuestrasPost++;
                     }
                 }
             } else {
                 if (!unitPriceOriginalConDato) {
                     rowData.set("UNIT_PRICE", String.format("%.2f", 0.00));
-                    diagUnitPriceSetCeroSinDescripcion++;
-                } else {
-                    diagUnitPricePreservadoSinDescripcion++;
-                }
-
-                if (diagUnitPriceMuestrasPost < 12) {
-                    logger.info("🧪 CARGA POST filaExcel={} motivo='{}' UNIT_PRICE_final='{}'",
-                        i + 1,
-                        unitPriceOriginalConDato ? "SIN_DESCRIPCION_PRESERVA_EXCEL" : "SIN_DESCRIPCION_SET_CERO",
-                        rowData.get("UNIT_PRICE"));
-                    diagUnitPriceMuestrasPost++;
                 }
             }
             
@@ -5018,15 +4822,6 @@ private void leerExcelConAspose(File archivo) {
         int totalFilasLeidas = lastRow - startRow + 1;
         int filasVacias = totalFilasLeidas - datos.size();
 
-        logger.info("🧭 DIAG CARGA UNIT_PRICE RESUMEN | originalConDato={} setDesdeBD={} setCeroSinMatch={} setCeroSinDescripcion={} preservadoSinMatch={} preservadoSinDescripcion={} filasTablaFinal={}",
-            diagUnitPriceOriginalConDato,
-            diagUnitPriceSetDesdeBD,
-            diagUnitPriceSetCeroSinMatch,
-            diagUnitPriceSetCeroSinDescripcion,
-            diagUnitPricePreservadoSinMatch,
-            diagUnitPricePreservadoSinDescripcion,
-            datos.size());
-        
         int productosConPrecio = 0;
         for (RowData row : datos) {
             String precio = row.get("precio_vss_calculado");

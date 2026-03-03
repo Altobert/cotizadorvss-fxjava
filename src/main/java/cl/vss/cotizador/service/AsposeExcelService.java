@@ -143,13 +143,6 @@ public class AsposeExcelService {
             .orElseThrow(() -> new RuntimeException("UNIT_PRICE no encontrado"))
             .getIndiceColumna();
 
-    if(esIfs){
-        logger.info("es IFS, buscando columna UNIT_PRICE en pestaña PriceRequestDetail");
-        logger.info("colUnitPrice: {}", colUnitPrice);
-    }
-
-    
-
     // ============================
     // COLUMNA REMARKS (dinámica)
     // ============================
@@ -298,7 +291,6 @@ public class AsposeExcelService {
                 unitPriceEscritos++;
             } catch (Exception e) {
                 unitPriceOmitidosNoNumericos++;
-                logger.debug("⚠ UNIT_PRICE no numérico para Part# {}: '{}' (se conserva valor Excel)", partNumber, dato.get("UNIT_PRICE"));
             }
         }
 
@@ -309,7 +301,7 @@ public class AsposeExcelService {
         cells.get(filaEncontrada, colRemark).putValue(valorRemark != null ? valorRemark : "");
     }
 
-        logger.info("🧭 DIAG EXPORT UNIT_PRICE | escritos={} omitidosVacios={} omitidosNoNumericos={} filasSinPart={} filasSinMatch={} filasTituloOmitidasEnBusqueda={}",
+        logger.info("Exportación UNIT_PRICE | escritos={} omitidosVacios={} omitidosNoNumericos={} filasSinPart={} filasSinMatch={} filasTituloOmitidasEnBusqueda={}",
             unitPriceEscritos,
             unitPriceOmitidosVacios,
             unitPriceOmitidosNoNumericos,
