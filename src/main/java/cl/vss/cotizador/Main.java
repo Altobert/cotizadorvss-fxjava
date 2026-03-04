@@ -8,10 +8,8 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
 import com.aspose.cells.Worksheet;
 import javafx.scene.layout.Priority;
-
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.ss.usermodel.BorderStyle;
@@ -62,6 +60,8 @@ import javafx.util.Callback;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.image.Image;
+import javafx.scene.input.KeyCode;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -71,6 +71,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -81,6 +82,7 @@ import java.util.function.UnaryOperator;
 import javafx.scene.Group;
 
 import cl.vss.cotizador.model.Producto;
+import cl.vss.cotizador.model.ProductoSimilar;
 import cl.vss.cotizador.service.ProductoService;
 import cl.vss.cotizador.service.UsuarioDAO;
 import cl.vss.cotizador.util.DBConnection;
@@ -97,6 +99,10 @@ public class Main extends Application {
     
     // Cotizador
     private final CotizacionService cotizacionService = new CotizacionService();
+    // 👉 Listas globales para el popup de productos similares
+    private ObservableList<ProductoSimilar> listaPopupOriginal;
+    private FilteredList<ProductoSimilar> filteredPopup;
+
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
     private cl.vss.cotizador.model.CabeceraCotizacion cabeceraActual;
     
@@ -5155,30 +5161,102 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecioUSD, colPrecioVentaNeto, colValorPesos);
     tablaProductos.setPrefSize(920, 400);
     
-    // ============================
-    // BÚSQUEDA DE PRODUCTOS
-    // ============================
-    HBox panelBusqueda = new HBox(10);
-    panelBusqueda.setStyle("-fx-padding: 10; -fx-alignment: center-left;");
-    
-    Label lblBuscar = new Label("🔍 Buscar producto:");
-    lblBuscar.setStyle("-fx-font-weight: bold;");
-    
-    TextField txtBusqueda = new TextField();
-    txtBusqueda.setPromptText("Ingrese términos de búsqueda...");
-    txtBusqueda.setPrefWidth(350);
-    // Pre-llenar con descripción actual si existe
-    if (descripcion != null && !descripcion.isEmpty()) {
-        logger.debug("Pre-llenando campo de búsqueda con descripción: '{}'", descripcion);
-        txtBusqueda.setText(descripcion);
+
+
+    // ============================================================
+// CARGA INICIAL DE PRODUCTOS RELACIONADOS
+// ============================================================
+List<ProductoSimilar> resultadosIniciales =
+        cotizacionService.buscarProductosSimilares(descripcion);
+
+// Lista base REAL del popup
+listaPopupOriginal = FXCollections.observableArrayList(resultadosIniciales);
+
+// Lista filtrada (aunque ya no filtramos, igual se usa para la tabla)
+filteredPopup = new FilteredList<>(listaPopupOriginal, p -> true);
+
+// Asignar a la tabla
+tablaProductos.setItems(filteredPopup);
+
+
+// ============================
+// BÚSQUEDA DE PRODUCTOS
+// ============================
+HBox panelBusqueda = new HBox(10);
+panelBusqueda.setStyle("-fx-padding: 10; -fx-alignment: center-left;");
+
+Label lblBuscar = new Label("🔍 Buscar producto:");
+lblBuscar.setStyle("-fx-font-weight: bold;");
+
+TextField txtBusqueda = new TextField();
+txtBusqueda.setPromptText("Ingrese términos de búsqueda...");
+txtBusqueda.setPrefWidth(350);
+
+// Prellenar con descripción actual
+if (descripcion != null && !descripcion.isEmpty()) {
+    txtBusqueda.setText(descripcion);
+}
+
+Button btnBuscar = new Button("Buscar");
+btnBuscar.setStyle("-fx-background-color: #0A3D91; -fx-text-fill: white; -fx-font-weight: bold;");
+btnBuscar.setPrefWidth(100);
+
+panelBusqueda.getChildren().addAll(lblBuscar, txtBusqueda, btnBuscar);
+
+
+// ============================================================
+// BÚSQUEDA EN TIEMPO REAL (consulta BD)
+// ============================================================
+txtBusqueda.textProperty().addListener((obs, oldValue, newValue) -> {
+    String termino = newValue.trim();
+
+    if (termino.isEmpty()) {
+        // Volver a mostrar los relacionados iniciales
+        listaPopupOriginal.setAll(resultadosIniciales);
+        return;
     }
-    
-    Button btnBuscar = new Button("Buscar");
-    btnBuscar.setStyle("-fx-background-color: #0A3D91; -fx-text-fill: white; -fx-font-weight: bold;");
-    btnBuscar.setPrefWidth(100);
-    
-    panelBusqueda.getChildren().addAll(lblBuscar, txtBusqueda, btnBuscar);
-    
+
+    // Buscar en BD
+    List<ProductoSimilar> resultados =
+            cotizacionService.buscarProductosSimilares(termino);
+
+    listaPopupOriginal.setAll(resultados);
+
+    if (resultados.isEmpty()) {
+        tablaProductos.setPlaceholder(
+            new Label("❌ No se encontraron productos para: " + termino)
+        );
+    }
+});
+
+// ENTER selecciona el primer resultado
+txtBusqueda.setOnKeyPressed(event -> {
+    if (event.getCode() == KeyCode.ENTER) {
+        if (!tablaProductos.getItems().isEmpty()) {
+            tablaProductos.getSelectionModel().select(0);
+        }
+    }
+});git branch
+
+
+
+// ============================================================
+// BOTÓN BUSCAR (consulta BD)
+// ============================================================
+btnBuscar.setOnAction(e -> {
+    String termino = txtBusqueda.getText().trim();
+
+    List<ProductoSimilar> resultados =
+            cotizacionService.buscarProductosSimilares(termino);
+
+    listaPopupOriginal.setAll(resultados);
+
+    if (resultados.isEmpty()) {
+        tablaProductos.setPlaceholder(new Label("❌ No se encontraron productos para: " + termino));
+    }
+});
+
+
     // ============================
     // PANEL DE PRECIO CALCULADO
     // ============================
@@ -5201,32 +5279,7 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     btnAplicarPrecio.setPrefWidth(310);
     btnAplicarPrecio.setPrefHeight(40);
     
-    // ============================
-    // LÓGICA DE BÚSQUEDA
-    // ============================
-    btnBuscar.setOnAction(e -> {
-        String termino = txtBusqueda.getText().trim();
-        if (!termino.isEmpty()) {
-            List<cl.vss.cotizador.model.ProductoSimilar> resultados = 
-                cotizacionService.buscarProductosSimilares(termino);
-            
-            ObservableList<cl.vss.cotizador.model.ProductoSimilar> datos = 
-                FXCollections.observableArrayList(resultados);
-            tablaProductos.setItems(datos);
-            
-            if (resultados.isEmpty()) {
-                Label sinResultados = new Label("❌ No se encontraron productos para: " + termino);
-                sinResultados.setStyle("-fx-font-size: 14px; -fx-text-fill: #666666;");
-                tablaProductos.setPlaceholder(sinResultados);
-            }
-        }
-    });
-    
-    // Búsqueda con Enter
-    txtBusqueda.setOnAction(e -> btnBuscar.fire());
-    
-    // Búsqueda inicial
-    btnBuscar.fire();
+  
     
     // ============================
     // LÓGICA DE SELECCIÓN
@@ -5259,7 +5312,7 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     final TextField txtVendorRemarksBtnRef = txtVendorRemarks;
     final TextField txtNotesBtnRef = txtNotes;
     
-    btnAplicarPrecio.setOnAction(e -> {
+    btnAplicarPrecio.setOnAction(e -> { 
         cl.vss.cotizador.model.ProductoSimilar seleccionado = 
             tablaProductos.getSelectionModel().getSelectedItem();
         
@@ -5517,6 +5570,21 @@ private VBox crearPanelMetadata() {
     
     return panel;
 }
+
+    // ============================================================
+    // 🔵 NORMALIZAR TEXTO (acentos, mayúsculas, espacios)
+    // ============================================================
+    private String normalizar(String texto) {
+        if (texto == null) return "";
+        return Normalizer.normalize(texto, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase()
+                .trim();
+    }
+
+
+
+
 
 // ============================================================
 // 🔵 CARGAR METADATA DEL BROKER
