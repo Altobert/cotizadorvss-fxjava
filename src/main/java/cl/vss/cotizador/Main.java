@@ -872,9 +872,16 @@ try {
     double fontSize = fontSizeBase * factorZoom;
     double rowHeight = rowHeightBase * factorZoom;
 
+    // Aumenta solo el texto
     tabla.setStyle("-fx-font-size: " + fontSize + "px;");
+
+    // Ajusta la altura de las filas
     tabla.setFixedCellSize(rowHeight);
+
+    // MUY IMPORTANTE: recalcular la tabla para que no se deforme
+    tabla.refresh();
 }
+
 
 
 
@@ -4969,24 +4976,24 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
 
     // ============================
-// PANEL MOTIVO COMERCIAL
-// ============================
-VBox panelMotivo = new VBox(8);
-panelMotivo.setStyle("-fx-padding: 10; -fx-background-color: #FFF3CD; -fx-border-color: #CC9A06; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
+    // PANEL MOTIVO COMERCIAL
+    // ============================
+    VBox panelMotivo = new VBox(8);
+    panelMotivo.setStyle("-fx-padding: 10; -fx-background-color: #FFF3CD; -fx-border-color: #CC9A06; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
 
-Label lblMotivo = new Label("🟡 Motivo comercial:");
-lblMotivo.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #8A6D3B;");
+    Label lblMotivo = new Label("🟡 Motivo comercial:");
+    lblMotivo.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #8A6D3B;");
 
-ComboBox<String> comboMotivo = new ComboBox<>();
-comboMotivo.getItems().addAll("not available", "out of season");
-comboMotivo.setPromptText("Seleccione motivo...");
-comboMotivo.setPrefWidth(300);
+    ComboBox<String> comboMotivo = new ComboBox<>();
+    comboMotivo.getItems().addAll("not available", "out of season");
+    comboMotivo.setPromptText("Seleccione motivo...");
+    comboMotivo.setPrefWidth(300);
 
-// Prellenar si existe
-String motivoPrevio = rowData.get("COMENTARIOS");
-if (motivoPrevio != null && !motivoPrevio.isEmpty()) {
-    comboMotivo.setValue(motivoPrevio);
-}
+    // Prellenar si existe
+    String motivoPrevio = rowData.get("COMENTARIOS");
+    if (motivoPrevio != null && !motivoPrevio.isEmpty()) {
+        comboMotivo.setValue(motivoPrevio);
+    }
 
 panelMotivo.getChildren().addAll(lblMotivo, comboMotivo);
 
