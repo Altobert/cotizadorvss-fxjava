@@ -1874,10 +1874,10 @@ private void cargarProductos() {
         // Panel principal que combina información, comentarios, búsqueda y tabla
         VBox contenidoPrincipal = new VBox(15);
         contenidoPrincipal.getChildren().addAll(infoPanel,
-                                              panelComentarios,
-                                              panelBusqueda,
-                                              new Label("🔍 Productos Similares Encontrados (" + productosSimilares.size() + "):"),
-                                              tablaProductosSimilares);
+        panelComentarios,
+        panelBusqueda,
+        new Label("🔍 Productos Similares Encontrados (" + productosSimilares.size() + "):"),
+        tablaProductosSimilares);
         
         // Configurar el diálogo (aumentado para panel de comentarios)
         dialogProductosSimilares.getDialogPane().setContent(contenidoPrincipal);
@@ -5011,11 +5011,11 @@ VBox panelVendorRemarks = null;
 TextField txtVendorRemarks = null;
 
 boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBrokerName() != null && 
-                        (formatoActual.getBrokerName().toUpperCase().contains("BSM") ||
-                         formatoActual.getBrokerName().toUpperCase().contains("CMA") ||
-                         formatoActual.getBrokerName().toUpperCase().contains("MCTC") ||
-                         formatoActual.getBrokerName().toUpperCase().contains("OCEANIC") ||
-                         formatoActual.getBrokerName().toUpperCase().contains("PROCURE"));
+                (formatoActual.getBrokerName().toUpperCase().contains("BSM") ||
+                formatoActual.getBrokerName().toUpperCase().contains("CMA") ||
+                formatoActual.getBrokerName().toUpperCase().contains("MCTC") ||
+                formatoActual.getBrokerName().toUpperCase().contains("OCEANIC") ||
+                formatoActual.getBrokerName().toUpperCase().contains("PROCURE"));
 
 if (permitirVendorRemarks) {
     panelVendorRemarks = new VBox(8);
@@ -5161,10 +5161,23 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     tablaProductos.getColumns().addAll(colDescEs, colDescEn, colUnidad, colPrecioUSD, colPrecioVentaNeto, colValorPesos);
     tablaProductos.setPrefSize(920, 400);
     
+    // ============================================================
+    // CARGA INICIAL DE PRODUCTOS RELACIONADOS
+    // ============================================================
+    List<ProductoSimilar> resultadosIniciales =
+            cotizacionService.buscarProductosSimilares(descripcion);
+
+    // Lista base REAL del popup
+    listaPopupOriginal = FXCollections.observableArrayList(resultadosIniciales);
+
+    // Lista filtrada (aunque ya no filtramos, igual se usa para la tabla)
+    filteredPopup = new FilteredList<>(listaPopupOriginal, p -> true);
+
+    // Asignar a la tabla
+    tablaProductos.setItems(filteredPopup);
 
 
     
-
     // ============================
     // PANEL DE PRECIO CALCULADO
     // ============================
@@ -5378,6 +5391,79 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     if (panelNotes != null) {
         contenidoPrincipal.getChildren().add(panelNotes);
     }
+    
+
+// ============================
+// BÚSQUEDA DE PRODUCTOS
+// ============================
+HBox panelBusqueda = new HBox(10);
+panelBusqueda.setStyle("-fx-padding: 10; -fx-alignment: center-left;");
+
+Label lblBuscar = new Label("🔍 Buscar producto:");
+lblBuscar.setStyle("-fx-font-weight: bold;");
+
+TextField txtBusqueda = new TextField();
+txtBusqueda.setPromptText("Ingrese términos de búsqueda...");
+txtBusqueda.setPrefWidth(350);
+
+if (descripcion != null && !descripcion.isEmpty()) {
+    txtBusqueda.setText(descripcion);
+}
+
+Button btnBuscar = new Button("Buscar");
+btnBuscar.setStyle("-fx-background-color: #0A3D91; -fx-text-fill: white; -fx-font-weight: bold;");
+btnBuscar.setPrefWidth(100);
+
+panelBusqueda.getChildren().addAll(lblBuscar, txtBusqueda, btnBuscar);
+
+// ============================================================
+// BÚSQUEDA EN TIEMPO REAL (consulta BD)
+// ============================================================
+txtBusqueda.textProperty().addListener((obs, oldValue, newValue) -> {
+    String termino = newValue.trim();
+
+    if (termino.isEmpty()) {
+        listaPopupOriginal.setAll(resultadosIniciales);
+        return;
+    }
+
+    List<ProductoSimilar> resultados =
+            cotizacionService.buscarProductosSimilares(termino);
+
+    listaPopupOriginal.setAll(resultados);
+
+    if (resultados.isEmpty()) {
+        tablaProductos.setPlaceholder(
+            new Label("❌ No se encontraron productos para: " + termino)
+        );
+    }
+});
+
+txtBusqueda.setOnKeyPressed(event -> {
+    if (event.getCode() == KeyCode.ENTER) {
+        if (!tablaProductos.getItems().isEmpty()) {
+            tablaProductos.getSelectionModel().select(0);
+        }
+    }
+});
+
+// ============================================================
+// BOTÓN BUSCAR (consulta BD)
+// ============================================================
+btnBuscar.setOnAction(e -> {
+    String termino = txtBusqueda.getText().trim();
+
+    List<ProductoSimilar> resultados =
+            cotizacionService.buscarProductosSimilares(termino);
+
+    listaPopupOriginal.setAll(resultados);
+
+    if (resultados.isEmpty()) {
+        tablaProductos.setPlaceholder(new Label("❌ No se encontraron productos para: " + termino));
+    }
+});
+
+
     
     contenidoPrincipal.getChildren().addAll(
         panelBusqueda,
