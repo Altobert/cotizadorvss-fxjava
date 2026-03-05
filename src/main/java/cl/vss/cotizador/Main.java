@@ -4687,6 +4687,7 @@ private void leerExcelConAspose(File archivo) {
                 continue;
             }
             RowData rowData = new RowData();
+            rowData.set("__EXCEL_ROW_INDEX", String.valueOf(i));
             boolean filaVacia = true;
             int camposConDatos = 0;
             
@@ -5262,6 +5263,11 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
                     campoVendorRemarks = key;
                     break;
                 }
+                // Buscar ITEM COMMENTS (TMS)
+                if (keyUpper.contains("ITEM") && keyUpper.contains("COMMENT")) {
+                    campoVendorRemarks = key;
+                    break;
+                }
             }
             if (campoVendorRemarks != null) {
                 rowData.set(campoVendorRemarks, nuevoValorRemarks);
@@ -5501,6 +5507,11 @@ btnBuscar.setOnAction(e -> {
                 // Buscar SUPPLIER_COMMENTS, SUPPLIER COMMNETS, SUPPLIER NOTES (MCTC, Oceanic, ProcureShip)
                 if (keyUpper.contains("SUPPLIER") && 
                     (keyUpper.contains("COMMENT") || keyUpper.contains("COMMNET") || keyUpper.contains("NOTE"))) {
+                    campoVendorRemarks = key;
+                    break;
+                }
+                // Buscar ITEM COMMENTS (TMS)
+                if (keyUpper.contains("ITEM") && keyUpper.contains("COMMENT")) {
                     campoVendorRemarks = key;
                     break;
                 }
