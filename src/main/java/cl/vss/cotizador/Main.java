@@ -4949,7 +4949,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         "SUPPLIER_COMMENTS", "SUPPLIER_COMMENT", "SUPPLIER COMMENTS",
         "Supplier Commnets", "Supplier Comments", "SUPPLIER COMMNETS",
         "SUPPLIER_NOTES", "SUPPLIER NOTES", "Supplier Notes",
-        "REMARKS", "COMMENTS");
+        "REMARKS", "COMMENTS", "SUPPLIER_COMMENTS" ,"ITEM COMMENTS");
     
     // Extraer Notes para Garret
     String notesGarret = obtenerValorDeCampo(rowData, "NOTES", "Notes");
@@ -5015,7 +5015,8 @@ boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBroker
                 formatoActual.getBrokerName().toUpperCase().contains("CMA") ||
                 formatoActual.getBrokerName().toUpperCase().contains("MCTC") ||
                 formatoActual.getBrokerName().toUpperCase().contains("OCEANIC") ||
-                formatoActual.getBrokerName().toUpperCase().contains("PROCURE"));
+                formatoActual.getBrokerName().toUpperCase().contains("PROCURE") ||
+                formatoActual.getBrokerName().toUpperCase().contains("TMS"));
 
 if (permitirVendorRemarks) {
     panelVendorRemarks = new VBox(8);
