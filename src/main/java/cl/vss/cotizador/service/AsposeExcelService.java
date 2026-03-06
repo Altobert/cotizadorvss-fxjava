@@ -424,6 +424,10 @@ public class AsposeExcelService {
                 return primerNoVacio(dato,
                         "ITEM_COMMENTS", "ITEM COMMENTS", "ITEM_COMMENT",
                         "COMMENTS", "COMENTARIOS", "SUPPLIER_COMMENTS", "SUPPLIER COMMENTS");
+            case "SUPPLIER_NOTES":
+                return primerNoVacio(dato,
+                        "SUPPLIER_NOTES", "SUPPLIER NOTES", "Supplier Notes",
+                        "NOTES", "Notes");
             case "SUPPLIER_COMMENTS":
                 return primerNoVacio(dato,
                         "SUPPLIER_COMMENTS", "SUPPLIER COMMENTS", "SUPPLIER COMMENT",
@@ -448,6 +452,7 @@ public class AsposeExcelService {
         String campo = normalizarCampoEstandar(campoEstandar);
         return "VENDOR_REMARKS".equals(campo)
                 || "NOTES".equals(campo)
+                || "SUPPLIER_NOTES".equals(campo)
                 || "SUPPLIER_COMMENTS".equals(campo)
                 || "OFFICE_REMARKS".equals(campo)
                 || "ITEM_COMMENTS".equals(campo);
