@@ -4764,7 +4764,8 @@ private void leerExcelConAspose(File archivo) {
                 && !"0.00".equals(unitPriceOriginalExcel.trim());
 
             if (descripcion != null && !descripcion.trim().isEmpty()) {
-                List<cl.vss.cotizador.model.ProductoSimilar> productos = cotizacionService.buscarMatchLoMasExactoPosible(descripcion);
+                List<ProductoSimilar> productos = cotizacionService.buscarProductosSimilares(descripcion);
+
                 
                 if (!productos.isEmpty()) {
                     cl.vss.cotizador.model.ProductoSimilar producto = productos.get(0);
@@ -5193,7 +5194,20 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     lblPrecioTotal.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #0A3D91;");
     
     panelPrecioCalculado.getChildren().addAll(lblTituloPrecio, lblPrecioTotal);
+   
     
+      
+    
+    // ============================
+    // CHECKBOX GUARDAR SINÓNIMO
+    // ============================
+    CheckBox chkGuardarSinonimo = new CheckBox("Guardar esta descripción como sinónimo del producto seleccionado");
+    chkGuardarSinonimo.setStyle("-fx-font-weight: bold;");
+
+
+
+
+
     // ============================
     // BOTÓN APLICAR PRECIO
     // ============================
@@ -5306,54 +5320,72 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
         // APLICAR PRECIO (solo si hay producto seleccionado)
         // ============================
         if (seleccionado != null) {
-            // Calcular precio total
-            double precioUnitario = seleccionado.getPrecioVentaNeto();
-            int cant = 1; // valor por defecto
-            if (cantidad != null && !cantidad.isEmpty()) {
-                try {
-                    cant = (int) Double.parseDouble(cantidad.trim());
-                    if (cant <= 0) cant = 1;
-                } catch (NumberFormatException ex) {
-                    logger.warn("⚠️ No se pudo parsear cantidad: '{}', usando 1", cantidad);
-                    cant = 1;
-                }
-            }
-            
-            double precioTotal = precioUnitario * cant;
-            
-            // Actualizar la fila con el nuevo precio total
-            rowData.set("precio_vss_calculado", String.valueOf(precioTotal));
-            
-            // 💰 Actualizar UNIT_PRICE con precio_venta_neto (precio unitario en USD)
-            rowData.set("UNIT_PRICE", String.format("%.2f", precioUnitario));
-            logger.info("💰 UNIT_PRICE actualizado con precio_venta_neto: ${} para producto: {}", 
-                String.format("%.2f", precioUnitario), seleccionado.getDescripcionEs().substring(0, Math.min(30, seleccionado.getDescripcionEs().length())));
-            
-            // Refrescar la tabla
-            tablaDinamica.refresh();
-            
-            // Mostrar confirmación
-            Alert confirmacion = new Alert(Alert.AlertType.INFORMATION);
-            confirmacion.setTitle("Precio Actualizado");
-            confirmacion.setHeaderText("✅ Precio aplicado exitosamente");
-            confirmacion.setContentText(String.format(
-                "Producto: %s\n" +
-                "Precio unitario: $%,.2f\n" +
-                "Cantidad: %d\n" +
-                "Precio total: $%,.2f" +
-                (notasGuardadas ? "\n\n" + mensajeNotas.toString() : ""),
-                seleccionado.getDescripcionEs(),
-                precioUnitario,
-                cant,
-                precioTotal
-            ));
-            confirmacion.showAndWait();
-            
-            logger.info("✅ Precio actualizado: {} → ${}", descripcion, precioTotal);
-            
-            // Cerrar el diálogo
-            dialog.close();
-        } else {
+
+        // ============================
+        // GUARDAR SINÓNIMO (si checkbox está marcado)
+        // ============================
+        if (chkGuardarSinonimo.isSelected()) {
+            try {
+            cotizacionService.guardarSinonimo(
+                seleccionado.getIdProducto(),   // ID del producto seleccionado
+                descripcion                     // descripción original del broker
+            );
+            logger.info("🟢 Sinónimo guardado: '{}' → producto {}", descripcion, seleccionado.getIdProducto());
+        } catch (Exception ex) {
+            logger.error("❌ Error guardando sinónimo", ex);
+        }
+    }
+
+    // Calcular precio total
+    double precioUnitario = seleccionado.getPrecioVentaNeto();
+    int cant = 1; // valor por defecto
+    if (cantidad != null && !cantidad.isEmpty()) {
+        try {
+            cant = (int) Double.parseDouble(cantidad.trim());
+            if (cant <= 0) cant = 1;
+        } catch (NumberFormatException ex) {
+            logger.warn("⚠️ No se pudo parsear cantidad: '{}', usando 1", cantidad);
+            cant = 1;
+        }
+    }
+
+    double precioTotal = precioUnitario * cant;
+
+    // Actualizar la fila con el nuevo precio total
+    rowData.set("precio_vss_calculado", String.valueOf(precioTotal));
+
+    // 💰 Actualizar UNIT_PRICE con precio_venta_neto (precio unitario en USD)
+    rowData.set("UNIT_PRICE", String.format("%.2f", precioUnitario));
+    logger.info("💰 UNIT_PRICE actualizado con precio_venta_neto: ${} para producto: {}", 
+        String.format("%.2f", precioUnitario), seleccionado.getDescripcionEs().substring(0, Math.min(30, seleccionado.getDescripcionEs().length())));
+
+    // Refrescar la tabla
+    tablaDinamica.refresh();
+
+    // Mostrar confirmación
+    Alert confirmacion = new Alert(Alert.AlertType.INFORMATION);
+    confirmacion.setTitle("Precio Actualizado");
+    confirmacion.setHeaderText("✅ Precio aplicado exitosamente");
+    confirmacion.setContentText(String.format(
+        "Producto: %s\n" +
+        "Precio unitario: $%,.2f\n" +
+        "Cantidad: %d\n" +
+        "Precio total: $%,.2f" +
+        (notasGuardadas ? "\n\n" + mensajeNotas.toString() : ""),
+        seleccionado.getDescripcionEs(),
+        precioUnitario,
+        cant,
+        precioTotal
+    ));
+    confirmacion.showAndWait();
+
+    logger.info("✅ Precio actualizado: {} → ${}", descripcion, precioTotal);
+
+    // Cerrar el diálogo
+    dialog.close();
+}
+
+        else {
             // No hay producto seleccionado, pero igual se guardan las notas
             tablaDinamica.refresh();
             
@@ -5470,15 +5502,16 @@ btnBuscar.setOnAction(e -> {
     }
 });
 
-
     
     contenidoPrincipal.getChildren().addAll(
-        panelBusqueda,
-        new Label("🔍 Productos en Base de Datos:"),
-        tablaProductos,
-        panelPrecioCalculado,
-        btnAplicarPrecio
-    );
+    panelBusqueda,
+    new Label("🔍 Productos en Base de Datos:"),
+    tablaProductos,
+    chkGuardarSinonimo,   // ← AGREGADO AQUÍ
+    panelPrecioCalculado,
+    btnAplicarPrecio
+);
+
     contenidoPrincipal.setStyle("-fx-padding: 10;");
     
     // Configurar diálogo

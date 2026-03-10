@@ -4,18 +4,24 @@ package cl.vss.cotizador.model;
  * Clase que representa un producto similar encontrado en la búsqueda
  */
 public class ProductoSimilar {
+
+    // 🔵 NUEVO: ID REAL DEL PRODUCTO (NO ROMPE NADA)
+    private int idProducto;
+
     private String descripcionEs;
     private String descripcionEn;
     private String unidadMedida;
     private double precioVentaNeto;
     private double precioVentaNetoDolares;
-    private double valorPesos;    
+    private double valorPesos;
 
     public ProductoSimilar() {
         this.precioVentaNetoDolares = 0.0;
     }
 
-    public ProductoSimilar(String descripcionEs, String descripcionEn, String unidadMedida, double precioVentaNeto, double precioVentaNetoDolares, double valorPesos) {
+    // 🔵 Constructor original (SE MANTIENE para no romper el service)
+    public ProductoSimilar(String descripcionEs, String descripcionEn, String unidadMedida,
+                            double precioVentaNeto, double precioVentaNetoDolares, double valorPesos) {
         this.descripcionEs = descripcionEs;
         this.descripcionEn = descripcionEn;
         this.unidadMedida = unidadMedida;
@@ -24,7 +30,16 @@ public class ProductoSimilar {
         this.valorPesos = valorPesos;
     }
 
-    // Getters y Setters
+    // 🔵 Getter/Setter del ID (nuevo)
+    public int getIdProducto() {
+        return idProducto;
+    }
+
+    public void setIdProducto(int idProducto) {
+        this.idProducto = idProducto;
+    }
+
+    // Getters y Setters existentes
     public String getDescripcionEs() {
         return descripcionEs;
     }
@@ -76,7 +91,8 @@ public class ProductoSimilar {
     @Override
     public String toString() {
         return "ProductoSimilar{" +
-                "descripcionEs='" + descripcionEs + '\'' +
+                "idProducto=" + idProducto +
+                ", descripcionEs='" + descripcionEs + '\'' +
                 ", descripcionEn='" + descripcionEn + '\'' +
                 ", unidadMedida='" + unidadMedida + '\'' +
                 ", precioVentaNeto=" + precioVentaNeto +
