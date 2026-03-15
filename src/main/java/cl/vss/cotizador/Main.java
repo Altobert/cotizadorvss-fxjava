@@ -20,6 +20,7 @@ import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import javafx.stage.FileChooser;
+import javafx.stage.Modality;
 import cl.vss.cotizador.demo.LoginController;
 import cl.vss.cotizador.model.Broker;
 import cl.vss.cotizador.model.BrokerFormato;
@@ -44,6 +45,7 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
 import javafx.concurrent.Task;
+import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -102,6 +104,9 @@ public class Main extends Application {
     // 👉 Listas globales para el popup de productos similares
     private ObservableList<ProductoSimilar> listaPopupOriginal;
     private FilteredList<ProductoSimilar> filteredPopup;
+
+    private String descripcionSeleccionada;
+
 
     private final TableView<ItemCotizacionExcel> tabla = new TableView<>();
     private cl.vss.cotizador.model.CabeceraCotizacion cabeceraActual;
@@ -4917,6 +4922,26 @@ private String obtenerValorDeCampo(RowData rowData, String... camposPosibles) {
     }
     return "";
 }
+   
+    private void abrirVentanaAgregarProducto() {
+
+    abrirDialogAgregarProducto(); // tu ventana existente
+
+    List<ProductoSimilar> nuevosResultados =
+            cotizacionService.buscarProductosSimilares(descripcionSeleccionada);
+
+    listaPopupOriginal.setAll(nuevosResultados);
+
+    if (!nuevosResultados.isEmpty()) {
+        tablaProductos.getSelectionModel().select(0);
+    }
+
+    tablaProductos.refresh();
+}
+
+
+
+
 
 // ============================================================
 // 🔵 ABRIR POPUP DE EDICIÓN DE PRODUCTO
@@ -4931,7 +4956,7 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     
     // 🔍 Extraer datos de la fila - intentar múltiples campos posibles
     // Prioridad: ITEM_NAME (campo estándar MCTC) > ITEM > ITEM_DESCRIPTION > DESCRIPTION
-    String descripcion = obtenerValorDeCampo(rowData, "ITEM_NAME", "ITEM", 
+    descripcionSeleccionada = obtenerValorDeCampo(rowData, "ITEM_NAME", "ITEM", 
         "ITEM_DESCRIPTION", "DESCRIPTION", "PRODUCT_NAME", "DESCRIPCION", "NOMBRE", "PRODUCTO");
     
     String cantidad = obtenerValorDeCampo(rowData, 
@@ -4951,17 +4976,19 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         "Supplier Commnets", "Supplier Comments", "SUPPLIER COMMNETS",
         "SUPPLIER_NOTES", "SUPPLIER NOTES", "Supplier Notes",
         "REMARKS", "COMMENTS");
+
     
     // Extraer Notes para Garret
     String notesGarret = obtenerValorDeCampo(rowData, "NOTES", "Notes");
     
     // 🚨 DEBUG: Mostrar todos los campos disponibles en la fila
     logger.debug("🚨 DEBUG - Campos disponibles en RowData: {}", rowData.getKeys());
-    logger.debug("🚨 DEBUG - Descripción extraída: '{}'", descripcion);
+    logger.debug("🚨 DEBUG - Descripción extraída: '{}'", descripcionSeleccionada);
     logger.debug("🚨 DEBUG - Cantidad extraída: '{}'", cantidad);
     logger.debug("🚨 DEBUG - Unidad extraída: '{}'", unidad);
     logger.debug("🚨 DEBUG - Vendor Remarks extraído: '{}'", vendorRemarks);
     logger.debug("🚨 DEBUG - Notes (Garret) extraído: '{}'", notesGarret);
+
     
     // se comenta para dar mas espacio
     //dialog.setHeaderText("Producto: " + (descripcion != null && !descripcion.isEmpty() ? descripcion : "[Sin descripción]"));
@@ -4971,16 +4998,32 @@ private void abrirPopupEdicionProducto(RowData rowData) {
     // ============================
     VBox infoPanel = new VBox(10);
     infoPanel.setStyle("-fx-padding: 10; -fx-background-color: #f0f0f0; -fx-border-color: #0A3D91; -fx-border-width: 2;");
-    
+
     Label lblTitulo = new Label("📦 Información Actual");
     lblTitulo.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #0A3D91;");
-    
-    Label lblDesc = new Label("Descripción: " + (descripcion != null && !descripcion.isEmpty() ? descripcion : "[No disponible]"));
-    Label lblCant = new Label("Cantidad: " + (cantidad != null && !cantidad.isEmpty() ? cantidad : "0") + " " + (unidad != null && !unidad.isEmpty() ? unidad : ""));
-    Label lblPrecio = new Label("Precio VSS Actual: $" + (precioActual != null && !precioActual.isEmpty() ? precioActual : "0.00"));
+
+    // ✔️ CORRECCIÓN AQUÍ
+    Label lblDesc = new Label(
+        "Descripción: " + 
+        (descripcionSeleccionada != null && !descripcionSeleccionada.isEmpty() 
+            ? descripcionSeleccionada 
+            : "[No disponible]")
+    );
+
+    Label lblCant = new Label(
+        "Cantidad: " + 
+        (cantidad != null && !cantidad.isEmpty() ? cantidad : "0") + " " +
+        (unidad != null && !unidad.isEmpty() ? unidad : "")
+    );
+
+    Label lblPrecio = new Label(
+        "Precio VSS Actual: $" + 
+        (precioActual != null && !precioActual.isEmpty() ? precioActual : "0.00")
+    );
     lblPrecio.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
-    
+
     infoPanel.getChildren().addAll(lblTitulo, lblDesc, lblCant, lblPrecio);
+
 
     // ============================
     // PANEL MOTIVO COMERCIAL
@@ -5002,16 +5045,16 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         comboMotivo.setValue(motivoPrevio);
     }
 
-panelMotivo.getChildren().addAll(lblMotivo, comboMotivo);
+    panelMotivo.getChildren().addAll(lblMotivo, comboMotivo);
 
 
-// ============================
-// PANEL VENDOR REMARKS (Para BSM, CMA CGM, MCTC, OCEANIC, PROCURESHIP)
-// ============================
-VBox panelVendorRemarks = null;
-TextField txtVendorRemarks = null;
+    // ============================
+    // PANEL VENDOR REMARKS (Para BSM, CMA CGM, MCTC, OCEANIC, PROCURESHIP)
+    // ============================
+    VBox panelVendorRemarks = null;
+    TextField txtVendorRemarks = null;
 
-boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBrokerName() != null && 
+    boolean permitirVendorRemarks = formatoActual != null && formatoActual.getBrokerName() != null && 
                 (formatoActual.getBrokerName().toUpperCase().contains("BSM") ||
                 formatoActual.getBrokerName().toUpperCase().contains("CMA") ||
                 formatoActual.getBrokerName().toUpperCase().contains("MCTC") ||
@@ -5166,7 +5209,7 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     // CARGA INICIAL DE PRODUCTOS RELACIONADOS
     // ============================================================
     List<ProductoSimilar> resultadosIniciales =
-            cotizacionService.buscarProductosSimilares(descripcion);
+            cotizacionService.buscarProductosSimilares(descripcionSeleccionada);
 
     // Lista base REAL del popup
     listaPopupOriginal = FXCollections.observableArrayList(resultadosIniciales);
@@ -5176,6 +5219,7 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
 
     // Asignar a la tabla
     tablaProductos.setItems(filteredPopup);
+
 
 
     
@@ -5318,16 +5362,17 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
         // GUARDAR SINÓNIMO (si checkbox está marcado)
         // ============================
         if (chkGuardarSinonimo.isSelected()) {
-            try {
+        try {
             cotizacionService.guardarSinonimo(
-                seleccionado.getIdProducto(),   // ID del producto seleccionado
-                descripcion                     // descripción original del broker
+                seleccionado.getIdProducto(),        // ID del producto seleccionado
+                descripcionSeleccionada              // descripción original del broker
             );
-            logger.info("🟢 Sinónimo guardado: '{}' → producto {}", descripcion, seleccionado.getIdProducto());
+            logger.info("🟢 Sinónimo guardado: '{}' → producto {}", descripcionSeleccionada, seleccionado.getIdProducto());
         } catch (Exception ex) {
             logger.error("❌ Error guardando sinónimo", ex);
         }
     }
+
 
     // Calcular precio total
     double precioUnitario = seleccionado.getPrecioVentaNeto();
@@ -5372,7 +5417,7 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     ));
     confirmacion.showAndWait();
 
-    logger.info("✅ Precio actualizado: {} → ${}", descripcion, precioTotal);
+    logger.info("✅ Precio actualizado: {} → ${}", descripcionSeleccionada, precioTotal);
 
     // Cerrar el diálogo
     dialog.close();
@@ -5425,7 +5470,23 @@ comboMotivo.valueProperty().addListener((obs, oldVal, newVal) -> {
     }
     
 
-// ============================
+
+    // ============================================================
+    // BOTÓN CREAR PRODUCTO EN LA MAESTRA
+    // ============================================================
+    Button btnCrearProducto = new Button("➕ Crear producto en la maestra");
+    btnCrearProducto.setStyle("-fx-background-color: #1976D2; -fx-text-fill: white; -fx-font-weight: bold;");
+    btnCrearProducto.setPrefWidth(250);
+
+    // Acción del botón → abre la ventana JavaFX de Agregar Producto
+    btnCrearProducto.setOnAction(e -> abrirVentanaAgregarProducto());
+
+    // Agregar al layout principal
+    contenidoPrincipal.getChildren().add(btnCrearProducto);
+
+
+
+    // ============================
 // BÚSQUEDA DE PRODUCTOS
 // ============================
 HBox panelBusqueda = new HBox(10);
@@ -5438,8 +5499,9 @@ TextField txtBusqueda = new TextField();
 txtBusqueda.setPromptText("Ingrese términos de búsqueda...");
 txtBusqueda.setPrefWidth(350);
 
-if (descripcion != null && !descripcion.isEmpty()) {
-    txtBusqueda.setText(descripcion);
+// ✔️ CORRECCIÓN AQUÍ
+if (descripcionSeleccionada != null && !descripcionSeleccionada.isEmpty()) {
+    txtBusqueda.setText(descripcionSeleccionada);
 }
 
 Button btnBuscar = new Button("Buscar");
@@ -5447,6 +5509,7 @@ btnBuscar.setStyle("-fx-background-color: #0A3D91; -fx-text-fill: white; -fx-fon
 btnBuscar.setPrefWidth(100);
 
 panelBusqueda.getChildren().addAll(lblBuscar, txtBusqueda, btnBuscar);
+
 
 // ============================================================
 // BÚSQUEDA EN TIEMPO REAL (consulta BD)
