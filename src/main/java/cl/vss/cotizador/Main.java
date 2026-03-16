@@ -4976,12 +4976,8 @@ private void abrirPopupEdicionProducto(RowData rowData) {
         "SUPPLIER_COMMENTS", "SUPPLIER_COMMENT", "SUPPLIER COMMENTS",
         "Supplier Commnets", "Supplier Comments", "SUPPLIER COMMNETS",
         "SUPPLIER_NOTES", "SUPPLIER NOTES", "Supplier Notes",
-<<<<<<< HEAD
-        "REMARKS", "COMMENTS", "SUPPLIER_COMMENTS" ,"ITEM COMMENTS");
-=======
         "REMARKS", "COMMENTS");
 
->>>>>>> 8c1748b93a72cbfb2a5d0e54727eb1c8da9b9a1a
     
     // Extraer Notes para Garret
     String notesGarret = obtenerValorDeCampo(rowData, "NOTES", "Notes");
