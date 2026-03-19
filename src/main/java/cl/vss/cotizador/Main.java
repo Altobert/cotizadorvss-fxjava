@@ -4215,10 +4215,7 @@ private void cargarFormatoBroker(Broker broker) {
             info.showAndWait();
         } else {
             logger.warn("No se encontró formato para broker {}", broker.getBrokerName());
-            
-            // Limpiar panel de metadata
-            //actualizarPanelMetadata(null);
-            
+                                    
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Formato no encontrado");
             alert.setHeaderText("Broker: " + broker.getBrokerName());
@@ -4252,6 +4249,19 @@ private void configurarTablaDinamica() {
     // Crear columnas dinámicamente según el formato
     for (FormatoColumna col : formatoActual.getColumnas()) {
         String campoEstandar = col.getCampoEstandar();
+
+        // 🚫 Ocultar la columna Product Code, PART_NUMBER, BRAND, UOM, PACKAGE, CONTRACT_PRICE , MD,
+        // SDOC, INTERNAL_CODE
+        // solo para el broker BSM CATERING, ya que no aportan valor y solo saturan la tabla
+        if (("PRODUCT_CODE".equals(campoEstandar) || "PART_NUMBER".equals(campoEstandar) ||
+             "BRAND".equals(campoEstandar) || "UOM".equals(campoEstandar) || "PACKAGE".equals(campoEstandar) ||
+             "CONTRACT_PRICE".equals(campoEstandar) || "MD".equals(campoEstandar) ||
+             "SDOC".equals(campoEstandar) || "INTERNAL_CODE".equals(campoEstandar)) &&
+            "BSM CATERING".equals(formatoActual.getBrokerName())) {
+            continue; // Saltar esta columna
+        }
+
+
         
         // 🚫 Ocultar la columna PRECIO_VSS de la BDD (usamos la calculada)
         if ("PRECIO_VSS".equals(campoEstandar)) {
