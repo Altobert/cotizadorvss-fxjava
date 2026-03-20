@@ -4253,8 +4253,8 @@ private void configurarTablaDinamica() {
         // 🚫 Ocultar la columna Product Code, PART_NUMBER, BRAND, UOM, PACKAGE, CONTRACT_PRICE , MD,
         // SDOC, INTERNAL_CODE
         // solo para el broker BSM CATERING, ya que no aportan valor y solo saturan la tabla
-        if (("PRODUCT_CODE".equals(campoEstandar) || "PART_NUMBER".equals(campoEstandar) ||
-             "BRAND".equals(campoEstandar) || "UOM".equals(campoEstandar) || "PACKAGE".equals(campoEstandar) ||
+        if (("PRODUCT_CODE".equals(campoEstandar) || "PART_NUMBER".equals(campoEstandar) 
+             || "UOM".equals(campoEstandar) || "PACKAGE".equals(campoEstandar) ||
              "CONTRACT_PRICE".equals(campoEstandar) || "MD".equals(campoEstandar) ||
              "SDOC".equals(campoEstandar) || "INTERNAL_CODE".equals(campoEstandar)) &&
             "BSM CATERING".equals(formatoActual.getBrokerName())) {
