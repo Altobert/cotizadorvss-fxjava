@@ -4328,7 +4328,8 @@ private void configurarTablaDinamica() {
                     }
                 }
             });
-        
+        // para que cada columna no habilite el ordenamiento, ya que no es necesario y puede causar confusión al usuario
+        column.setSortable(false);
         tablaDinamica.getColumns().add(column);
     }
     
