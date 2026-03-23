@@ -4319,6 +4319,7 @@ private void configurarTablaDinamica() {
                 }
             });
         
+        column.setSortable(false);
         tablaDinamica.getColumns().add(column);
     }
     
