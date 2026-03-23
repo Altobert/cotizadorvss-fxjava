@@ -394,26 +394,50 @@ public class AsposeExcelService {
     FileFormatInfo info = FileFormatUtil.detectFileFormat(rutaArchivoOriginal);
     int format = info.getFileFormatType();
 
-    logger.info("💾 Guardando archivo. Formato real detectado: {}", format);
+    String extensionDetectada = FileFormatUtil.loadFormatToExtension(format); // ej: ".xlsx", ".xlsm"
+    logger.info("💾 Guardando archivo. Formato real detectado: {} ({})",
+            format, extensionDetectada);
 
-    // Guardar respetando el formato real
+    // Determinar SaveFormat y extensión correcta
+    int saveFormat;
     if (format == FileFormatType.XLSM) {
-        workbookActual.save(rutaSalida, SaveFormat.XLSM);
-
+        saveFormat = SaveFormat.XLSM;
     } else if (format == FileFormatType.XLSX) {
-        workbookActual.save(rutaSalida, SaveFormat.XLSX);
-
+        saveFormat = SaveFormat.XLSX;
     } else if (format == FileFormatType.EXCEL_97_TO_2003) {
-        workbookActual.save(rutaSalida, SaveFormat.EXCEL_97_TO_2003);
-
+        saveFormat = SaveFormat.EXCEL_97_TO_2003;
     } else {
         logger.warn("⚠ Formato desconocido o híbrido. Guardando como XLSX por seguridad.");
-        workbookActual.save(rutaSalida, SaveFormat.XLSX);
+        saveFormat = SaveFormat.XLSX;
+        extensionDetectada = ".xlsx";
     }
 
-    logger.info("✅ Archivo guardado correctamente en {}", rutaSalida);
+    // Asegurar que la ruta de salida tenga la extensión correcta según el formato real
+    String rutaNormalizada = ajustarExtensionSegunFormato(rutaSalida, extensionDetectada);
+    if (!rutaNormalizada.equals(rutaSalida)) {
+        logger.info("🔁 Ajustando extensión de salida: '{}' → '{}'", rutaSalida, rutaNormalizada);
+    }
+
+    workbookActual.save(rutaNormalizada, saveFormat);
+
+    logger.info("✅ Archivo guardado correctamente en {}", rutaNormalizada);
 }
 
+// Helper privado dentro de AsposeExcelService
+private String ajustarExtensionSegunFormato(String rutaSalida, String extensionConPunto) {
+    if (rutaSalida == null || rutaSalida.isEmpty()) {
+        return rutaSalida;
+    }
+
+    int idx = rutaSalida.lastIndexOf('.');
+    if (idx == -1) {
+        // No tenía extensión, se la agregamos
+        return rutaSalida + extensionConPunto;
+    }
+
+    // Reemplazamos la extensión existente por la correcta
+    return rutaSalida.substring(0, idx) + extensionConPunto;
+}
 
 
     // ============================================================
