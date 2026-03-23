@@ -562,13 +562,46 @@ public class AsposeExcelService {
                 || valorPart.startsWith("====");
     }
 
-    public void guardarWorkbook(String rutaSalida) throws Exception {
-        if (workbookActual == null) {
-            throw new IllegalStateException("No hay workbook cargado");
-        }
+    //public void guardarWorkbook(String rutaSalida) throws Exception {
+      //  if (workbookActual == null) {
+        //    throw new IllegalStateException("No hay workbook cargado");
+       // }
 
-        workbookActual.save(rutaSalida);
+        //workbookActual.save(rutaSalida);
+    //}
+    public void guardarWorkbook(String rutaSalida) throws Exception {
+    if (workbookActual == null) {
+        throw new IllegalStateException("No hay workbook cargado");
     }
+
+    if (rutaArchivoOriginal == null) {
+        throw new IllegalStateException("No se conoce la ruta del archivo original");
+    }
+
+    // Detectar el formato REAL del archivo original
+    FileFormatInfo info = FileFormatUtil.detectFileFormat(rutaArchivoOriginal);
+    int format = info.getFileFormatType();
+
+    logger.info("💾 Guardando archivo. Formato real detectado: {}", format);
+
+    // Guardar respetando el formato real
+    if (format == FileFormatType.XLSM) {
+        workbookActual.save(rutaSalida, SaveFormat.XLSM);
+
+    } else if (format == FileFormatType.XLSX) {
+        workbookActual.save(rutaSalida, SaveFormat.XLSX);
+
+    } else if (format == FileFormatType.EXCEL_97_TO_2003) {
+        workbookActual.save(rutaSalida, SaveFormat.EXCEL_97_TO_2003);
+
+    } else {
+        logger.warn("⚠ Formato desconocido o híbrido. Guardando como XLSX por seguridad.");
+        workbookActual.save(rutaSalida, SaveFormat.XLSX);
+    }
+
+    logger.info("✅ Archivo guardado correctamente en {}", rutaSalida);
+}
+
 
 
     // ============================================================
