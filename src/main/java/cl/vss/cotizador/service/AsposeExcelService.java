@@ -9,6 +9,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.function.Predicate;
 
 public class AsposeExcelService {
@@ -157,13 +158,14 @@ public class AsposeExcelService {
     // ============================
     // COLUMNA REMARKS (dinámica)
     // ============================
-        FormatoColumna colRemarkObj = formato.getColumnas().stream()
-            .filter(c -> esCampoRemarks(c.getCampoEstandar()))
-            .findFirst()
-            .orElseThrow(() -> new RuntimeException("No se encontró columna de remarks"));
+    FormatoColumna colRemarkObj = formato.getColumnas().stream()
+        .filter(c -> esCampoRemarks(c.getCampoEstandar()))
+        .findFirst()
+        .orElse(null);
 
-    int colRemark = colRemarkObj.getIndiceColumna();
-    String campoRemark = colRemarkObj.getCampoEstandar();
+    int colRemark = colRemarkObj != null ? colRemarkObj.getIndiceColumna() : -1;
+
+    String campoRemark = colRemarkObj != null ? colRemarkObj.getCampoEstandar() : "VENDOR_REMARKS";
 
         // ============================
         // FILAS BASE
@@ -184,11 +186,23 @@ public class AsposeExcelService {
             || h.equals("SUPPLIERCOMMENTS") || h.equals("SUPPLIER_COMMENTS") || h.equals("SUPPLIER COMMENTS")
             || h.equals("VENDORREMARKS") || h.equals("VENDOR_REMARKS") || h.equals("VENDOR REMARKS")
             || h.equals("OFFICEREMARKS") || h.equals("OFFICE_REMARKS") || h.equals("OFFICE REMARKS")
+            || h.equals("REMARKS") || h.equals("COMMENTS")
             || h.equals("NOTES"));
         if (colRemarkByHeader >= 0 && colRemarkByHeader != colRemark) {
-        logger.warn("⚠️ REMARKS por formato={} difiere de header={}. Se usará header.",
-            colRemark, colRemarkByHeader);
+        if (colRemark >= 0) {
+            logger.warn("⚠️ REMARKS por formato={} difiere de header={}. Se usará header.",
+                colRemark, colRemarkByHeader);
+        } else {
+            logger.info("🩹 REMARKS no definido en formato. Se usará columna por header={}", colRemarkByHeader);
+        }
         colRemark = colRemarkByHeader;
+        }
+
+        if (colRemark < 0) {
+        String camposDisponibles = formato.getColumnas().stream()
+            .map(FormatoColumna::getCampoEstandar)
+            .collect(Collectors.joining(", "));
+        throw new RuntimeException("No se encontró columna de remarks (ni por formato ni por header). Campos disponibles: " + camposDisponibles);
         }
 
         logger.info("🧭 Aspose write target | hoja='{}' headerRow={} UNIT_PRICE={}({}) REMARKS={}({}) campoRemark='{}'",
@@ -437,6 +451,14 @@ public class AsposeExcelService {
                 return primerNoVacio(dato,
                         "VENDOR_REMARKS", "VENDOR_REMARK", "VENDOR_REMARKS", "VENDOR COMMENTS",
                         "VENDOR_COMMENTS", "VENDOR_COMMENT", "REMARKS");
+            case "VENDOR_COMMENTS":
+            case "REMARKS":
+            case "COMMENTS":
+                return primerNoVacio(dato,
+                        "VENDOR_REMARKS", "VENDOR_REMARK", "VENDOR_NOTES", "VENDOR_NOTE",
+                        "VENDOR_COMMENTS", "VENDOR_COMMENT", "SUPPLIER_COMMENTS", "SUPPLIER_COMMENT",
+                        "SUPPLIER COMMNETS", "SUPPLIER COMMENTS", "SUPPLIER_NOTES", "SUPPLIER NOTES",
+                        "REMARKS", "COMMENTS", "NOTES");
             case "OFFICE_REMARKS":
                 return primerNoVacio(dato,
                         "OFFICE_REMARKS", "OFFICE REMARKS", "OFFICE_REMARK",
@@ -451,10 +473,18 @@ public class AsposeExcelService {
     private boolean esCampoRemarks(String campoEstandar) {
         String campo = normalizarCampoEstandar(campoEstandar);
         return "VENDOR_REMARKS".equals(campo)
+                || "VENDOR_COMMENTS".equals(campo)
                 || "NOTES".equals(campo)
+                || "REMARKS".equals(campo)
+                || "COMMENTS".equals(campo)
+                || "VENDOR_COMMENT".equals(campo)
+                || "VENDOR_NOTE".equals(campo)
                 || "SUPPLIER_NOTES".equals(campo)
+                || "SUPPLIER_NOTE".equals(campo)
                 || "SUPPLIER_COMMENTS".equals(campo)
+                || "SUPPLIER_COMMENT".equals(campo)
                 || "OFFICE_REMARKS".equals(campo)
+                || "OFFICE_REMARK".equals(campo)
                 || "ITEM_COMMENTS".equals(campo);
     }
 
@@ -582,27 +612,66 @@ public class AsposeExcelService {
     FileFormatInfo info = FileFormatUtil.detectFileFormat(rutaArchivoOriginal);
     int format = info.getFileFormatType();
 
-    logger.info("💾 Guardando archivo. Formato real detectado: {}", format);
+    // Aspose a veces devuelve null → hacemos fallback seguro
+    String extensionDetectada = FileFormatUtil.loadFormatToExtension(format);
 
-    // Guardar respetando el formato real
-    if (format == FileFormatType.XLSM) {
-        workbookActual.save(rutaSalida, SaveFormat.XLSM);
-
-    } else if (format == FileFormatType.XLSX) {
-        workbookActual.save(rutaSalida, SaveFormat.XLSX);
-
-    } else if (format == FileFormatType.EXCEL_97_TO_2003) {
-        workbookActual.save(rutaSalida, SaveFormat.EXCEL_97_TO_2003);
-
-    } else {
-        logger.warn("⚠ Formato desconocido o híbrido. Guardando como XLSX por seguridad.");
-        workbookActual.save(rutaSalida, SaveFormat.XLSX);
+    if (extensionDetectada == null || extensionDetectada.isBlank()) {
+        switch (format) {
+            case FileFormatType.XLSM:
+                extensionDetectada = ".xlsm";
+                break;
+            case FileFormatType.XLSX:
+                extensionDetectada = ".xlsx";
+                break;
+            case FileFormatType.EXCEL_97_TO_2003:
+                extensionDetectada = ".xls";
+                break;
+            default:
+                extensionDetectada = ".xlsx"; // fallback genérico
+                break;
+        }
     }
 
-    logger.info("✅ Archivo guardado correctamente en {}", rutaSalida);
+    logger.info("💾 Guardando archivo. Formato real detectado: {} ({})",
+            format, extensionDetectada);
+
+    // Determinar SaveFormat correcto
+    int saveFormat;
+    if (format == FileFormatType.XLSM) {
+        saveFormat = SaveFormat.XLSM;
+    } else if (format == FileFormatType.XLSX) {
+        saveFormat = SaveFormat.XLSX;
+    } else if (format == FileFormatType.EXCEL_97_TO_2003) {
+        saveFormat = SaveFormat.EXCEL_97_TO_2003;
+    } else {
+        logger.warn("⚠ Formato desconocido o híbrido. Guardando como XLSX por seguridad.");
+        saveFormat = SaveFormat.XLSX;
+        extensionDetectada = ".xlsx";
+    }
+
+    // Asegurar extensión correcta
+    String rutaNormalizada = ajustarExtensionSegunFormato(rutaSalida, extensionDetectada);
+    if (!rutaNormalizada.equals(rutaSalida)) {
+        logger.info("🔁 Ajustando extensión de salida: '{}' → '{}'", rutaSalida, rutaNormalizada);
+    }
+
+    workbookActual.save(rutaNormalizada, saveFormat);
+
+    logger.info("✅ Archivo guardado correctamente en {}", rutaNormalizada);
 }
 
+private String ajustarExtensionSegunFormato(String rutaSalida, String extensionConPunto) {
+    if (rutaSalida == null || rutaSalida.isEmpty()) {
+        return rutaSalida;
+    }
 
+    int idx = rutaSalida.lastIndexOf('.');
+    if (idx == -1) {
+        return rutaSalida + extensionConPunto;
+    }
+
+    return rutaSalida.substring(0, idx) + extensionConPunto;
+}
 
     // ============================================================
     // 🔧 UTILIDADES
