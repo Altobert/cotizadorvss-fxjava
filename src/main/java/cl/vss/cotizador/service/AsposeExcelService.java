@@ -397,11 +397,30 @@ public class AsposeExcelService {
     FileFormatInfo info = FileFormatUtil.detectFileFormat(rutaArchivoOriginal);
     int format = info.getFileFormatType();
 
-    String extensionDetectada = FileFormatUtil.loadFormatToExtension(format); // ej: ".xlsx", ".xlsm"
+    // Aspose a veces devuelve null → hacemos fallback seguro
+    String extensionDetectada = FileFormatUtil.loadFormatToExtension(format);
+
+    if (extensionDetectada == null || extensionDetectada.isBlank()) {
+        switch (format) {
+            case FileFormatType.XLSM:
+                extensionDetectada = ".xlsm";
+                break;
+            case FileFormatType.XLSX:
+                extensionDetectada = ".xlsx";
+                break;
+            case FileFormatType.EXCEL_97_TO_2003:
+                extensionDetectada = ".xls";
+                break;
+            default:
+                extensionDetectada = ".xlsx"; // fallback genérico
+                break;
+        }
+    }
+
     logger.info("💾 Guardando archivo. Formato real detectado: {} ({})",
             format, extensionDetectada);
 
-    // Determinar SaveFormat y extensión correcta
+    // Determinar SaveFormat correcto
     int saveFormat;
     if (format == FileFormatType.XLSM) {
         saveFormat = SaveFormat.XLSM;
@@ -415,7 +434,7 @@ public class AsposeExcelService {
         extensionDetectada = ".xlsx";
     }
 
-    // Asegurar que la ruta de salida tenga la extensión correcta según el formato real
+    // Asegurar extensión correcta
     String rutaNormalizada = ajustarExtensionSegunFormato(rutaSalida, extensionDetectada);
     if (!rutaNormalizada.equals(rutaSalida)) {
         logger.info("🔁 Ajustando extensión de salida: '{}' → '{}'", rutaSalida, rutaNormalizada);
@@ -426,7 +445,6 @@ public class AsposeExcelService {
     logger.info("✅ Archivo guardado correctamente en {}", rutaNormalizada);
 }
 
-// Helper privado dentro de AsposeExcelService
 private String ajustarExtensionSegunFormato(String rutaSalida, String extensionConPunto) {
     if (rutaSalida == null || rutaSalida.isEmpty()) {
         return rutaSalida;
@@ -434,14 +452,11 @@ private String ajustarExtensionSegunFormato(String rutaSalida, String extensionC
 
     int idx = rutaSalida.lastIndexOf('.');
     if (idx == -1) {
-        // No tenía extensión, se la agregamos
         return rutaSalida + extensionConPunto;
     }
 
-    // Reemplazamos la extensión existente por la correcta
     return rutaSalida.substring(0, idx) + extensionConPunto;
 }
-
 
     // ============================================================
     // 🔧 UTILIDADES
