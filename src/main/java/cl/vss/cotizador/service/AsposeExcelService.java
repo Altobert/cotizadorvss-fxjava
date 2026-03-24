@@ -147,16 +147,19 @@ public class AsposeExcelService {
     // COLUMNA REMARKS (dinámica)
     // ============================
     FormatoColumna colRemarkObj = formato.getColumnas().stream()
-            .filter(c ->
-                    "VENDOR_REMARKS".equalsIgnoreCase(c.getCampoEstandar()) ||
-                    "NOTES".equalsIgnoreCase(c.getCampoEstandar()) ||
-                    "SUPPLIER_COMMENTS".equalsIgnoreCase(c.getCampoEstandar()) ||
-                    "OFFICE_REMARKS".equalsIgnoreCase(c.getCampoEstandar())
-            )
-            .findFirst()
-            .orElseThrow(() -> new RuntimeException("No se encontró columna de remarks"));
+        .filter(c ->
+                "VENDOR_REMARKS".equalsIgnoreCase(c.getCampoEstandar()) ||
+                "NOTES".equalsIgnoreCase(c.getCampoEstandar()) ||
+                "SUPPLIER_COMMENTS".equalsIgnoreCase(c.getCampoEstandar()) ||
+                "OFFICE_REMARKS".equalsIgnoreCase(c.getCampoEstandar()) ||
+                "SUPPLIER_NOTES".equalsIgnoreCase(c.getCampoEstandar())   
+        )
+        .findFirst()
+        .orElseThrow(() -> new RuntimeException("No se encontró columna de remarks"));
+
 
     int colRemark = colRemarkObj.getIndiceColumna();
+
     String campoRemark = colRemarkObj.getCampoEstandar();
 
     // ============================
