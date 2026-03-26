@@ -4343,8 +4343,62 @@ private void configurarTablaDinamica() {
         });
         return row;
     });
+
+    // Ajustar al menos según encabezados; luego se recalcula al cargar datos.
+    autoAjustarColumnasTablaDinamica();
     
     logger.info("Tabla dinámica configurada con {} columnas", tablaDinamica.getColumns().size());
+}
+
+private void autoAjustarColumnasTablaDinamica() {
+    if (tablaDinamica.getColumns().isEmpty()) {
+        return;
+    }
+
+    Platform.runLater(() -> {
+        for (TableColumn<RowData, ?> column : tablaDinamica.getColumns()) {
+            autoAjustarColumna(column);
+        }
+    });
+}
+
+private void autoAjustarColumna(TableColumn<RowData, ?> column) {
+    if (column == null) {
+        return;
+    }
+
+    if (!column.getColumns().isEmpty()) {
+        for (TableColumn<RowData, ?> subCol : column.getColumns()) {
+            autoAjustarColumna(subCol);
+        }
+        return;
+    }
+
+    double anchoMaximo = medirAnchoTexto(column.getText()) + 30;
+    int totalFilas = tablaDinamica.getItems() != null ? tablaDinamica.getItems().size() : 0;
+    int filasAMedir = Math.min(totalFilas, 300);
+
+    for (int i = 0; i < filasAMedir; i++) {
+        Object valor = column.getCellData(i);
+        if (valor != null) {
+            double anchoTexto = medirAnchoTexto(valor.toString()) + 24;
+            if (anchoTexto > anchoMaximo) {
+                anchoMaximo = anchoTexto;
+            }
+        }
+    }
+
+    double anchoFinal = Math.max(80, Math.min(550, anchoMaximo));
+    column.setPrefWidth(anchoFinal);
+}
+
+private double medirAnchoTexto(String texto) {
+    if (texto == null || texto.isEmpty()) {
+        return 0;
+    }
+
+    javafx.scene.text.Text textNode = new javafx.scene.text.Text(texto);
+    return textNode.getLayoutBounds().getWidth();
 }
 
 // ============================================================
@@ -4571,6 +4625,7 @@ private void leerExcelConFormato(File archivo) {
 
         ejecutarEnHiloFX(() -> {
             tablaDinamica.setItems(datos);
+            autoAjustarColumnasTablaDinamica();
 
             Alert info = new Alert(Alert.AlertType.INFORMATION);
             info.setTitle("Archivo cargado");
@@ -4880,6 +4935,7 @@ private void leerExcelConAspose(File archivo) {
 
         ejecutarEnHiloFX(() -> {
             tablaDinamica.setItems(datos);
+            autoAjustarColumnasTablaDinamica();
 
             Alert info = new Alert(Alert.AlertType.INFORMATION);
             info.setTitle("Archivo cargado");
