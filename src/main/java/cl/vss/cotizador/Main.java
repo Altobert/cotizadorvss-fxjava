@@ -271,7 +271,7 @@ public class Main extends Application {
 // ⬇⬇⬇ AQUÍ VA EL BLOQUE DE ZOOM ⬇⬇⬇
 
    final double[] zoom = {1.0};
-    double minZoom = 0.75;
+    double minZoom = 0.5;
     double maxZoom = 1.5;
 
     // Zoom IN
