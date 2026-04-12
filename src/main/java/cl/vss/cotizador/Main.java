@@ -77,6 +77,7 @@ import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -95,6 +96,7 @@ import cl.vss.cotizador.view.CargaCotizacionProgressController;
 import cl.vss.cotizador.view.UserCrudView;
 import com.aspose.cells.Workbook; 
 import com.aspose.cells.Worksheet;
+import javafx.scene.layout.Region;
 
 public class Main extends Application {
     private static final Logger logger = LogManager.getLogger(Main.class);
@@ -160,6 +162,10 @@ public class Main extends Application {
     
     // 👉 Tabla dinámica para cotizaciones con formato de broker
     private final TableView<RowData> tablaDinamica = new TableView<>();
+    private final Map<TableColumnBase<?, ?>, Double> anchosBaseZoomTablaDinamica = new LinkedHashMap<>();
+    private double factorZoomTablaDinamica = 1.0;
+    private static final double MIN_ZOOM_TABLA = 0.5;
+    private static final double MAX_ZOOM_TABLA = 1.5;
     private BrokerFormato formatoActual;
     
     // Constructor o inicialización
@@ -270,26 +276,22 @@ public class Main extends Application {
 
 // ⬇⬇⬇ AQUÍ VA EL BLOQUE DE ZOOM ⬇⬇⬇
 
-   final double[] zoom = {1.0};
-    double minZoom = 0.5;
-    double maxZoom = 1.5;
-
     // Zoom IN
     btnZoomIn.setOnAction(e -> {
-        zoom[0] = Math.min(maxZoom, zoom[0] * 1.1);
-        aplicarZoomTabla(tablaDinamica, zoom[0]);
+        factorZoomTablaDinamica = Math.min(MAX_ZOOM_TABLA, factorZoomTablaDinamica * 1.1);
+        aplicarZoomTabla(tablaDinamica, factorZoomTablaDinamica);
     });
 
     // Zoom OUT
     btnZoomOut.setOnAction(e -> {
-        zoom[0] = Math.max(minZoom, zoom[0] / 1.1);
-        aplicarZoomTabla(tablaDinamica, zoom[0]);
+        factorZoomTablaDinamica = Math.max(MIN_ZOOM_TABLA, factorZoomTablaDinamica / 1.1);
+        aplicarZoomTabla(tablaDinamica, factorZoomTablaDinamica);
     });
 
     // Reset
     btnResetZoom.setOnAction(e -> {
-        zoom[0] = 1.0;
-        aplicarZoomTabla(tablaDinamica, zoom[0]);
+        factorZoomTablaDinamica = 1.0;
+        aplicarZoomTabla(tablaDinamica, factorZoomTablaDinamica);
     });
 
 
@@ -336,6 +338,8 @@ public class Main extends Application {
     panelConMetadata.setStyle("-fx-padding: 10;");
 
     rootCotizador.setCenter(panelConMetadata);
+
+    aplicarZoomTabla(tablaDinamica, factorZoomTablaDinamica);
 
 
 
@@ -877,20 +881,68 @@ try {
     }
 
     private void aplicarZoomTabla(TableView<?> tabla, double factorZoom) {
+    if (tabla == null) {
+        return;
+    }
+
     double fontSizeBase = 12;
     double rowHeightBase = 24;
+    double headerHeightBase = 26;
 
     double fontSize = fontSizeBase * factorZoom;
     double rowHeight = rowHeightBase * factorZoom;
+    double headerHeight = headerHeightBase * factorZoom;
 
-    // Aumenta solo el texto
-    tabla.setStyle("-fx-font-size: " + fontSize + "px;");
-
-    // Ajusta la altura de las filas
+    tabla.setStyle(
+        "-fx-font-size: " + fontSize + "px; " +
+        "-fx-fixed-cell-size: " + rowHeight + "px;"
+    );
     tabla.setFixedCellSize(rowHeight);
 
-    // MUY IMPORTANTE: recalcular la tabla para que no se deforme
+    List<TableColumnBase<?, ?>> columnasHoja = obtenerColumnasHoja(tabla.getColumns());
+    if (!anchosBaseZoomTablaDinamica.keySet().containsAll(columnasHoja)
+            || anchosBaseZoomTablaDinamica.size() != columnasHoja.size()) {
+        anchosBaseZoomTablaDinamica.clear();
+        for (TableColumnBase<?, ?> columna : columnasHoja) {
+            double anchoBase = columna.getWidth() > 0 ? columna.getWidth() : columna.getPrefWidth();
+            if (anchoBase <= 0) {
+                anchoBase = 120;
+            }
+            anchosBaseZoomTablaDinamica.put(columna, anchoBase);
+        }
+    }
+
+    for (TableColumnBase<?, ?> columna : columnasHoja) {
+        Double anchoBase = anchosBaseZoomTablaDinamica.get(columna);
+        if (anchoBase != null) {
+            columna.setPrefWidth(anchoBase * factorZoom);
+        }
+    }
+
+    Platform.runLater(() -> {
+        for (javafx.scene.Node node : tabla.lookupAll(".column-header, .filler, .show-hide-columns-button")) {
+            if (node instanceof Region) {
+                Region region = (Region) node;
+                region.setMinHeight(headerHeight);
+                region.setPrefHeight(headerHeight);
+                region.setMaxHeight(headerHeight);
+            }
+        }
+    });
+
     tabla.refresh();
+}
+
+private List<TableColumnBase<?, ?>> obtenerColumnasHoja(List<? extends TableColumnBase<?, ?>> columnas) {
+    List<TableColumnBase<?, ?>> hojas = new java.util.ArrayList<>();
+    for (TableColumnBase<?, ?> columna : columnas) {
+        if (columna.getColumns().isEmpty()) {
+            hojas.add(columna);
+        } else {
+            hojas.addAll(obtenerColumnasHoja(columna.getColumns()));
+        }
+    }
+    return hojas;
 }
 
 
@@ -4346,6 +4398,7 @@ private void configurarTablaDinamica() {
 
     // Ajustar al menos según encabezados; luego se recalcula al cargar datos.
     autoAjustarColumnasTablaDinamica();
+    aplicarZoomTabla(tablaDinamica, factorZoomTablaDinamica);
     
     logger.info("Tabla dinámica configurada con {} columnas", tablaDinamica.getColumns().size());
 }
@@ -4359,6 +4412,7 @@ private void autoAjustarColumnasTablaDinamica() {
         for (TableColumn<RowData, ?> column : tablaDinamica.getColumns()) {
             autoAjustarColumna(column);
         }
+        aplicarZoomTabla(tablaDinamica, factorZoomTablaDinamica);
     });
 }
 
